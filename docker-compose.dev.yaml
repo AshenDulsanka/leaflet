@@ -1,0 +1,38 @@
+services:
+  leaflet:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=development
+      - NOTES_DATA_DIR=/app/data
+      - NOTES_DIR=/app/data/notes
+      - SCREENSHOTS_DIR=/app/data/screenshots
+      - PORT=5173
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+          ignore:
+            - node_modules/
+        - action: sync
+          path: ./static
+          target: /app/static
+        - action: sync+restart
+          path: ./svelte.config.js
+          target: /app/svelte.config.js
+        - action: sync+restart
+          path: ./vite.config.ts
+          target: /app/vite.config.ts
+        - action: sync+restart
+          path: ./tailwind.config.ts
+          target: /app/tailwind.config.ts
+        - action: rebuild
+          path: ./package.json
+        - action: rebuild
+          path: ./pnpm-lock.yaml

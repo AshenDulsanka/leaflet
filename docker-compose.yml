@@ -1,0 +1,16 @@
+services:
+  leaflet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - NOTES_DATA_DIR=/app/data
+      - NOTES_DIR=/app/data/notes
+      - SCREENSHOTS_DIR=/app/data/screenshots
+      - PORT=3000
+    restart: unless-stopped
