@@ -1,0 +1,80 @@
+/**
+ * PATCH  /api/workspaces/[id]/hosts/[hostId]          - Update host
+ * DELETE /api/workspaces/[id]/hosts/[hostId]          - Delete host
+ * POST   /api/workspaces/[id]/hosts/[hostId]/ports    - Add port
+ * DELETE /api/workspaces/[id]/hosts/[hostId]/ports/[portId] - Delete port
+ */
+
+import { json } from '@sveltejs/kit';
+import { randomUUID } from 'crypto';
+import type { RequestHandler } from '@sveltejs/kit';
+
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+  const { db } = locals;
+  const body = await request.json() as Record<string, unknown>;
+
+  const allowed = ['ip', 'hostname', 'os', 'segment', 'status', 'notes'];
+  const updates: string[] = [];
+  const values: unknown[] = [];
+
+  for (const key of allowed) {
+    if (key in body) {
+      updates.push(`${key} = ?`);
+      values.push(body[key]);
+    }
+  }
+
+  if (updates.length === 0) return json({ error: 'No valid fields' }, { status: 400 });
+
+  updates.push('updated_at = ?');
+  values.push(new Date().toISOString());
+  values.push(params.hostId);
+  values.push(params.id);
+
+  db.prepare(`UPDATE hosts SET ${updates.join(', ')} WHERE id = ? AND workspace_id = ?`).run(...values);
+
+  const host = db.prepare('SELECT * FROM hosts WHERE id = ?').get(params.hostId) as Record<string, unknown>;
+  const ports = db.prepare('SELECT * FROM ports WHERE host_id = ? ORDER BY number').all(params.hostId);
+  return json({ ...host, ports });
+};
+
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+  const { db } = locals;
+  const result = db.prepare('DELETE FROM hosts WHERE id = ? AND workspace_id = ?').run(params.hostId, params.id);
+  if (result.changes === 0) return json({ error: 'Not found' }, { status: 404 });
+  return new Response(null, { status: 204 });
+};
+
+export const POST: RequestHandler = async ({ params, request, locals }) => {
+  // POST to /hosts/[hostId] acts as "add port" when ?port=1 query param is present
+  // In SvelteKit, nested routes handle this better — this handles port creation
+  const { db } = locals;
+  const body = await request.json() as {
+    number: number;
+    protocol?: string;
+    service?: string;
+    version?: string;
+    state?: string;
+    notes?: string;
+  };
+
+  if (!body.number) return json({ error: 'port number is required' }, { status: 400 });
+
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO ports (id, host_id, number, protocol, service, version, state, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    params.hostId,
+    body.number,
+    body.protocol ?? 'tcp',
+    body.service ?? '',
+    body.version ?? '',
+    body.state ?? 'open',
+    body.notes ?? ''
+  );
+
+  const port = db.prepare('SELECT * FROM ports WHERE id = ?').get(id);
+  return json(port, { status: 201 });
+};
