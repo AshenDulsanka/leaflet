@@ -196,6 +196,47 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       ALTER TABLE workspaces ADD COLUMN notes_folder TEXT NOT NULL DEFAULT '';
     `,
   },
+  {
+    // v3: reduce workspace types to 'pentest' | 'general'.
+    // SQLite cannot ALTER CHECK constraints, so recreate the workspaces table
+    // and migrate existing rows: exam/practice/ctf → pentest, other → general.
+    version: 3,
+    disableFks: true,
+    up: `
+      CREATE TABLE workspaces_v3 (
+        id                  TEXT    PRIMARY KEY,
+        name                TEXT    NOT NULL,
+        type                TEXT    NOT NULL DEFAULT 'general'
+                                    CHECK(type IN ('pentest','general')),
+        icon_color          TEXT    NOT NULL DEFAULT '#6366f1',
+        exam_start_date     TEXT,
+        exam_duration_days  INTEGER NOT NULL DEFAULT 10,
+        total_flags         INTEGER NOT NULL DEFAULT 0,
+        passing_flags       INTEGER NOT NULL DEFAULT 0,
+        notes_folder        TEXT    NOT NULL DEFAULT '',
+        created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+        updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+      );
+
+      INSERT INTO workspaces_v3
+        (id, name, type, icon_color, exam_start_date, exam_duration_days,
+         total_flags, passing_flags, notes_folder, created_at, updated_at)
+      SELECT
+        id, name,
+        CASE type
+          WHEN 'exam'     THEN 'pentest'
+          WHEN 'practice' THEN 'pentest'
+          WHEN 'ctf'      THEN 'pentest'
+          ELSE 'general'
+        END,
+        icon_color, exam_start_date, exam_duration_days,
+        total_flags, passing_flags, notes_folder, created_at, updated_at
+      FROM workspaces;
+
+      DROP TABLE workspaces;
+      ALTER TABLE workspaces_v3 RENAME TO workspaces;
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
@@ -247,7 +288,7 @@ export function seedDefaultWorkspace(db: Database.Database): void {
   db.prepare(`
     INSERT INTO workspaces (id, name, type, icon_color, notes_folder, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, 'Default Workspace', 'other', '#6366f1', 'default-workspace', now, now);
+  `).run(id, 'Default Workspace', 'general', '#6366f1', 'default-workspace', now, now);
 
   // Create notes subfolder if NOTES_DIR is set
   const notesDir = process.env.NOTES_DIR;

@@ -33,7 +33,7 @@ export interface Note {
 export interface Workspace {
   id: string;
   name: string;
-  type: 'exam' | 'practice' | 'ctf' | 'other';
+  type: 'pentest' | 'general';
   icon_color: string;
   exam_start_date: string | null;
   exam_duration_days: number;

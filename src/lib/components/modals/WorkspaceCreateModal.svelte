@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, GraduationCap, Crosshair, Flag, FolderOpen } from '@lucide/svelte';
+  import { X, Shield, FolderOpen } from '@lucide/svelte';
   import { fly, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -11,14 +11,12 @@
   let { onConfirm, onCancel }: Props = $props();
 
   let name = $state('');
-  let selectedType = $state<string>('exam');
+  let selectedType = $state<string>('pentest');
   let inputEl: HTMLInputElement | null = $state(null);
 
   const typeOptions = [
-    { value: 'exam', label: 'Exam', description: 'Certification exam engagement', icon: GraduationCap, color: '#6366f1' },
-    { value: 'practice', label: 'Practice', description: 'Practice labs and boxes', icon: Crosshair, color: '#22c55e' },
-    { value: 'ctf', label: 'CTF', description: 'Capture the flag competition', icon: Flag, color: '#f59e0b' },
-    { value: 'other', label: 'Other', description: 'General-purpose workspace', icon: FolderOpen, color: '#8b5cf6' },
+    { value: 'pentest', label: 'Pentest Notes', description: 'Engagement tracking + tools', icon: Shield, color: '#6366f1' },
+    { value: 'general', label: 'General', description: 'General-purpose workspace', icon: FolderOpen, color: '#8b5cf6' },
   ] as const;
 
   $effect(() => {
