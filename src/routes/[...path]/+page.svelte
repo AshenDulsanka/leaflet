@@ -433,6 +433,7 @@
     onOpenSettings={() => (settingsOpen = true)}
     onOpenGraph={() => (graphOpen = !graphOpen)}
     hasWorkspace={!!activeWorkspace}
+    isPentest={activeWorkspace?.type === 'pentest'}
     onOpenHostTracker={() => (hostTrackerOpen = !hostTrackerOpen)}
     onOpenCredentialVault={() => (credentialVaultOpen = !credentialVaultOpen)}
     onOpenFlagTracker={() => (flagTrackerOpen = !flagTrackerOpen)}
