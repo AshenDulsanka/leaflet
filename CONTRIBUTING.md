@@ -31,12 +31,16 @@ docker compose -f docker-compose.dev.yaml up --watch
 ## Workflow
 
 1. Create a GitHub issue for the work you intend to do.
-2. Cut a branch from `main` following `branch-conventions.md`.
+2. Cut a branch from `development` following `branch-conventions.md`.
 3. Make changes following `coding-standards.md`.
 4. Commit following `commit-conventions.md`.
-5. Open a PR following `pr-standards.md`.
+5. Open a PR targeting `development` following `pr-standards.md`.
 6. Address review feedback.
-7. Squash merge to `main`.
+7. Squash merge into `development`.
+
+> **Stacked PRs:** For larger features, you may use stacked PRs — create a chain of branches where each depends on the previous one. Each PR targets the branch below it. The final PR in the stack targets `development`.
+
+> **Release flow:** `main` only receives merges from `development` when a release is ready. Never push directly to `main`.
 
 ## Type Checking and Linting
 
