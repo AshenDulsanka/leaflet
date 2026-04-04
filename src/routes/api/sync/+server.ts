@@ -26,6 +26,7 @@ function getRepoRoot(fromDir: string): string | null {
       cwd: fromDir,
       encoding: 'utf-8',
       timeout: 5_000,
+      env: { ...process.env, GIT_DISCOVERY_ACROSS_FILESYSTEM: '1' },
     }).trim();
   } catch {
     return null;
