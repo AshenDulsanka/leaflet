@@ -1,0 +1,344 @@
+@import 'tailwindcss';
+@import 'katex/dist/katex.min.css';
+
+/* --------------------------------------------------------------------------
+   Tailwind v4: Typography plugin
+   --------------------------------------------------------------------------*/
+@plugin "@tailwindcss/typography";
+
+/* --------------------------------------------------------------------------
+   Tailwind v4: class-based dark mode (.dark on <html>)
+   --------------------------------------------------------------------------*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* --------------------------------------------------------------------------
+   Tailwind v4: custom color utilities that reference CSS custom properties.
+   @theme inline keeps the var() references un-evaluated so dark mode works.
+   --------------------------------------------------------------------------*/
+@theme inline {
+  --color-background:            hsl(var(--background));
+  --color-foreground:            hsl(var(--foreground));
+  --color-card:                  hsl(var(--card));
+  --color-card-foreground:       hsl(var(--card-foreground));
+  --color-popover:               hsl(var(--popover));
+  --color-popover-foreground:    hsl(var(--popover-foreground));
+  --color-primary:               hsl(var(--primary));
+  --color-primary-foreground:    hsl(var(--primary-foreground));
+  --color-secondary:             hsl(var(--secondary));
+  --color-secondary-foreground:  hsl(var(--secondary-foreground));
+  --color-muted:                 hsl(var(--muted));
+  --color-muted-foreground:      hsl(var(--muted-foreground));
+  --color-accent:                hsl(var(--accent));
+  --color-accent-foreground:     hsl(var(--accent-foreground));
+  --color-destructive:           hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border:                hsl(var(--border));
+  --color-input:                 hsl(var(--input));
+  --color-ring:                  hsl(var(--ring));
+  --color-sidebar:               hsl(var(--sidebar));
+  --color-sidebar-foreground:    hsl(var(--sidebar-foreground));
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* --------------------------------------------------------------------------
+   Light theme (default)
+   --------------------------------------------------------------------------*/
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
+  --sidebar: 0 0% 98%;
+  --sidebar-foreground: 240 5.3% 26.1%;
+  --radius: 0.5rem;
+  --sidebar-width: 260px;
+  --sidebar-min-width: 180px;
+  --sidebar-max-width: 400px;
+}
+
+/* --------------------------------------------------------------------------
+   Dark theme
+   --------------------------------------------------------------------------*/
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 224.3 76.3% 48%;
+  --sidebar: 222.2 84% 3.9%;
+  --sidebar-foreground: 210 40% 98%;
+}
+
+/* --------------------------------------------------------------------------
+   Base resets
+   --------------------------------------------------------------------------*/
+*,
+*::before,
+*::after {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: Inter, system-ui, sans-serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar             { width: 6px; height: 6px; }
+::-webkit-scrollbar-track       { background: transparent; }
+::-webkit-scrollbar-thumb       { background: hsl(var(--border)); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+/* --------------------------------------------------------------------------
+   Milkdown editor base styles
+   --------------------------------------------------------------------------*/
+.milkdown {
+  outline: none;
+  min-height: 100%;
+}
+
+.milkdown .editor {
+  outline: none;
+  padding: 2rem;
+  min-height: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+/* Prose overrides for dark mode */
+.dark .prose {
+  --tw-prose-body: hsl(var(--foreground));
+  --tw-prose-headings: hsl(var(--foreground));
+  --tw-prose-code: hsl(var(--foreground));
+  --tw-prose-pre-bg: hsl(220 16% 13%);
+  --tw-prose-quotes: hsl(var(--muted-foreground));
+  --tw-prose-links: hsl(var(--primary));
+  --tw-prose-bold: hsl(var(--foreground));
+}
+
+/* --------------------------------------------------------------------------
+   Milkdown Crepe - dark mode color overrides
+   The frame theme ships light-only crepe CSS variables. Override them
+   under .dark so code blocks, inline code, and the editor surface all use
+   an ash-toned palette instead of pitch black.
+   --------------------------------------------------------------------------*/
+.dark .milkdown {
+  --crepe-color-background:         hsl(222 16% 9%);
+  --crepe-color-on-background:      hsl(210 30% 90%);
+  --crepe-color-surface:            hsl(220 16% 13%);
+  --crepe-color-surface-low:        hsl(220 16% 18%);
+  --crepe-color-on-surface:         hsl(210 30% 88%);
+  --crepe-color-on-surface-variant: hsl(215 20% 65%);
+  --crepe-color-outline:            hsl(217 32% 32%);
+  --crepe-color-primary:            hsl(217 70% 68%);
+  --crepe-color-secondary:          hsl(220 16% 22%);
+  --crepe-color-on-secondary:       hsl(210 30% 88%);
+  --crepe-color-inline-code:        hsl(14 80% 65%);
+  --crepe-color-error:              hsl(0 70% 60%);
+  --crepe-color-hover:              hsl(220 16% 20%);
+  --crepe-color-selected:           hsl(220 16% 24%);
+  --crepe-color-inline-area:        hsl(220 16% 22%);
+}
+
+/* --------------------------------------------------------------------------
+   Milkdown Crepe - code block toolbar always visible
+   By default the language badge and copy/tools buttons have opacity: 0
+   and only appear on :hover (set in @milkdown/crepe's own CSS).
+   Override here to always show them.
+   --------------------------------------------------------------------------*/
+.milkdown .milkdown-code-block {
+  border-radius: 8px;
+}
+
+.milkdown .milkdown-code-block .language-button {
+  opacity: 1 !important;
+}
+
+.milkdown .milkdown-code-block .tools-button-group > button {
+  opacity: 1 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Inline code (`backtick`) - ash background that works in both themes
+   --------------------------------------------------------------------------*/
+.milkdown .editor :not(pre) > code {
+  font-family: var(--font-mono);
+}
+
+/* --------------------------------------------------------------------------
+   Tables - uses CSS variables so both light and dark themes work automatically
+   --------------------------------------------------------------------------*/
+.milkdown .editor table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 0.9em;
+}
+.milkdown .editor th,
+.milkdown .editor td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.45em 0.8em;
+  text-align: left;
+  color: hsl(var(--foreground));
+}
+.milkdown .editor th {
+  background: hsl(var(--muted));
+  font-weight: 600;
+}
+.milkdown .editor tr:nth-child(even) td {
+  background: hsl(var(--muted) / 0.3);
+}
+
+/* --------------------------------------------------------------------------
+   View Transitions API - disable default cross-fade; the JS clip-path
+   animation in AnimatedThemeToggler.svelte handles the visual transition.
+   --------------------------------------------------------------------------*/
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+
+/* Light theme (default) */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
+  --radius: 0.5rem;
+
+  /* Sidebar width */
+  --sidebar-width: 260px;
+  --sidebar-min-width: 180px;
+  --sidebar-max-width: 400px;
+}
+
+/* Dark theme */
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 224.3 76.3% 48%;
+}
+
+/* Base resets */
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: Inter, system-ui, sans-serif;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* Milkdown editor base styles */
+.milkdown {
+  outline: none;
+  min-height: 100%;
+}
+
+.milkdown .editor {
+  outline: none;
+  padding: 2rem;
+  min-height: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+/* Prose typography overrides for dark mode */
+.dark .prose {
+  --tw-prose-body: hsl(var(--foreground));
+  --tw-prose-headings: hsl(var(--foreground));
+  --tw-prose-code: hsl(var(--foreground));
+  --tw-prose-pre-bg: hsl(var(--secondary));
+  --tw-prose-quotes: hsl(var(--muted-foreground));
+  --tw-prose-links: hsl(var(--primary));
+  --tw-prose-bold: hsl(var(--foreground));
+}

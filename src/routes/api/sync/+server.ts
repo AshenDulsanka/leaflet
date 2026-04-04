@@ -1,0 +1,135 @@
+/**
+ * POST /api/sync - Push or pull data via git
+ *
+ * Body: { action: 'push' | 'pull' | 'status' }
+ *
+ * Push: checkpoint DB → git add → git commit → git push
+ * Pull: git pull
+ * Status: git status --porcelain + check if inside a repo
+ */
+
+import { json } from '@sveltejs/kit';
+import { execSync } from 'child_process';
+import { existsSync } from 'fs';
+import { join } from 'path';
+import type { RequestHandler } from '@sveltejs/kit';
+import { checkpoint } from '$lib/server/database';
+import { getRandomSyncMessage } from '$lib/data/sync-messages';
+
+function getDataDir(): string {
+  return process.env.NOTES_DATA_DIR ?? join(process.cwd(), 'data');
+}
+
+function getRepoRoot(fromDir: string): string | null {
+  try {
+    return execSync('git rev-parse --show-toplevel', {
+      cwd: fromDir,
+      encoding: 'utf-8',
+      timeout: 5_000,
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function git(args: string, cwd: string): string {
+  return execSync(`git ${args}`, {
+    cwd,
+    encoding: 'utf-8',
+    timeout: 30_000,
+  }).trim();
+}
+
+export const POST: RequestHandler = async ({ request }) => {
+  const body = await request.json() as { action?: string };
+  const action = body.action;
+
+  if (!action || !['push', 'pull', 'status'].includes(action)) {
+    return json({ error: 'action must be push, pull, or status' }, { status: 400 });
+  }
+
+  const dataDir = getDataDir();
+
+  if (!existsSync(dataDir)) {
+    return json({ error: 'data directory does not exist' }, { status: 404 });
+  }
+
+  const repoRoot = getRepoRoot(dataDir);
+  if (!repoRoot) {
+    return json(
+      {
+        error: 'No git repository found. Initialize one with `git init` in your project root.',
+        hint: 'git init && git remote add origin <your-repo-url>',
+      },
+      { status: 400 }
+    );
+  }
+
+  try {
+    if (action === 'status') {
+      const status = git('status --porcelain', repoRoot);
+      const branch = git('rev-parse --abbrev-ref HEAD', repoRoot);
+      let hasRemote = false;
+      try {
+        git('remote get-url origin', repoRoot);
+        hasRemote = true;
+      } catch {
+        hasRemote = false;
+      }
+      return json({
+        initialized: true,
+        branch,
+        hasRemote,
+        dirty: status.length > 0,
+        changes: status || null,
+      });
+    }
+
+    if (action === 'push') {
+      // 0. Verify remote exists
+      try {
+        git('remote get-url origin', repoRoot);
+      } catch {
+        return json(
+          { error: 'No remote configured. Run `git remote add origin <url>` first.' },
+          { status: 400 }
+        );
+      }
+
+      // 1. Flush WAL to main DB file
+      checkpoint();
+
+      // 2. Stage everything
+      git('add -A', repoRoot);
+
+      // 3. Check if there are staged changes
+      const diff = git('diff --cached --name-only', repoRoot);
+      if (!diff) {
+        return json({ message: 'Nothing to push - already up to date.' });
+      }
+
+      // 4. Commit with a fun message
+      const msg = getRandomSyncMessage();
+      git(`commit -m "${msg}"`, repoRoot);
+
+      // 5. Push
+      git('push', repoRoot);
+
+      return json({ message: `Pushed! "${msg}"`, commitMessage: msg });
+    }
+
+    if (action === 'pull') {
+      const output = git('pull', repoRoot);
+      const upToDate = output.includes('Already up to date');
+      return json({
+        message: upToDate ? 'Already up to date.' : 'Pulled latest changes.',
+        details: output,
+      });
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown git error';
+    return json({ error: message }, { status: 500 });
+  }
+
+  return json({ error: 'Unexpected error' }, { status: 500 });
+};

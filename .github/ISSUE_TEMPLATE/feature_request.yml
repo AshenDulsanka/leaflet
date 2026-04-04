@@ -1,0 +1,37 @@
+name: Feature Request
+description: Propose a new feature or enhancement
+title: "feat: "
+labels: [enhancement]
+assignees: []
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One paragraph describing the feature and why it is needed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: What must be true for this to be considered complete?
+      value: |
+        - [ ]
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical
+    attributes:
+      label: Technical Notes
+      description: "Optional: implementation hints, libraries to use, files to touch."
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related Issues
+      description: "Optional: link related issues."
