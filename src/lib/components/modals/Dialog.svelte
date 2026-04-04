@@ -63,7 +63,7 @@
   onclick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
   role="presentation"
 >
-  <!-- Panel — stop clicks from bubbling to the backdrop -->
+  <!-- Panel - stop clicks from bubbling to the backdrop -->
   <div
     transition:fly={{ y: 10, duration: 200, easing: cubicOut }}
     tabindex="-1"

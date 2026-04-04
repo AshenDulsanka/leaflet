@@ -4,7 +4,7 @@ import { join } from 'path';
 import { getScreenshotsDir } from '$lib/server/screenshots';
 import type { RequestHandler } from './$types';
 
-// Only allow timestamp-based filenames — prevents path traversal
+// Only allow timestamp-based filenames - prevents path traversal
 const SAFE_NAME = /^[0-9]+\.(png|jpg|jpeg|gif|webp)$/;
 
 const MIME: Record<string, string> = {

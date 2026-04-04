@@ -73,7 +73,7 @@
   <div class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
     <div class="flex-1">
       <h2 class="text-sm font-semibold text-foreground">Methodology</h2>
-      <p class="text-xs text-muted-foreground">{done}/{total} steps — {pct}%</p>
+      <p class="text-xs text-muted-foreground">{done}/{total} steps - {pct}%</p>
     </div>
     <button
       class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"

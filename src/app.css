@@ -153,7 +153,7 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   Milkdown Crepe — dark mode color overrides
+   Milkdown Crepe - dark mode color overrides
    The frame theme ships light-only crepe CSS variables. Override them
    under .dark so code blocks, inline code, and the editor surface all use
    an ash-toned palette instead of pitch black.
@@ -177,7 +177,7 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   Milkdown Crepe — code block toolbar always visible
+   Milkdown Crepe - code block toolbar always visible
    By default the language badge and copy/tools buttons have opacity: 0
    and only appear on :hover (set in @milkdown/crepe's own CSS).
    Override here to always show them.
@@ -195,14 +195,14 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   Inline code (`backtick`) — ash background that works in both themes
+   Inline code (`backtick`) - ash background that works in both themes
    --------------------------------------------------------------------------*/
 .milkdown .editor :not(pre) > code {
   font-family: var(--font-mono);
 }
 
 /* --------------------------------------------------------------------------
-   Tables — uses CSS variables so both light and dark themes work automatically
+   Tables - uses CSS variables so both light and dark themes work automatically
    --------------------------------------------------------------------------*/
 .milkdown .editor table {
   border-collapse: collapse;
@@ -226,7 +226,7 @@ body {
 }
 
 /* --------------------------------------------------------------------------
-   View Transitions API — disable default cross-fade; the JS clip-path
+   View Transitions API - disable default cross-fade; the JS clip-path
    animation in AnimatedThemeToggler.svelte handles the visual transition.
    --------------------------------------------------------------------------*/
 ::view-transition-old(root),

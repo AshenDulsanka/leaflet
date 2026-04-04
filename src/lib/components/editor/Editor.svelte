@@ -42,7 +42,7 @@
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
   let lineNumberGutterEl = $state<HTMLDivElement | null>(null);
 
-  // Image toolbar state — set when user clicks an image in WYSIWYG mode
+  // Image toolbar state - set when user clicks an image in WYSIWYG mode
   interface ImageToolbarState { rect: DOMRect; src: string; alt: string; pmPos: number }
   let imageToolbarState = $state<ImageToolbarState | null>(null);
 
@@ -98,7 +98,7 @@
 
   // Lifted to component scope so destroyEditor() can set it false BEFORE calling
   // crepeEditor.destroy(). Crepe (ProseMirror) can fire a final markdownUpdated
-  // event during teardown — if editorReady is still true at that point,
+  // event during teardown - if editorReady is still true at that point,
   // internalContent would be overwritten with an empty string, causing a blank
   // editor when switching back to WYSIWYG mode.
   // $state so the scroll $effect below re-runs when it transitions to true.
@@ -106,8 +106,8 @@
 
   // Consume scrollTarget whenever the editor is ready AND a target is pending.
   // Works for both cases:
-  //   same file — editorReady already true; effect fires immediately on target change.
-  //   different file — target set before re-init; effect fires when editorReady goes true.
+  //   same file - editorReady already true; effect fires immediately on target change.
+  //   different file - target set before re-init; effect fires when editorReady goes true.
   $effect(() => {
     const t = scrollTarget;
     if (editorReady && t) {
@@ -134,7 +134,7 @@
   });
 
   // When the active FILE changes, load its content into the editor.
-  // Deliberately does NOT track `content` as a dependency — only `filePath`.
+  // Deliberately does NOT track `content` as a dependency - only `filePath`.
   // Tracking content would cause the editor to re-create on every keystroke
   // because internalContent updates synchronously (from Milkdown) while the
   // parent's `content` prop updates asynchronously, making them momentarily
@@ -197,7 +197,7 @@
     // Listen for content changes before create()
     crepeEditor.on((api) => {
       api.markdownUpdated((_ctx, markdown) => {
-        // Ignore events fired during Crepe initialization — they can carry
+        // Ignore events fired during Crepe initialization - they can carry
         // empty string before the default value is parsed, which would wipe
         // the editor content on every mode switch.
         if (!editorReady) return;
@@ -257,7 +257,7 @@
   //
   // Both DOM elements (milkdownContainer div and textarea) are always kept in
   // the DOM and shown/hidden via style:display. This avoids all bind:this
-  // timing issues — milkdownContainer is never null, so initEditor() can run
+  // timing issues - milkdownContainer is never null, so initEditor() can run
   // immediately without needing tick() or any DOM-ready hacks.
   $effect(() => {
     if (untrack(() => !mounted)) return;
@@ -270,7 +270,7 @@
 
   // ─── Wiki-link highlighting ────────────────────────────────────────────────
   // Tracks [[note-name]] spans for CSS highlight + click navigation.
-  // No extra packages needed — piggybacks on the existing CSS Highlight API.
+  // No extra packages needed - piggybacks on the existing CSS Highlight API.
   interface WikiRange { start: number; end: number; name: string }
   let wikilinkPositions: WikiRange[] = [];
 
@@ -437,7 +437,7 @@
     if (target.tagName !== 'IMG') return;
     const img = target as HTMLImageElement;
     const r = img.getBoundingClientRect();
-    // Guard: already showing toolbar for this exact image position — skip
+    // Guard: already showing toolbar for this exact image position - skip
     if (imageToolbarState && Math.abs(imageToolbarState.rect.top - r.top) < 1 && imageToolbarState.src === img.src) return;
     let pmPos = -1;
     if (crepeEditor && editorReady) {
@@ -481,7 +481,7 @@
             allRanges.push(range);
             if (seen === currentIndex) curRange = range;
             seen++;
-          } catch { /* stale DOM — skip */ }
+          } catch { /* stale DOM - skip */ }
         }
       });
       if (allRanges.length === 0) return;
@@ -538,7 +538,7 @@
     try {
       let pattern = opts.useRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       if (opts.wholeWord) pattern = `\\b${pattern}\\b`;
-      // 'gid' is not universally supported — fall back gracefully
+      // 'gid' is not universally supported - fall back gracefully
       const safeFlags = opts.caseSensitive ? 'g' : 'gi';
       const regex = new RegExp(pattern, safeFlags);
       const matches: Array<{ start: number; end: number }> = [];
@@ -764,7 +764,7 @@
   ondrop={handleDrop}
   role="none"
 >
-  <!-- Milkdown WYSIWYG — always in DOM so milkdownContainer is never null.
+  <!-- Milkdown WYSIWYG - always in DOM so milkdownContainer is never null.
        Shown/hidden via display so initEditor() can run without DOM-ready timing hacks. -->
   <!-- svelte-ignore a11y_mouse_events_have_key_events -->
   <div
@@ -776,7 +776,7 @@
     onmouseover={handleEditorMouseOver}
     role="none"
   ></div>
-  <!-- Image toolbar overlay — shown when user clicks an image in WYSIWYG mode -->
+  <!-- Image toolbar overlay - shown when user clicks an image in WYSIWYG mode -->
   {#if imageToolbarState && mode === 'wysiwyg'}
     {@const s = imageToolbarState}
     <ImageToolbar
@@ -906,7 +906,7 @@
     cursor: pointer;
   }
 
-  /* Crepe floating UI — bubble toolbar + slash/block-edit menu */
+  /* Crepe floating UI - bubble toolbar + slash/block-edit menu */
   :global(.milkdown-editor .crepe-toolbar),
   :global(.milkdown-editor .block-edit-main),
   :global(.milkdown-editor .tableTooltip),
@@ -914,7 +914,7 @@
     z-index: 40 !important;
   }
 
-  /* ── CSS Custom Highlight API — find panel & search-result flash ── */
+  /* ── CSS Custom Highlight API - find panel & search-result flash ── */
   /* All occurrences: subtle background */
   :global(::highlight(fd-all)) {
     background-color: rgba(234, 179, 8, 0.28); /* amber-400 / 0.28 */
@@ -938,14 +938,14 @@
     text-decoration-style: dashed;
   }
 
-  /* Images in WYSIWYG — show pointer so users know they're clickable */
+  /* Images in WYSIWYG - show pointer so users know they're clickable */
   :global(.milkdown-editor img) {
     cursor: zoom-in;
     border-radius: 0.375rem;
     max-width: 100%;
   }
 
-  /* Image alignment — set by ImageToolbar via ProseMirror title attr */
+  /* Image alignment - set by ImageToolbar via ProseMirror title attr */
   :global(.milkdown-editor img[title="align-left"]) {
     display: block;
     margin-right: auto;

@@ -61,7 +61,7 @@ async function* streamMinimax(
 
   if (!response.ok) {
     const text = await response.text().catch(() => response.statusText);
-    throw new Error(`MiniMax API error: ${response.status} — ${text}`);
+    throw new Error(`MiniMax API error: ${response.status} - ${text}`);
   }
 
   const reader = response.body!.getReader();
@@ -81,7 +81,7 @@ async function* streamMinimax(
       try {
         const json = JSON.parse(data);
         const delta = json.choices?.[0]?.delta;
-        // reasoning_content is MiniMax M2.5 chain-of-thought — never forward it.
+        // reasoning_content is MiniMax M2.5 chain-of-thought - never forward it.
         // Only yield delta.content when it exists and is not CoT.
         if (delta?.reasoning_content) continue;
         if (delta?.content) yield delta.content;

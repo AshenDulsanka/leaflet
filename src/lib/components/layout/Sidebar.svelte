@@ -45,7 +45,7 @@
     onRenameItem(fromPath, toPath);
   }
 
-  // Pinned notes — persisted in localStorage, scoped per workspace
+  // Pinned notes - persisted in localStorage, scoped per workspace
   function storageKey(): string {
     const wsId = activeWorkspace?.id ?? 'global';
     return `notes-pinned-${wsId}`;

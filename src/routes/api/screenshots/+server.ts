@@ -1,6 +1,6 @@
 /**
- * POST /api/screenshots — upload a screenshot blob and return its URL
- * GET  /api/screenshots  — list all screenshots in SCREENSHOTS_DIR
+ * POST /api/screenshots - upload a screenshot blob and return its URL
+ * GET  /api/screenshots  - list all screenshots in SCREENSHOTS_DIR
  */
 
 import { json, error } from '@sveltejs/kit';

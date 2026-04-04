@@ -25,7 +25,7 @@ export const SYNC_MESSAGES: string[] = [
   'syncing before entropy wins',
   'the pen is mightier than the sword, but git is mightier than both',
   'dropping notes like I drop shells',
-  'checkpoint reached — no save scumming',
+  'checkpoint reached - no save scumming',
   'adding more evidence of my hacking',
   'my second brain needs backups too',
 ];

@@ -613,10 +613,10 @@
       onClose={() => (searchOpen = false)}
       onSelectResult={(path, line, lineText) => {
         if (path === activeFile) {
-          // Same file — editor already ready, effect fires immediately.
+          // Same file - editor already ready, effect fires immediately.
           pendingScrollTarget = { line, lineText };
         } else {
-          // Different file — pendingScrollTarget is set inside openFile() in the
+          // Different file - pendingScrollTarget is set inside openFile() in the
           // same sync batch as activeContent so Editor defers scroll until re-init.
           openFile(path, true, { line, lineText });
         }

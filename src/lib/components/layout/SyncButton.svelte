@@ -22,7 +22,7 @@
         }
       }
     } catch {
-      // Silently fail — user can still try push/pull
+      // Silently fail - user can still try push/pull
     }
   }
 

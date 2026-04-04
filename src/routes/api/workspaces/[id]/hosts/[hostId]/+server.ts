@@ -47,7 +47,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
   // POST to /hosts/[hostId] acts as "add port" when ?port=1 query param is present
-  // In SvelteKit, nested routes handle this better — this handles port creation
+  // In SvelteKit, nested routes handle this better - this handles port creation
   const { db } = locals;
   const body = await request.json() as {
     number: number;

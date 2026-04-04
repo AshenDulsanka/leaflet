@@ -19,10 +19,10 @@
   let bodyEl = $state<HTMLDivElement | null>(null);
 
   onMount(async () => {
-    // Snapshot note content at mount time — the component only mounts once per
+    // Snapshot note content at mount time - the component only mounts once per
     // summarize action, so we take the content as-is and build the prompt here.
     const prompt =
-      `You are creating a compressed quick-reference card from the following note. Your output MUST be shorter than the input — aim for 25% of the original length.
+      `You are creating a compressed quick-reference card from the following note. Your output MUST be shorter than the input - aim for 25% of the original length.
 
 Rules:
 - DO NOT reproduce sentences, paragraphs, or sections verbatim
@@ -32,7 +32,7 @@ Rules:
 - Drop all filler, context-setting prose, and repetition
 - Use tight markdown: \`## headers\`, bullet lists, inline code for values
 
-Produce the compressed card now. Do not preface it with "Here is a summary" or any intro sentence — start directly with the first header.
+Produce the compressed card now. Do not preface it with "Here is a summary" or any intro sentence - start directly with the first header.
 
 ---
 

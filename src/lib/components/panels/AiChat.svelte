@@ -197,7 +197,7 @@
   <!-- Messages -->
   <div bind:this={messagesEl} class="flex-1 overflow-y-auto px-3 py-3">
     {#if messages.length === 0}
-      <!-- Empty state — quick starters -->
+      <!-- Empty state - quick starters -->
       <div class="flex flex-col gap-2">
         <p class="mb-2 text-center text-xs text-muted-foreground">Ask me anything about your engagement</p>
         {#each STARTERS as starter}
