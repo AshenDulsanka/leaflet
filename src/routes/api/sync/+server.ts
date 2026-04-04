@@ -11,7 +11,7 @@
 import { json } from '@sveltejs/kit';
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { join, relative } from 'path';
 import type { RequestHandler } from '@sveltejs/kit';
 import { checkpoint } from '$lib/server/database';
 import { getRandomSyncMessage } from '$lib/data/sync-messages';
@@ -99,8 +99,9 @@ export const POST: RequestHandler = async ({ request }) => {
       // 1. Flush WAL to main DB file
       checkpoint();
 
-      // 2. Stage everything
-      git('add -A', repoRoot);
+      // 2. Stage only the data directory (not source files)
+      const relDataDir = relative(repoRoot, dataDir);
+      git(`add "${relDataDir}"`, repoRoot);
 
       // 3. Check if there are staged changes
       const diff = git('diff --cached --name-only', repoRoot);
