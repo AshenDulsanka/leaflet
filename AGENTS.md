@@ -60,13 +60,13 @@ leaflet/
   data/
     notes.db          - SQLite database (committed via Git)
     notes/            - markdown files organized by workspace folder
-    screenshots/      - uploaded screenshots (gitignored)
+    screenshots/      - uploaded screenshots (synced via git)
 ```
 
 ## What Agents Must Do
 
 - Use Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`). No Svelte 4 syntax.
-- Use Lucide icons from `@lucide/svelte`. No emojis anywhere.
+- Use Lucide icons from `@lucide/svelte`. No emojis anywhere — not in code, data, seed files, comments, or UI strings. When an icon identifier is needed in data or database records, use the Lucide icon name as a string (e.g., `'notebook-pen'`, `'circle-alert'`).
 - Use `better-sqlite3` synchronously. No async DB calls.
 - Validate all file paths with `safePath()` before any `fs` operation (see `docs/SECURITY.md`).
 - Follow `.github/skills/coding-standards.md` for naming, imports, error handling.
@@ -77,7 +77,7 @@ leaflet/
 - Do not install React, Vue, Angular, or Radix UI packages.
 - Do not use `any` types without a comment explaining why.
 - Do not hardcode file paths. Use environment variables with documented fallbacks.
-- Do not commit `.env` files, `data/screenshots/`, or WAL temp files.
+- Do not commit `.env` files or WAL temp files.
 - Do not leave dead code, unused imports, or commented-out blocks.
 
 ## Running the App
@@ -88,7 +88,7 @@ pnpm install
 pnpm dev
 
 # Docker development
-docker compose -f docker-compose.dev.yml up --watch
+docker compose -f docker-compose.dev.yaml up --watch
 
 # Type check
 pnpm check
