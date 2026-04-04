@@ -1,5 +1,5 @@
 /**
- * POST /api/sync — Push or pull data via git
+ * POST /api/sync - Push or pull data via git
  *
  * Body: { action: 'push' | 'pull' | 'status' }
  *
@@ -20,8 +20,16 @@ function getDataDir(): string {
   return process.env.NOTES_DATA_DIR ?? join(process.cwd(), 'data');
 }
 
-function isGitRepo(dir: string): boolean {
-  return existsSync(join(dir, '.git'));
+function getRepoRoot(fromDir: string): string | null {
+  try {
+    return execSync('git rev-parse --show-toplevel', {
+      cwd: fromDir,
+      encoding: 'utf-8',
+      timeout: 5_000,
+    }).trim();
+  } catch {
+    return null;
+  }
 }
 
 function git(args: string, cwd: string): string {
@@ -46,11 +54,12 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ error: 'data directory does not exist' }, { status: 404 });
   }
 
-  if (!isGitRepo(dataDir)) {
+  const repoRoot = getRepoRoot(dataDir);
+  if (!repoRoot) {
     return json(
       {
-        error: 'data directory is not a git repository. Run `git init` in your data directory first.',
-        hint: `cd ${dataDir} && git init && git remote add origin <your-repo-url>`,
+        error: 'No git repository found. Initialize one with `git init` in your project root.',
+        hint: 'git init && git remote add origin <your-repo-url>',
       },
       { status: 400 }
     );
@@ -58,11 +67,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
   try {
     if (action === 'status') {
-      const status = git('status --porcelain', dataDir);
-      const branch = git('rev-parse --abbrev-ref HEAD', dataDir);
+      const status = git('status --porcelain', repoRoot);
+      const branch = git('rev-parse --abbrev-ref HEAD', repoRoot);
       let hasRemote = false;
       try {
-        git('remote get-url origin', dataDir);
+        git('remote get-url origin', repoRoot);
         hasRemote = true;
       } catch {
         hasRemote = false;
@@ -79,7 +88,7 @@ export const POST: RequestHandler = async ({ request }) => {
     if (action === 'push') {
       // 0. Verify remote exists
       try {
-        git('remote get-url origin', dataDir);
+        git('remote get-url origin', repoRoot);
       } catch {
         return json(
           { error: 'No remote configured. Run `git remote add origin <url>` first.' },
@@ -90,27 +99,27 @@ export const POST: RequestHandler = async ({ request }) => {
       // 1. Flush WAL to main DB file
       checkpoint();
 
-      // 2. Stage everything in data dir
-      git('add -A', dataDir);
+      // 2. Stage everything
+      git('add -A', repoRoot);
 
       // 3. Check if there are staged changes
-      const diff = git('diff --cached --name-only', dataDir);
+      const diff = git('diff --cached --name-only', repoRoot);
       if (!diff) {
-        return json({ message: 'Nothing to push — already up to date.' });
+        return json({ message: 'Nothing to push - already up to date.' });
       }
 
       // 4. Commit with a fun message
       const msg = getRandomSyncMessage();
-      git(`commit -m "${msg}"`, dataDir);
+      git(`commit -m "${msg}"`, repoRoot);
 
       // 5. Push
-      git('push', dataDir);
+      git('push', repoRoot);
 
       return json({ message: `Pushed! "${msg}"`, commitMessage: msg });
     }
 
     if (action === 'pull') {
-      const output = git('pull', dataDir);
+      const output = git('pull', repoRoot);
       const upToDate = output.includes('Already up to date');
       return json({
         message: upToDate ? 'Already up to date.' : 'Pulled latest changes.',
