@@ -30,9 +30,10 @@
     onOpenAttackChain?: () => void;
     onOpenReport?: () => void;
     hasWorkspace?: boolean;
+    isPentest?: boolean;
   }
 
-  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenReport, hasWorkspace = false }: Props =
+  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenReport, hasWorkspace = false, isPentest = false }: Props =
     $props();
 
   let activeDialog: 'note' | 'folder' | null = $state(null);
@@ -161,6 +162,7 @@
       <Download size={15} />
     </button>
 
+    {#if isPentest}
     <!-- Divider -->
     <span class="mx-1 h-4 w-px bg-border"></span>
 
@@ -223,6 +225,7 @@
     >
       <FileText size={15} />
     </button>
+    {/if}
 
     <!-- Divider -->
     <span class="mx-1 h-4 w-px bg-border"></span>

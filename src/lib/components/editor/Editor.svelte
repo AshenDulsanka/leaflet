@@ -778,22 +778,21 @@
   ></div>
   <!-- Image toolbar overlay - shown when user clicks an image in WYSIWYG mode -->
   {#if imageToolbarState && mode === 'wysiwyg'}
-    {@const s = imageToolbarState}
     <ImageToolbar
-      rect={s.rect}
+      rect={imageToolbarState.rect}
       onOpenLightbox={() => {
-        const src = s.src; const alt = s.alt;
+        const src = imageToolbarState!.src; const alt = imageToolbarState!.alt;
         imageToolbarState = null;
         onImageClick?.(src, alt);
       }}
       onDelete={() => {
-        const pmPos = s.pmPos;
+        const pmPos = imageToolbarState!.pmPos;
         imageToolbarState = null;
         deleteImageAtPos(pmPos);
       }}
-      onAlignLeft={() => { const pmPos = s.pmPos; imageToolbarState = null; alignImage(pmPos, 'left'); }}
-      onAlignCenter={() => { const pmPos = s.pmPos; imageToolbarState = null; alignImage(pmPos, 'center'); }}
-      onAlignRight={() => { const pmPos = s.pmPos; imageToolbarState = null; alignImage(pmPos, 'right'); }}
+      onAlignLeft={() => { const pmPos = imageToolbarState!.pmPos; imageToolbarState = null; alignImage(pmPos, 'left'); }}
+      onAlignCenter={() => { const pmPos = imageToolbarState!.pmPos; imageToolbarState = null; alignImage(pmPos, 'center'); }}
+      onAlignRight={() => { const pmPos = imageToolbarState!.pmPos; imageToolbarState = null; alignImage(pmPos, 'right'); }}
       onClose={() => (imageToolbarState = null)}
     />
   {/if}

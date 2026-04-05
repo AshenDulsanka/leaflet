@@ -55,7 +55,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   `).run(
     id,
     body.name.trim(),
-    body.type ?? 'exam',
+    body.type ?? 'general',
     body.icon_color ?? '#6366f1',
     body.exam_start_date ?? null,
     body.exam_duration_days ?? 10,

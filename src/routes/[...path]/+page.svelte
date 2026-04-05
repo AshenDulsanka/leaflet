@@ -238,7 +238,8 @@
 
   async function createFile(path: string, type: 'file' | 'folder', initialContent?: string) {
     const wsFolder = activeWorkspace?.notes_folder;
-    const fullPath = wsFolder ? `${wsFolder}/${path}` : path;
+    const alreadyPrefixed = wsFolder && path.startsWith(`${wsFolder}/`);
+    const fullPath = wsFolder && !alreadyPrefixed ? `${wsFolder}/${path}` : path;
     const res = await fetch(`/api/notes/${fullPath}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -433,6 +434,7 @@
     onOpenSettings={() => (settingsOpen = true)}
     onOpenGraph={() => (graphOpen = !graphOpen)}
     hasWorkspace={!!activeWorkspace}
+    isPentest={activeWorkspace?.type === 'pentest'}
     onOpenHostTracker={() => (hostTrackerOpen = !hostTrackerOpen)}
     onOpenCredentialVault={() => (credentialVaultOpen = !credentialVaultOpen)}
     onOpenFlagTracker={() => (flagTrackerOpen = !flagTrackerOpen)}
@@ -472,10 +474,10 @@
           filePath={activeFile}
           bind:scrollTarget={pendingScrollTarget}
           onContentChange={handleContentChange}
-          onWordCountChange={(count) => (wordCount = count)}
-          onReady={(api) => { insertIntoEditor = api.insertText; editorApi = api; }}
-          onImageClick={(src, alt) => (lightboxImage = { src, alt })}
-          onWikilinkClick={(name) => {
+          onWordCountChange={(count: number) => (wordCount = count)}
+          onReady={(api: EditorApi) => { insertIntoEditor = api.insertText; editorApi = api; }}
+          onImageClick={(src: string, alt: string) => (lightboxImage = { src, alt })}
+          onWikilinkClick={(name: string) => {
             const path = findNoteByName(tree, name);
             if (path) openFile(path);
           }}

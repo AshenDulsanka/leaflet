@@ -45,7 +45,7 @@
           ],
         },
         {
-          duration: 400,
+          duration: 600,
           easing: 'ease-in-out',
           pseudoElement: '::view-transition-new(root)',
         }
