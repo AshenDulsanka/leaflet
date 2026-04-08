@@ -78,6 +78,15 @@ leaflet/
 - Do not use `any` types without a comment explaining why.
 - Do not hardcode file paths. Use environment variables with documented fallbacks.
 - Do not commit `.env` files or WAL temp files.
+
+## Agent Task Workflow
+
+1. Check if a GitHub issue exists for the task. If not, note that one should be created.
+2. Read the skill files listed in **Read First** before making changes.
+3. Search for existing similar code before writing new code.
+4. Write the implementation following all **What Agents Must Do** rules.
+5. Run `pnpm check` and `pnpm lint` mentally to verify no TypeScript or lint errors.
+6. Update `CHANGELOG.md` under `[Unreleased]` with a concise entry for every change made.
 - Do not leave dead code, unused imports, or commented-out blocks.
 
 ## Running the App
