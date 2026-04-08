@@ -458,6 +458,10 @@
       onMoveItem={moveFile}
       onSelectWorkspace={selectWorkspace}
       onCreateWorkspace={() => (createWorkspaceOpen = true)}
+      onPullSuccess={async () => {
+        await loadWorkspaces();
+        await loadTree(activeWorkspace?.notes_folder ?? '');
+      }}
     />
 
     <main class="relative flex flex-1 flex-col overflow-hidden">
