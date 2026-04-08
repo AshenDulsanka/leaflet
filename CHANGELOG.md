@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI pipeline: `pnpm check` → `pnpm lint` → `pnpm build` → `pnpm test` on every PR to `main` and push to `development` ([#9](https://github.com/AshenDulsanka/leaflet/issues/9))
 - Vitest unit test suite covering path-safety helpers, notes directory resolution, DB singleton lifecycle, WAL checkpoint, and connection reload
 
-## [0.1.0] - 2026-04-03
+## [0.1.0] - 2026-04-08
 
 ### Added
 - WYSIWYG editor (Milkdown) with source mode toggle (CodeMirror)
@@ -31,10 +31,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Note graph visualization (force-directed canvas)
 - Image upload, alignment, and lightbox
 - Export to Markdown, HTML, and PDF
-- Workspace isolation with CTF and general workspace types
+- Workspace isolation with `pentest` and `general` workspace types; `pentest` unlocks the engagement toolbar
 - CTF workspace tools: host tracker, credential vault, flag tracker, attack chain visualizer, command snippets, report generator
 - AI chat and summarize (Google Gemini default, MiniMax optional)
-- Git-based sync button (push/pull)
+- Git-based sync button (push/pull) with inline status messages
 - Default Workspace created on first run
 - Pinned notes scoped per workspace
 - Docker setup for development and production
+
+### Fixed
+- Sync API now detects the Git repo root instead of checking the data directory directly
+- Git cross-filesystem boundary discovery enabled so the repo root is found correctly inside Docker
+- SSL certificates, Git identity env vars, and GitHub token auth added to Docker sync environment
+- Double workspace-prefix prevented when creating notes in subfolders
+- `general` set as the correct default workspace type in the workspaces API
+- `better-sqlite3` native binding now builds correctly with pnpm 10+
+- `@const` removed from `#if` block to resolve `svelte-check` chunk-split error
+- `.git` directory mounted in Docker and `git add` scoped to the `data/` directory only
+- Light theme warm off-white background (`#f0eee6`) applied correctly
+- Warm palette extended to `secondary`, `muted`, `accent`, `border`, and `input` tokens in light theme
+- Theme toggle animation duration increased to 600 ms
+- Code quality pass: ESLint and `svelte-check` corrections applied
