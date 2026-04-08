@@ -5,7 +5,7 @@
 
 import { json } from '@sveltejs/kit';
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type { RequestHandler } from '@sveltejs/kit';
 
@@ -70,7 +70,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const notesDir = process.env.NOTES_DIR;
   if (notesDir) {
     const dir = join(notesDir, notes_folder);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+      // Mark the empty workspace folder so git tracks it
+      writeFileSync(join(dir, '.gitkeep'), '');
+    }
   }
 
   const workspace = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id);
