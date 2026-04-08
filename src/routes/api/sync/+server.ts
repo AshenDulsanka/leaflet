@@ -20,13 +20,24 @@ function getDataDir(): string {
   return process.env.NOTES_DATA_DIR ?? join(process.cwd(), 'data');
 }
 
+function getGitEnv(): Record<string, string> {
+  const env = { ...process.env } as Record<string, string>;
+  const name = process.env.GIT_USER_NAME;
+  const email = process.env.GIT_USER_EMAIL;
+  if (name) { env.GIT_AUTHOR_NAME = name; env.GIT_COMMITTER_NAME = name; }
+  if (email) { env.GIT_AUTHOR_EMAIL = email; env.GIT_COMMITTER_EMAIL = email; }
+  env.GIT_TERMINAL_PROMPT = '0';
+  env.GIT_DISCOVERY_ACROSS_FILESYSTEM = '1';
+  return env;
+}
+
 function getRepoRoot(fromDir: string): string | null {
   try {
     return execSync('git rev-parse --show-toplevel', {
       cwd: fromDir,
       encoding: 'utf-8',
       timeout: 5_000,
-      env: { ...process.env, GIT_DISCOVERY_ACROSS_FILESYSTEM: '1' },
+      env: getGitEnv(),
     }).trim();
   } catch {
     return null;
@@ -38,6 +49,7 @@ function git(args: string, cwd: string): string {
     cwd,
     encoding: 'utf-8',
     timeout: 30_000,
+    env: getGitEnv(),
   }).trim();
 }
 
@@ -114,14 +126,35 @@ export const POST: RequestHandler = async ({ request }) => {
       const msg = getRandomSyncMessage();
       git(`commit -m "${msg}"`, repoRoot);
 
-      // 5. Push
-      git('push', repoRoot);
+      // 5. Push (inject token into remote URL if configured)
+      const origUrl = git('remote get-url origin', repoRoot);
+      const token = process.env.GITHUB_TOKEN;
+      if (token) {
+        const authUrl = origUrl.replace(/^https:\/\//, `https://oauth2:${token}@`);
+        git(`remote set-url origin "${authUrl}"`, repoRoot);
+      }
+      try {
+        git('push', repoRoot);
+      } finally {
+        if (token) git(`remote set-url origin "${origUrl}"`, repoRoot);
+      }
 
       return json({ message: `Pushed! "${msg}"`, commitMessage: msg });
     }
 
     if (action === 'pull') {
-      const output = git('pull', repoRoot);
+      const origUrl = git('remote get-url origin', repoRoot);
+      const token = process.env.GITHUB_TOKEN;
+      if (token) {
+        const authUrl = origUrl.replace(/^https:\/\//, `https://oauth2:${token}@`);
+        git(`remote set-url origin "${authUrl}"`, repoRoot);
+      }
+      let output = '';
+      try {
+        output = git('pull', repoRoot);
+      } finally {
+        if (token) git(`remote set-url origin "${origUrl}"`, repoRoot);
+      }
       const upToDate = output.includes('Already up to date');
       return json({
         message: upToDate ? 'Already up to date.' : 'Pulled latest changes.',
