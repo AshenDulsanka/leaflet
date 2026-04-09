@@ -2,7 +2,19 @@
 
 A self-hosted markdown note-taking app for general use and for CTF and penetration testing engagements.
 
+## About
+
+Leaflet was created to capture notes from the HackTheBox CPTS (Certified Penetration Testing Specialist) course. The app was inspired by **Obsidian** and **Cherry Tree** (an open-source hierarchical note-taking tool), but I decided to build my own to:
+
+1. Add features tailored to **pentest/CTF workflows** — Host tracker, credential vault, flag tracker, attack chain visualizer, and report generation
+2. Keep notes as **plain `.md` files** — maximizing portability and Git-friendly sync
+3. Support **both general and pentest modes** via workspace selection, since the app proved useful for everyday note-taking too
+
 Leaflet combines a rich WYSIWYG editor with engagement-specific tools that activate when a workspace is marked as CTF-related. Notes are plain `.md` files on disk — Git is the sync mechanism between devices. No cloud. No lock-in.
+
+### Learning Projects
+
+This project also serves as a reference for **agent orchestration** and open-source project structure — featuring an 8-agent AI engineering pipeline (orchestrator, planner, coder, designer, code-reviewer, security-auditor, test-writer, docs-updater) with structured output formats, context-passing protocols, and skills-based code generation.
 
 ## Features
 
@@ -130,13 +142,14 @@ git pull
 
 | File | Contents |
 |------|----------|
-| `.github/skills/architecture.md` | Data flow, folder structure, design decisions |
-| `.github/skills/coding-standards.md` | Code conventions for contributors and AI agents |
-| `.github/skills/commit-conventions.md` | Commit message format and examples |
-| `.github/skills/branch-conventions.md` | Branch naming rules |
-| `.github/skills/pr-standards.md` | Pull request requirements |
+| `AGENTS.md` | 8-agent orchestration pipeline and AI coding agent guidelines |
+| `.github/skills/architecture/SKILL.md` | Data flow, folder structure, design decisions |
+| `.github/skills/coding-standards/SKILL.md` | Code conventions for contributors and AI agents |
+| `.github/skills/commit-conventions/SKILL.md` | Commit message format and examples |
+| `.github/skills/branch-conventions/SKILL.md` | Branch naming rules |
+| `.github/skills/pr-standards/SKILL.md` | Pull request requirements |
+| `.github/agents/` | 8 specialized agents (orchestrator, planner, coder, designer, code-reviewer, security-auditor, test-writer, docs-updater) |
 | `CONTRIBUTING.md` | How to contribute |
-| `AGENTS.md` | Instructions for AI coding agents |
 
 ## Contributing
 
