@@ -1,7 +1,8 @@
 ---
-description: Writes Vitest unit tests for Leaflet server-side TypeScript. Use when adding tests for notes file operations (notes.ts), database functions (database.ts), or API utility helpers. Follows the existing test patterns in src/lib/server/*.test.ts — sets NOTES_DATA_DIR before imports, uses tmpdir() for isolation, and calls reloadDb() in afterEach.
+name: Test Writer
+description: 'Writes Vitest unit tests for Leaflet server-side TypeScript. Use when adding tests for notes file operations (notes.ts), database functions (database.ts), or API utility helpers. Sets NOTES_DATA_DIR before imports, uses tmpdir() for isolation, and calls reloadDb() in afterEach. Returns a complete test file with a structured report covering test cases written, coverage assessment, run results, and any obstacles encountered.'
 model: Claude Sonnet 4.6 (copilot)
-tools: [read, edit, search, execute, context7/*, vscode]
+tools: [vscode, execute, read, edit, search, 'io.github.upstash/context7/*']
 user-invocable: true
 ---
 
@@ -77,6 +78,23 @@ describe('getDb', () => {
 });
 ```
 
-## Output
+## Output Format
 
-Write the complete test file content. Include all necessary imports. Run the tests mentally and verify expected values make sense before finishing.
+Write the complete test file content. Include all necessary imports. Verify expected values make sense before finishing.
+
+Then provide your test report in this structured format:
+
+**1. Summary**
+Brief description of what was tested (file, functions) and an overall coverage assessment.
+
+**2. Test Cases Written**
+List of every `describe` block and `it()` test written, with one-line descriptions of what each verifies.
+
+**3. Coverage Assessment**
+For each function tested, confirm whether happy path, edge cases, and error cases are covered. Note any gaps that remain.
+
+**4. Run Results**
+Outcome of running the tests (pass/fail). List any failing tests and why. If tests could not be run, explain why.
+
+**5. Obstacles Encountered**
+Report any obstacles encountered during test writing. This includes: env var ordering problems, import issues, module resolution errors, mocking decisions, or any workarounds applied.

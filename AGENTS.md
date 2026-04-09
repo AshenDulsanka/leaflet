@@ -93,6 +93,23 @@ leaflet/
 6. Update `CHANGELOG.md` under `[Unreleased]` with a concise entry for every change made.
 - Do not leave dead code, unused imports, or commented-out blocks.
 
+## Orchestration Pipeline
+
+For complex features, bug fixes, or multi-file changes, use the 8-agent orchestration pipeline in `.github/agents/`. Invoke `@Orchestrator` as your entry point — it will break the work into phases, delegate to specialist agents, and report results.
+
+| Agent | Role |
+|-------|------|
+| **Orchestrator** | Brain — classifies request, plans phases, delegates, gates on quality |
+| **Planner** | Researches codebase and produces ordered implementation steps |
+| **Coder** | Implements TypeScript, SvelteKit routes, server-side logic |
+| **Designer** | Writes Svelte 5 components and Tailwind UI |
+| **Code Reviewer** | Audits code quality against coding-standards/SKILL.md |
+| **Security Auditor** | Audits for path traversal, SQL injection, XSS, and secret leaks |
+| **Test Writer** | Writes Vitest unit tests for `src/lib/server/` |
+| **Docs Updater** | Updates CHANGELOG.md, AGENTS.md, README.md |
+
+**Standard pipeline:** Planner → Coder + Designer (parallel) → Code Reviewer + Security Auditor (parallel) → Test Writer + Docs Updater (parallel)
+
 ## Running the App
 
 ```bash

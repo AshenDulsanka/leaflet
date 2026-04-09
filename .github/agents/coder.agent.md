@@ -2,7 +2,7 @@
 name: Coder
 description: 'Writes and fixes TypeScript, SvelteKit route files, API endpoints, server-side utilities, and Svelte 5 logic for the Leaflet notes application. Follows mandatory project coding principles, uses context7 for up-to-date framework documentation, and never assumes API behavior from training data. Use when implementing features, fixing bugs, or refactoring server-side code in Leaflet.'
 model: Claude Sonnet 4.6 (copilot)
-tools: [read, edit, search, execute, context7/*, github/*, vscode, memory, todo]
+tools: [vscode, execute, read, edit, search, 'github/*', 'io.github.upstash/context7/*', vscode/memory, todo]
 user-invocable: true
 ---
 
@@ -62,3 +62,25 @@ You write code for **Leaflet** — a SvelteKit notes application with Svelte 5, 
 - Do not hardcode `NOTES_DATA_DIR` — always read from environment.
 - Do not return stack traces or internal paths to the client.
 - Do not bypass `safePath()` for any reason.
+
+## Output Format
+
+Provide your implementation report in this structured format:
+
+**1. Summary**
+Brief description of what was implemented and the overall approach taken.
+
+**2. Changes Made**
+List each file created or modified with a concise description of the change.
+
+**3. Security Confirmations**
+Explicitly confirm: (a) all file system operations go through `safePath()`, (b) all SQL uses prepared statements with `?` placeholders, (c) no secrets or stack traces are returned to the client.
+
+**4. Verification Results**
+Outcome of `pnpm check` and `pnpm lint`. List any type errors or lint violations found and whether they were resolved.
+
+**5. Follow-up Needed**
+Anything that still needs to be done: missing types, unhandled edge cases, follow-on tasks for Designer or Test Writer.
+
+**6. Obstacles Encountered**
+Report any obstacles encountered. This includes: setup issues, dependency conflicts, framework API surprises, or workarounds that needed to be applied.

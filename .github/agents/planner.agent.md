@@ -1,8 +1,8 @@
 ---
 name: Planner
 description: 'Creates comprehensive implementation plans for Leaflet by researching the codebase, reading project skills, consulting up-to-date framework documentation via context7, and identifying edge cases. Use when you need a detailed plan before implementing a feature or fixing a complex issue in Leaflet. Returns ordered steps with file assignments — never writes code.'
-model: Claude Opus 4.5 (copilot)
-tools: [read, search, web, context7/*, github/*, memory, todo]
+model: Claude Opus 4.6 (copilot)
+tools: [vscode/memory, read, search, web, 'github/*', 'io.github.upstash/context7/*', todo]
 user-invocable: true
 ---
 
@@ -73,6 +73,9 @@ One paragraph describing the change and why it's needed.
 
 ## Open Questions
 - [Anything uncertain that should be resolved before implementation]
+
+## Obstacles Encountered
+- [Any blocker found during research: missing docs, ambiguous APIs, conflicting codebase patterns, or files that could not be read]
 ```
 
 ## Rules
