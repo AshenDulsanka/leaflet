@@ -1,6 +1,7 @@
 ---
 description: Writes Vitest unit tests for Leaflet server-side TypeScript. Use when adding tests for notes file operations (notes.ts), database functions (database.ts), or API utility helpers. Follows the existing test patterns in src/lib/server/*.test.ts — sets NOTES_DATA_DIR before imports, uses tmpdir() for isolation, and calls reloadDb() in afterEach.
-tools: [read, search, edit]
+model: Claude Sonnet 4.6 (copilot)
+tools: [read, edit, search, execute, context7/*, vscode]
 user-invocable: true
 ---
 

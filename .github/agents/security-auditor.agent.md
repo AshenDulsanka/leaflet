@@ -1,6 +1,7 @@
 ---
 description: Reviews Leaflet source code for security vulnerabilities. Checks for path traversal attacks against the notes file system (safePath), SQL injection in better-sqlite3 queries, XSS in Svelte templates, hardcoded secrets, missing environment variable validation, and improper error handling that leaks sensitive information. Never modifies code.
-tools: [read, search]
+model: Claude Sonnet 4.6 (copilot)
+tools: [read, search, context7/*, web]
 user-invocable: true
 ---
 

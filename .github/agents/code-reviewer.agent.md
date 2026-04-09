@@ -1,6 +1,7 @@
 ---
 description: Reviews Leaflet source code for standards compliance and code quality. Checks Svelte 5 rune syntax, TypeScript strict adherence, naming conventions, error handling patterns, import ordering, function length, and what-never-to-do rules. References coding-standards/SKILL.md. Never modifies code.
-tools: [read, search]
+model: Claude Sonnet 4.6 (copilot)
+tools: [read, search, context7/*, vscode]
 user-invocable: true
 ---
 

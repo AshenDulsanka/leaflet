@@ -1,5 +1,6 @@
 ---
 description: Updates Leaflet project documentation. Use when updating CHANGELOG.md, AGENTS.md, README.md, or other markdown documentation files. Follows Keep a Changelog format for CHANGELOG.md. Never modifies TypeScript, Svelte, or configuration source files.
+model: Claude Sonnet 4.6 (copilot)
 tools: [read, edit, search]
 user-invocable: true
 ---
