@@ -6,10 +6,12 @@ This file defines how AI coding agents (GitHub Copilot, Claude Code, etc.) shoul
 
 Before writing any code, read these files in order:
 
-1. `.github/skills/coding-standards.md` - TypeScript, Svelte 5, and general code conventions
-2. `.github/skills/commit-conventions.md` - commit message format and scope list
-3. `.github/skills/architecture.md` - folder structure, data flow, design decisions
-4. `docs/SECURITY.md` - path traversal prevention, secret management, input validation
+1. `.github/skills/coding-standards/SKILL.md` — TypeScript, Svelte 5, and general code conventions
+2. `.github/skills/commit-conventions/SKILL.md` — commit message format and scope list
+3. `.github/skills/architecture/SKILL.md` — folder structure, data flow, design decisions
+4. `.github/skills/branch-conventions/SKILL.md` — branch naming rules and lifecycle
+5. `.github/skills/pr-standards/SKILL.md` — pull request format and review requirements
+6. `docs/SECURITY.md` — path traversal prevention, secret management, input validation
 
 ## What Is Leaflet
 
@@ -69,8 +71,10 @@ leaflet/
 - Use Lucide icons from `@lucide/svelte`. No emojis anywhere — not in code, data, seed files, comments, or UI strings. When an icon identifier is needed in data or database records, use the Lucide icon name as a string (e.g., `'notebook-pen'`, `'circle-alert'`).
 - Use `better-sqlite3` synchronously. No async DB calls.
 - Validate all file paths with `safePath()` before any `fs` operation (see `docs/SECURITY.md`).
-- Follow `.github/skills/coding-standards.md` for naming, imports, error handling.
-- Follow `.github/skills/commit-conventions.md` for all commit messages.
+- Follow `.github/skills/coding-standards/SKILL.md` for naming, imports, error handling.
+- Follow `.github/skills/commit-conventions/SKILL.md` for all commit messages.
+- Follow `.github/skills/branch-conventions/SKILL.md` for branch naming.
+- Follow `.github/skills/pr-standards/SKILL.md` when opening pull requests.
 
 ## What Agents Must Not Do
 
