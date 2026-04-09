@@ -31,3 +31,14 @@ export function checkpoint(): void {
   const db = getDb();
   db.pragma('wal_checkpoint(TRUNCATE)');
 }
+
+/**
+ * Close and discard the current DB connection so the next getDb() call
+ * reopens from disk. Call this after a git pull overwrites the .db file.
+ */
+export function reloadDb(): void {
+  if (_db) {
+    _db.close();
+    _db = null;
+  }
+}

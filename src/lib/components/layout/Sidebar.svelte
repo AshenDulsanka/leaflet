@@ -19,9 +19,10 @@
     onMoveItem: (fromPath: string, toFolderPath: string) => void;
     onSelectWorkspace?: (ws: Workspace) => void;
     onCreateWorkspace?: () => void;
+    onPullSuccess?: () => void;
   }
 
-  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace }: Props = $props();
+  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess }: Props = $props();
 
   let wsDropdownOpen = $state(false);
 
@@ -132,7 +133,7 @@
     {#if !collapsed}
       <span class="text-xs font-medium tracking-widest text-muted-foreground uppercase">Notes</span>
       <div class="ml-auto flex items-center gap-0.5">
-        <SyncButton />
+        <SyncButton {onPullSuccess} />
         <button
           title="Collapse sidebar (Ctrl+B)"
           onclick={() => (collapsed = !collapsed)}

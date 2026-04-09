@@ -13,7 +13,7 @@ import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join, relative } from 'path';
 import type { RequestHandler } from '@sveltejs/kit';
-import { checkpoint } from '$lib/server/database';
+import { checkpoint, reloadDb } from '$lib/server/database';
 import { getRandomSyncMessage } from '$lib/data/sync-messages';
 
 function getDataDir(): string {
@@ -155,6 +155,9 @@ export const POST: RequestHandler = async ({ request }) => {
       } finally {
         if (token) git(`remote set-url origin "${origUrl}"`, repoRoot);
       }
+      // Discard stale in-memory DB connection so the next request reopens
+      // the file that was just updated by the pull.
+      reloadDb();
       const upToDate = output.includes('Already up to date');
       return json({
         message: upToDate ? 'Already up to date.' : 'Pulled latest changes.',

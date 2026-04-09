@@ -2,6 +2,7 @@
   import '../app.css';
   import { onMount } from 'svelte';
   import { theme } from '$lib/theme.svelte';
+  import FloatingPill from '$lib/components/FloatingPill.svelte';
 
   // Initialize theme from localStorage on mount (client-side only)
   onMount(() => {
@@ -27,3 +28,4 @@
 </svelte:head>
 
 {@render children()}
+<FloatingPill />

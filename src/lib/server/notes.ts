@@ -83,10 +83,19 @@ export async function createNote(relativePath: string, isDirectory = false): Pro
   const filePath = safePath(relativePath);
   if (isDirectory) {
     await fs.mkdir(filePath, { recursive: true });
+    // Mark the empty directory so git tracks it
+    await fs.writeFile(join(filePath, '.gitkeep'), '');
   } else {
     await fs.mkdir(dirname(filePath), { recursive: true });
     // Create with empty content if it doesn't exist
     await fs.writeFile(filePath, '', { flag: 'wx' });
+    // Now that the directory has a real note, remove the placeholder
+    const gitkeep = join(dirname(filePath), '.gitkeep');
+    try {
+      await fs.unlink(gitkeep);
+    } catch {
+      // .gitkeep may not exist — that's fine
+    }
   }
 }
 
