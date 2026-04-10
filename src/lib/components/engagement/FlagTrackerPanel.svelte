@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Flag, Plus, X, RefreshCw, CheckCircle2, Circle, Trash2 } from '@lucide/svelte';
+  import CopyButton from '$lib/components/ui/CopyButton.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -258,7 +259,12 @@
                   <span class="text-[10px] text-muted-foreground">{flag.host_hostname || flag.host_ip}</span>
                 {/if}
               </div>
-              <code class="block truncate text-[10px] font-mono text-foreground">{flag.value || '(empty)'}</code>
+              <div class="flex items-center gap-1">
+                <code class="flex-1 truncate text-[10px] font-mono text-foreground">{flag.value || '(empty)'}</code>
+                {#if flag.value}
+                  <CopyButton text={flag.value} size={10} />
+                {/if}
+              </div>
               {#if flag.capture_method}
                 <p class="text-[10px] text-muted-foreground">via {flag.capture_method}</p>
               {/if}

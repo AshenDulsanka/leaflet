@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Monitor, Plus, X, ChevronDown, ChevronRight, Trash2, RefreshCw, Globe } from '@lucide/svelte';
+  import CopyButton from '$lib/components/ui/CopyButton.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -256,24 +257,31 @@
             <div class="group flex items-center gap-2 px-3 py-2 hover:bg-accent/50">
               <button
                 onclick={() => (expandedHost = expandedHost === host.id ? null : host.id)}
-                class="flex flex-1 items-center gap-2 text-left"
+                class="flex-shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                title={expandedHost === host.id ? 'Collapse' : 'Expand'}
               >
                 {#if expandedHost === host.id}
-                  <ChevronDown size={11} class="flex-shrink-0 text-muted-foreground" />
+                  <ChevronDown size={11} />
                 {:else}
-                  <ChevronRight size={11} class="flex-shrink-0 text-muted-foreground" />
-                {/if}
-                <div class="h-2 w-2 flex-shrink-0 rounded-full {statusDots[host.status] ?? statusDots.unknown}"></div>
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-xs font-medium">{host.ip}</p>
-                  {#if host.hostname}
-                    <p class="truncate text-[10px] text-muted-foreground">{host.hostname}</p>
-                  {/if}
-                </div>
-                {#if host.ports.length > 0}
-                  <span class="text-[10px] text-muted-foreground">{host.ports.length}p</span>
+                  <ChevronRight size={11} />
                 {/if}
               </button>
+              <div class="h-2 w-2 flex-shrink-0 rounded-full {statusDots[host.status] ?? statusDots.unknown}"></div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1">
+                  <span class="truncate text-xs font-medium">{host.ip}</span>
+                  <CopyButton text={host.ip} size={10} />
+                </div>
+                {#if host.hostname}
+                  <div class="flex items-center gap-1">
+                    <span class="truncate text-[10px] text-muted-foreground">{host.hostname}</span>
+                    <CopyButton text={host.hostname} size={10} />
+                  </div>
+                {/if}
+              </div>
+              {#if host.ports.length > 0}
+                <span class="text-[10px] text-muted-foreground">{host.ports.length}p</span>
+              {/if}
               <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                 <select
                   value={host.status}
@@ -325,12 +333,19 @@
                             <td class="px-2 py-0.5 text-muted-foreground">{port.protocol}</td>
                             <td class="px-2 py-0.5 text-muted-foreground">{port.service || '-'}</td>
                             <td class="px-1 py-0.5">
-                              <button
-                                onclick={() => deletePort(host.id, port.id)}
-                                class="flex h-4 w-4 items-center justify-center rounded text-destructive opacity-0 transition-opacity group-hover/port:opacity-100 hover:bg-destructive/10"
-                              >
-                                <X size={9} />
-                              </button>
+                              <div class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/port:opacity-100">
+                                <CopyButton
+                                  text="{port.number}/{port.protocol}{port.service ? ` ${port.service}` : ''}"
+                                  size={9}
+                                  class="h-4 w-4"
+                                />
+                                <button
+                                  onclick={() => deletePort(host.id, port.id)}
+                                  class="flex h-4 w-4 items-center justify-center rounded text-destructive hover:bg-destructive/10"
+                                >
+                                  <X size={9} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         {/each}
