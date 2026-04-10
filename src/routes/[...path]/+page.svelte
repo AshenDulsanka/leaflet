@@ -14,7 +14,6 @@
   import FlagTrackerPanel from '$lib/components/engagement/FlagTrackerPanel.svelte';
   import CommandSnippetsPanel from '$lib/components/panels/CommandSnippetsPanel.svelte';
   import AttackChainPanel from '$lib/components/engagement/AttackChainPanel.svelte';
-  import ReportGeneratorPanel from '$lib/components/engagement/ReportGeneratorPanel.svelte';
   import CommandPalette from '$lib/components/modals/CommandPalette.svelte';
   import MethodologyPanel from '$lib/components/panels/MethodologyPanel.svelte';
   import AiChat from '$lib/components/panels/AiChat.svelte';
@@ -77,7 +76,6 @@
   let flagTrackerOpen = $state(false);
   let snippetsOpen = $state(false);
   let attackChainOpen = $state(false);
-  let reportOpen = $state(false);
   let graphOpen = $state(false);
   let aiMessages = $state<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   let insertIntoEditor = $state<((text: string) => void) | null>(null);
@@ -162,7 +160,6 @@
   $effect(() => { if (flagTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; snippetsOpen = false; } });
   $effect(() => { if (snippetsOpen)        { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; } });
   $effect(() => { if (attackChainOpen)     { /* full-screen modal - no sidebar conflict */ } });
-  $effect(() => { if (reportOpen)          { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; } });
   $effect(() => { if (graphOpen)           { /* full-screen overlay - close other full-screen panels */ attackChainOpen = false; } });
 
   onMount(async () => {
@@ -448,7 +445,6 @@
     onOpenFlagTracker={() => (flagTrackerOpen = !flagTrackerOpen)}
     onOpenSnippets={() => (snippetsOpen = !snippetsOpen)}
     onOpenAttackChain={() => (attackChainOpen = !attackChainOpen)}
-    onOpenReport={() => (reportOpen = !reportOpen)}
   />
 
   <div class="flex flex-1 overflow-hidden">
@@ -570,13 +566,6 @@
       />
     {/if}
 
-    {#if reportOpen}
-      <ReportGeneratorPanel
-        workspaceId={activeWorkspace?.id ?? null}
-        onClose={() => (reportOpen = false)}
-        onInsert={(text) => { insertIntoEditor?.(text); }}
-      />
-    {/if}
   </div>
 
   {#if attackChainOpen}
