@@ -313,10 +313,11 @@
   }
 
   // Flat list of all note paths for wikilink autocomplete
+  // readTree only emits type:'file' for .md files, so no extension check needed
   function flattenTree(nodes: FileNode[]): string[] {
     const paths: string[] = [];
     for (const node of nodes) {
-      if (node.type === 'file' && node.name.endsWith('.md')) {
+      if (node.type === 'file') {
         paths.push(node.path);
       } else if (node.children) {
         paths.push(...flattenTree(node.children));

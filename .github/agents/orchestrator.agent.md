@@ -29,7 +29,7 @@ You coordinate work. **You NEVER write code, edit files, or run shell commands y
 
 | Agent | Role | Invoke when |
 |-------|------|-------------|
-| **Planner** | Research codebase + create implementation strategy | Always first for new features or complex changes |
+| **Planner** | Research codebase + create implementation strategy | New features, changes touching 2+ files, any DB/schema change, or when the implementation path isn't immediately obvious. |
 | **Coder** | Write TypeScript, SvelteKit routes, server-side logic | Implementing logic, file ops, API endpoints, DB queries |
 | **Designer** | Write Svelte 5 components, Tailwind styling | UI components, layouts, visual/interactive changes |
 | **Code-reviewer** | Audit code quality and standards compliance | After every implementation |

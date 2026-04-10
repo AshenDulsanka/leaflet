@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { X, Search, RefreshCw } from '@lucide/svelte';
 
   interface Props {
@@ -25,10 +25,13 @@
   }
 
   let containerEl: HTMLDivElement | undefined = $state();
+  let hoveredNodeId = $state<string | null>(null);
+  let neighborMap = new Map<string, Set<string>>();
   // force-graph types declare it as a class but it's callable as a factory function;
   // using object to avoid ReturnType constraint error.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let graph: any = $state(null);
+  let graph: any = null;
+  let graphReady = $state(false);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let searchQuery = $state('');
@@ -49,6 +52,14 @@
   ];
 
   const folderColorMap = new Map<string, string>();
+  function escapeHtml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   function folderColor(folder: string): string {
     if (!folder) return '#94a3b8'; // slate for root
     if (!folderColorMap.has(folder)) {
@@ -63,24 +74,35 @@
     return base + bonus;
   }
 
-  // Re-apply highlight filter whenever searchQuery changes
-  $effect(() => {
+  function applyColors(): void {
     if (!graph) return;
-    if (!searchQuery.trim()) {
-      graph.nodeColor((n: GraphNode) => folderColor(n.folder));
+
+    if (searchQuery.trim()) {
+      // Dim links during search — nodes handle search coloring via nodeCanvasObject
+      graph.linkColor(() => '#1e293b');
       return;
     }
-    const q = searchQuery.toLowerCase();
-    const ids = new Set<string>();
-    (graph.graphData().nodes as GraphNode[]).forEach((n) => {
-      if (n.name.toLowerCase().includes(q) || n.folder.toLowerCase().includes(q)) {
-        ids.add(n.id);
-      }
-    });
-    graph.nodeColor((n: GraphNode) => {
-      if (ids.has(n.id)) return '#facc15'; // yellow highlight
-      return '#334155'; // dimmed
-    });
+
+    if (hoveredNodeId) {
+      graph.linkColor((link: GraphLink) => {
+        const src = typeof link.source === 'object' ? (link.source as GraphNode).id : link.source;
+        const tgt = typeof link.target === 'object' ? (link.target as GraphNode).id : link.target;
+        return (src === hoveredNodeId || tgt === hoveredNodeId) ? '#6366f1' : '#1e293b';
+      });
+      return;
+    }
+
+    // Default
+    graph.linkColor(() => '#334155');
+  }
+
+  // Re-apply link colors and force a canvas re-render whenever state changes
+  $effect(() => {
+    hoveredNodeId; // track
+    searchQuery;   // track
+    if (!graphReady) return;
+    applyColors();   // update link colors
+    graph.refresh(); // force canvas re-render so nodeCanvasObject picks up new state
   });
 
   onMount(async () => {
@@ -100,8 +122,23 @@
     nodeCount = data.nodes.length;
     linkCount = data.links.length;
     loading = false;
+    await tick(); // wait for Svelte to render the containerEl div
 
-    if (!containerEl) return;
+    if (!containerEl) {
+      error = 'Failed to initialize graph container.';
+      return;
+    }
+
+    // Build adjacency map for hover highlighting
+    neighborMap = new Map<string, Set<string>>();
+    for (const link of data.links) {
+      const src = typeof link.source === 'string' ? link.source : (link.source as GraphNode).id;
+      const tgt = typeof link.target === 'string' ? link.target : (link.target as GraphNode).id;
+      if (!neighborMap.has(src)) neighborMap.set(src, new Set());
+      if (!neighborMap.has(tgt)) neighborMap.set(tgt, new Set());
+      neighborMap.get(src)!.add(tgt);
+      neighborMap.get(tgt)!.add(src);
+    }
 
     // force-graph is a factory function; cast to any to bypass tsc class-check
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,32 +149,61 @@
       .height(containerEl.clientHeight)
       .graphData(data)
       .nodeId('id')
-      .nodeLabel((n: GraphNode) => `<div style="background:#1e293b;color:#e2e8f0;padding:4px 8px;border-radius:4px;font-size:12px;border:1px solid #334155">${n.name}${n.folder ? ` <span style="opacity:0.5">(${n.folder})</span>` : ''}</div>`)
+      .nodeLabel((n: GraphNode) =>
+        `<div style="background:#1e293b;color:#e2e8f0;padding:4px 8px;border-radius:4px;font-size:12px;border:1px solid #334155">${escapeHtml(n.name)}${n.folder ? ` <span style="opacity:0.5">(${escapeHtml(n.folder)})</span>` : ''}</div>`)
       .nodeVal((n: GraphNode) => nodeRadius(n) * nodeRadius(n))
       .nodeColor((n: GraphNode) => folderColor(n.folder))
       .nodeCanvasObject((n: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
         const r = nodeRadius(n);
-        const color = folderColor(n.folder);
 
-        // Node circle
+        // Determine fill color — priority: search filter > hover > default
+        let nodeColor: string;
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const isMatch = n.name.toLowerCase().includes(q) || n.folder.toLowerCase().includes(q);
+          nodeColor = isMatch ? '#facc15' : '#334155';
+        } else if (hoveredNodeId) {
+          if (n.id === hoveredNodeId) nodeColor = '#818cf8';
+          else if (neighborMap.get(hoveredNodeId)?.has(n.id)) nodeColor = '#6366f1';
+          else nodeColor = '#1e293b';
+        } else {
+          nodeColor = folderColor(n.folder);
+        }
+
+        // Draw circle
         ctx.beginPath();
         ctx.arc(n.x ?? 0, n.y ?? 0, r, 0, 2 * Math.PI);
-        ctx.fillStyle = color;
+        ctx.fillStyle = nodeColor;
         ctx.fill();
 
-        // Label - only show when zoomed in enough
-        if (globalScale > 1.2) {
-          const label = n.name;
-          const fontSize = Math.max(9, 12 / globalScale);
-          ctx.font = `${fontSize}px Inter, sans-serif`;
-          ctx.fillStyle = '#e2e8f0';
-          ctx.textAlign = 'center';
-          ctx.fillText(label, n.x ?? 0, (n.y ?? 0) + r + fontSize + 1);
+        // Label — always visible, size scales with zoom
+        const label = n.name;
+        const fontSize = Math.max(8, 12 / globalScale);
+        ctx.font = `${fontSize}px Inter, sans-serif`;
+
+        if (hoveredNodeId && !searchQuery.trim()) {
+          if (n.id === hoveredNodeId) ctx.fillStyle = '#e2e8f0';
+          else if (neighborMap.get(hoveredNodeId)?.has(n.id)) ctx.fillStyle = '#94a3b8';
+          else ctx.fillStyle = '#334155';
+        } else if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const isMatch = n.name.toLowerCase().includes(q) || n.folder.toLowerCase().includes(q);
+          ctx.fillStyle = isMatch ? '#fef08a' : '#475569';
+        } else {
+          ctx.fillStyle = '#94a3b8';
         }
+
+        ctx.textAlign = 'center';
+        ctx.fillText(label, n.x ?? 0, (n.y ?? 0) + r + fontSize + 1);
       })
       .nodeCanvasObjectMode(() => 'replace')
       .linkColor(() => '#334155')
-      .linkWidth(0.8)
+      .linkWidth((link: GraphLink) => {
+        if (!hoveredNodeId) return 0.8;
+        const src = typeof link.source === 'object' ? (link.source as GraphNode).id : link.source;
+        const tgt = typeof link.target === 'object' ? (link.target as GraphNode).id : link.target;
+        return src === hoveredNodeId || tgt === hoveredNodeId ? 2 : 0.4;
+      })
       .linkDirectionalParticles(0)
       .enableNodeDrag(true)
       .onNodeClick((n: GraphNode) => {
@@ -145,9 +211,8 @@
         onClose();
       })
       .onNodeHover((n: GraphNode | null) => {
-        if (containerEl) {
-          containerEl.style.cursor = n ? 'pointer' : 'default';
-        }
+        hoveredNodeId = n ? n.id : null;
+        if (containerEl) containerEl.style.cursor = n ? 'pointer' : 'default';
       });
 
     // Resize observer
@@ -159,15 +224,16 @@
     });
     ro.observe(containerEl!);
 
+    graphReady = true;
+
     // Store cleanup ref
     (graph as unknown as { _ro: ResizeObserver })._ro = ro;
   });
 
   onDestroy(() => {
     if (graph) {
-      const g = graph as unknown as { _ro?: ResizeObserver; _destructor?: () => void };
-      g._ro?.disconnect();
-      g._destructor?.();
+      (graph as unknown as { _ro?: ResizeObserver })._ro?.disconnect();
+      if (typeof graph.pauseAnimation === 'function') graph.pauseAnimation();
     }
   });
 

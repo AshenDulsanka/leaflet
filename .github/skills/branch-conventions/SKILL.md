@@ -1,6 +1,6 @@
 ---
 name: branch-conventions
-description: 'Use when creating a branch or reviewing branch names. Covers type prefixes (feat, fix, docs, chore, refactor, ci), naming rules (all lowercase, hyphens only, 2-5 words), branch lifecycle from cut to delete, and correct/wrong examples.'
+description: Use when creating a branch or reviewing branch names. Covers type prefixes (feat, fix, docs, chore, refactor, ci), naming rules (all lowercase, hyphens only, 2-5 words), branch lifecycle from cut to delete, and correct/wrong examples.
 ---
 
 # Branch Naming Conventions

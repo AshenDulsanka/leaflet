@@ -1,6 +1,6 @@
 ---
 name: pr-standards
-description: 'Use when creating or reviewing pull requests. Covers PR title format (Conventional Commits), required issue reference, three-section description template (What changed / Why / How to test), 400-line diff limit, screenshot requirements for UI changes, squash merge strategy, and review requirements.'
+description: Use when creating or reviewing pull requests. Covers PR title format (Conventional Commits), required issue reference, three-section description template (What changed / Why / How to test), 400-line diff limit, screenshot requirements for UI changes, squash merge strategy, and review requirements.
 ---
 
 # Pull Request Standards

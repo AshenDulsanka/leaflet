@@ -9,7 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Wiki-link `[[...]]` autocomplete, visual highlighting, and slash-command insertion all repaired: `flattenTree` was silently discarding all note paths (`.md` extension check on already-stripped names), CSS Highlight ranges were invalid due to `domAtPos` element–text-node ambiguity (replaced with DOM `TreeWalker`), and the slash command left `/w[[` instead of `[[` due to unreliable `setTimeout` (replaced with double `requestAnimationFrame` + remnant cleanup)
 - SQLite DB connection is now reloaded after `git pull` so the app reads updated data without a server restart ([#5](https://github.com/AshenDulsanka/leaflet/issues/5))
+- Wikilink `[[note]]` rendering in WYSIWYG editor — CSS Highlight API approach was unreliable (Range objects became stale when ProseMirror replaced DOM nodes); replaced with ProseMirror `Decoration.inline()` plugin injected via `state.reconfigure()` so highlights stay in sync with the editor's render cycle
+- Wikilink autocomplete dropdown keyboard navigation — arrow keys reset to first item on every keyup due to `checkAndUpdateWikilinkDropdown` always resetting `selectedIndex` to `0`; now preserves index when the typed query is unchanged
+- Note Graph canvas was blank — `containerEl` was `undefined` at point of force-graph initialization because it lives inside a Svelte `{:else}` block and `loading = false` was set before Svelte flushed the DOM; fixed with `await tick()`
+- Note Graph search filter did not highlight nodes — `graph.nodeColor()` was dead code because `nodeCanvasObjectMode(() => 'replace')` bypasses the color callback; node color logic moved into `nodeCanvasObject` so search and hover states render correctly
+- XSS in Note Graph tooltip — `nodeLabel` template injected `n.name` and `n.folder` directly into HTML without escaping; added `escapeHtml()` helper applied to all interpolated values
+- Note Graph memory leak on close — `onDestroy` called `_destructor()` which does not exist in force-graph; replaced with `pauseAnimation()` to stop the animation RAF loop
 
 ### Added
 
@@ -18,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sidebar and workspace tree reload automatically after a successful `git pull` with no manual page refresh required ([#8](https://github.com/AshenDulsanka/leaflet/issues/8))
 - GitHub Actions CI pipeline: `pnpm check` → `pnpm lint` → `pnpm build` → `pnpm test` on every PR to `main` and push to `development` ([#9](https://github.com/AshenDulsanka/leaflet/issues/9))
 - Vitest unit test suite covering path-safety helpers, notes directory resolution, DB singleton lifecycle, WAL checkpoint, and connection reload
+
+### Changed
+
+- Wikilink autocomplete dropdown: added search input at top for filtering notes in large workspaces; results list now shows up to 50 items (was 8); "No notes found" empty state shown when search has no matches
+- Wikilink autocomplete dropdown: improved accessibility — `role="combobox"` on search input with `aria-controls`, `aria-activedescendant`, `aria-autocomplete`; Tab key accepts highlighted suggestion (same as Enter)
+- Note Graph hover highlighting: hovering a node highlights it and its direct neighbors in indigo, dims unconnected nodes and links (Obsidian-style focus view); labels always visible regardless of zoom level
+- Note Graph: `graph` variable changed from `$state` to plain reference to avoid unnecessary deep Proxy over force-graph internals; `graphReady = $state(false)` used as the reactive gate instead
 
 ## [0.1.0] - 2026-04-08
 
