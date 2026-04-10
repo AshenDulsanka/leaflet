@@ -1,6 +1,6 @@
 ---
 name: architecture
-description: 'Use when understanding the Leaflet project structure, folder layout, data flow, API routes, database design, SQLite WAL mode, Docker setup, or key design decisions. Covers the full high-level architecture, component map, and sync mechanism.'
+description: Use when understanding the Leaflet project structure, folder layout, data flow, API routes, database design, SQLite WAL mode, Docker setup, or key design decisions. Covers the full high-level architecture, component map, and sync mechanism.
 ---
 
 # Architecture Overview

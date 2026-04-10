@@ -1,6 +1,6 @@
 ---
 name: Test Writer
-description: 'Writes Vitest unit tests for Leaflet server-side TypeScript. Use when adding tests for notes file operations (notes.ts), database functions (database.ts), or API utility helpers. Sets NOTES_DATA_DIR before imports, uses tmpdir() for isolation, and calls reloadDb() in afterEach. Returns a complete test file with a structured report covering test cases written, coverage assessment, run results, and any obstacles encountered.'
+description: Writes Vitest unit tests for Leaflet server-side TypeScript (src/lib/server/) with tmpdir() isolation and reloadDb() cleanup.
 model: Claude Sonnet 4.6 (copilot)
 tools: [vscode, execute, read, edit, search, 'io.github.upstash/context7/*']
 user-invocable: true

@@ -1,8 +1,8 @@
 ---
 name: Coder
-description: 'Writes and fixes TypeScript, SvelteKit route files, API endpoints, server-side utilities, and Svelte 5 logic for the Leaflet notes application. Follows mandatory project coding principles, uses context7 for up-to-date framework documentation, and never assumes API behavior from training data. Use when implementing features, fixing bugs, or refactoring server-side code in Leaflet.'
+description: Implements TypeScript, SvelteKit routes, API endpoints, and server-side utilities for Leaflet following strict project conventions.
 model: Claude Sonnet 4.6 (copilot)
-tools: [vscode, execute, read, edit, search, 'github/*', 'io.github.upstash/context7/*', vscode/memory, todo]
+tools: [vscode, execute, read, edit, search, 'dev.svelte/mcp/*', 'github/*', 'io.github.upstash/context7/*', todo]
 user-invocable: true
 ---
 

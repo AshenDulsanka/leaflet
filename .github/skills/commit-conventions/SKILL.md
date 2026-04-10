@@ -1,6 +1,6 @@
 ---
 name: commit-conventions
-description: 'Use when writing or reviewing commit messages. Covers type prefixes (feat, fix, docs, chore, ci), scope list, subject line rules (imperative mood, 72 chars max, no period), breaking changes with ! or BREAKING CHANGE footer, body/footer format, and good/bad examples.'
+description: Use when writing or reviewing commit messages. Covers type prefixes (feat, fix, docs, chore, ci), scope list, subject line rules (imperative mood, 72 chars max, no period), breaking changes with ! or BREAKING CHANGE footer, body/footer format, and good/bad examples.
 ---
 
 # Commit Message Conventions

@@ -313,10 +313,11 @@
   }
 
   // Flat list of all note paths for wikilink autocomplete
+  // readTree only emits type:'file' for .md files, so no extension check needed
   function flattenTree(nodes: FileNode[]): string[] {
     const paths: string[] = [];
     for (const node of nodes) {
-      if (node.type === 'file' && node.name.endsWith('.md')) {
+      if (node.type === 'file') {
         paths.push(node.path);
       } else if (node.children) {
         paths.push(...flattenTree(node.children));
@@ -325,7 +326,14 @@
     return paths;
   }
   const noteSuggestions = $derived(flattenTree(tree));
+  const noteTitle = $derived(
+    activeFile ? (activeFile.split('/').pop()?.replace(/\.md$/i, '') ?? 'Leaflet') : 'Leaflet'
+  );
 </script>
+
+<svelte:head>
+  <title>{noteTitle}</title>
+</svelte:head>
 
 <svelte:window
   onkeydown={(e) => {
@@ -580,6 +588,8 @@
 
   {#if graphOpen}
     <NoteGraphPanel
+      workspaceFolder={activeWorkspace?.notes_folder ?? ''}
+      activePath={activeFile ?? ''}
       onClose={() => (graphOpen = false)}
       onNavigate={(path) => openFile(path)}
     />
