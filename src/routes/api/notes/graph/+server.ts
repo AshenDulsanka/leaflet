@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { promises as fs } from 'fs';
 import { join, extname, basename } from 'path';
-import { getNotesDir } from '$lib/server/notes';
+import { getNotesDir, safePath } from '$lib/server/notes';
 import type { RequestHandler } from './$types';
 
 interface GraphNode {
@@ -50,38 +50,53 @@ function extractWikilinks(content: string): string[] {
   return matches.map((m) => m[1].trim());
 }
 
-export const GET: RequestHandler = async () => {
-  const notesDir = getNotesDir();
-  const files = await collectFiles(notesDir, notesDir);
+export const GET: RequestHandler = async ({ url }) => {
+  try {
+    const notesDir = getNotesDir();
+    const workspaceParam = url.searchParams.get('workspace') ?? '';
+    let targetRoot = notesDir;
 
-  // Build a name→path lookup (case-insensitive, last-one-wins for duplicates)
-  const nameToPath = new Map<string, string>();
-  for (const f of files) {
-    nameToPath.set(f.name.toLowerCase(), f.path);
-  }
-
-  // Build link counts and edges
-  const linkCounts = new Map<string, number>();
-  const links: GraphLink[] = [];
-
-  for (const f of files) {
-    const targets = extractWikilinks(f.content);
-    for (const target of targets) {
-      const targetPath = nameToPath.get(target.toLowerCase());
-      if (targetPath && targetPath !== f.path) {
-        links.push({ source: f.path, target: targetPath });
-        linkCounts.set(f.path, (linkCounts.get(f.path) ?? 0) + 1);
-        linkCounts.set(targetPath, (linkCounts.get(targetPath) ?? 0) + 1);
+    if (workspaceParam) {
+      try {
+        targetRoot = safePath(workspaceParam);
+      } catch {
+        return json({ nodes: [], links: [] });
       }
     }
+
+    const files = await collectFiles(targetRoot, notesDir);
+
+    // Build a name→path lookup (case-insensitive, last-one-wins for duplicates)
+    const nameToPath = new Map<string, string>();
+    for (const f of files) {
+      nameToPath.set(f.name.toLowerCase(), f.path);
+    }
+
+    // Build link counts and edges
+    const linkCounts = new Map<string, number>();
+    const links: GraphLink[] = [];
+
+    for (const f of files) {
+      const targets = extractWikilinks(f.content);
+      for (const target of targets) {
+        const targetPath = nameToPath.get(target.toLowerCase());
+        if (targetPath && targetPath !== f.path) {
+          links.push({ source: f.path, target: targetPath });
+          linkCounts.set(f.path, (linkCounts.get(f.path) ?? 0) + 1);
+          linkCounts.set(targetPath, (linkCounts.get(targetPath) ?? 0) + 1);
+        }
+      }
+    }
+
+    const nodes: GraphNode[] = files.map((f) => ({
+      id: f.path,
+      name: f.name,
+      folder: f.folder,
+      linkCount: linkCounts.get(f.path) ?? 0
+    }));
+
+    return json({ nodes, links });
+  } catch {
+    return json({ nodes: [], links: [] }, { status: 500 });
   }
-
-  const nodes: GraphNode[] = files.map((f) => ({
-    id: f.path,
-    name: f.name,
-    folder: f.folder,
-    linkCount: linkCounts.get(f.path) ?? 0
-  }));
-
-  return json({ nodes, links });
 };

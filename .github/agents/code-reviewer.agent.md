@@ -1,6 +1,6 @@
 ---
 name: Code Reviewer
-description: Reviews Leaflet source code for standards compliance and code quality. Checks Svelte 5 rune syntax, TypeScript strict adherence, naming conventions, error handling patterns, import ordering, function length, and what-never-to-do rules. References coding-standards/SKILL.md. Returns a structured 7-section report covering critical/major/minor issues, recommendations, approval status, and any obstacles encountered. Never modifies code.
+description: Reviews Leaflet source code against coding-standards/SKILL.md and returns a structured critical/major/minor issue report — never modifies code.
 model: Claude Sonnet 4.6 (copilot)
 tools: [vscode, read, search, 'io.github.upstash/context7/*']
 user-invocable: true

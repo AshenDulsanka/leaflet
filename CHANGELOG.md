@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Fix path traversal bypass in `safePath()`: replaced `startsWith` check with `relative()` comparison to prevent sibling-directory escape (e.g. `/data/notes-evil` bypassing `/data/notes` prefix check)
+
+### Added
+- Logo and wordmark SVGs (`logo.svg`, `typo.svg`) displayed as combined brand mark in the app toolbar; SVGs use `currentColor` and `hsl(var(--background))` for theme-adaptive rendering in both light and dark mode
+- Favicon (`static/favicon.svg`) created from the logo mark with brand-blue fill (`#3b82f6`) — visible on all browser tab backgrounds
+- Dynamic page title: browser tab shows the current note name (without `.md` extension), falling back to "Leaflet"
+- Note Graph: workspace-scoped view — graph now shows only notes in the active workspace (not all workspaces combined)
+- Note Graph: two view mode buttons — Network icon (all workspace notes) and Crosshair icon (local graph — current note and its direct connections only)
+- Note Graph: converted from full-screen overlay to centered popup modal (`85vw × 80vh`) with click-outside-to-close
+- Note Graph: theme-aware canvas colors — background, links, labels, and highlight colors resolved from live Tailwind CSS and update automatically on dark/light toggle
+
+### Changed
+- Agent description fields shortened to single-sentence summaries across all 8 `.github/agents/*.agent.md` files
+- Note Graph API (`/api/notes/graph`) now accepts optional `workspace` query parameter for workspace scoping, validated through `safePath()` with outer error boundary
+
 ### Fixed
 
 - Wiki-link `[[...]]` autocomplete, visual highlighting, and slash-command insertion all repaired: `flattenTree` was silently discarding all note paths (`.md` extension check on already-stripped names), CSS Highlight ranges were invalid due to `domAtPos` element–text-node ambiguity (replaced with DOM `TreeWalker`), and the slash command left `/w[[` instead of `[[` due to unreliable `setTimeout` (replaced with double `requestAnimationFrame` + remnant cleanup)

@@ -3,6 +3,8 @@
   import Dialog from '$lib/components/modals/Dialog.svelte';
   import NewNoteDialog from '$lib/components/modals/NewNoteDialog.svelte';
   import AnimatedThemeToggler from './AnimatedThemeToggler.svelte';
+  import logoRaw from '$lib/assets/logo.svg?raw';
+  import typoRaw from '$lib/assets/typo.svg?raw';
 
   interface Props {
     searchOpen: boolean;
@@ -45,11 +47,20 @@
       newNoteOpen = false;
     }
   });
+
+  // Strip fixed width/height so CSS controls sizing of the inline SVGs.
+  // SECURITY: ?raw imports are bundled at build time from static assets only.
+  // NEVER use {@html} with runtime user content — use DOMPurify instead.
+  const logoSvg = logoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
+  const typoSvg = typoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
 </script>
 
 <header class="flex h-10 items-center gap-1 border-b border-border bg-card px-2">
-  <!-- App name -->
-  <span class="mr-2 select-none text-sm font-semibold tracking-wide text-foreground">Notes</span>
+  <!-- App logo -->
+  <a href="/" class="mr-3 flex shrink-0 select-none items-center gap-1.5 text-foreground" aria-label="Leaflet">
+    <span class="flex h-6 w-[22px] items-center invert dark:invert-0 [&>svg]:h-full [&>svg]:w-full">{@html logoSvg}</span>
+    <span class="flex h-[13px] items-center invert dark:invert-0 [&>svg]:h-full [&>svg]:w-auto">{@html typoSvg}</span>
+  </a>
 
   <div class="flex flex-1 items-center gap-0.5">
     <!-- New Note -->

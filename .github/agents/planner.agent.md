@@ -1,6 +1,6 @@
 ---
 name: Planner
-description: Creates comprehensive implementation plans for Leaflet by researching the codebase, reading project skills, consulting up-to-date framework documentation via context7, and identifying edge cases. Use when you need a detailed plan before implementing a feature or fixing a complex issue in Leaflet. Returns ordered steps with file assignments — never writes code.
+description: Creates ordered, file-specific implementation plans for Leaflet features by researching the codebase and skill files — never writes code.
 model: Claude Opus 4.6 (copilot)
 tools: [vscode/memory, vscode/askQuestions, search, web, 'github/*', 'io.github.upstash/context7/*', todo]
 user-invocable: true

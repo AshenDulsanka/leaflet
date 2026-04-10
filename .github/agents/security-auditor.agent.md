@@ -1,6 +1,6 @@
 ---
 name: Security Auditor
-description: Reviews Leaflet source code for security vulnerabilities including path traversal attacks against the notes file system (safePath), SQL injection in better-sqlite3 queries, XSS in Svelte templates, hardcoded secrets, missing environment variable validation, and improper error handling that leaks sensitive information. Returns a structured severity-graded report with per-finding details, overall recommendations, and a clear merge-readiness verdict. Never modifies code.
+description: Audits Leaflet source code for path traversal, SQL injection, XSS, and secret leaks, returning a severity-graded report — never modifies code.
 model: Claude Sonnet 4.6 (copilot)
 tools: [read, search, web, 'io.github.upstash/context7/*']
 user-invocable: true

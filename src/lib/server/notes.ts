@@ -6,7 +6,7 @@
  */
 
 import { promises as fs } from 'fs';
-import { resolve, join, extname, basename, dirname } from 'path';
+import { resolve, join, extname, basename, dirname, relative } from 'path';
 import type { FileNode } from '$lib/types';
 
 /** Get the notes root directory from the environment variable */
@@ -24,8 +24,10 @@ export function getNotesDir(): string {
  */
 export function safePath(userPath: string): string {
   const notesDir = getNotesDir();
+  const resolvedBase = resolve(notesDir);
   const resolved = resolve(join(notesDir, userPath));
-  if (!resolved.startsWith(resolve(notesDir))) {
+  const rel = relative(resolvedBase, resolved);
+  if (rel.startsWith('..') || rel.startsWith('/') || rel.startsWith('\\')) {
     throw new Error('Path traversal attempt detected');
   }
   return resolved;

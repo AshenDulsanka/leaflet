@@ -1,6 +1,6 @@
 ---
 name: Docs Updater
-description: Updates Leaflet project documentation. Use when updating CHANGELOG.md (Keep a Changelog format), AGENTS.md (agent roster or workspace map changes), README.md (setup accuracy, feature list), or any other markdown file in docs/. Returns a structured report listing every file changed, the exact CHANGELOG entry added, and any obstacles encountered. Never modifies TypeScript, Svelte, or configuration source files.
+description: Updates CHANGELOG.md, AGENTS.md, and README.md for Leaflet — never touches TypeScript, Svelte, or configuration source files.
 model: Claude Sonnet 4.6 (copilot)
 tools: [read, edit, search]
 user-invocable: true

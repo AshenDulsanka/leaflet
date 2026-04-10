@@ -1,6 +1,6 @@
 ---
 name: Designer
-description: Handles all UI and UX tasks for the Leaflet notes application. Writes Svelte 5 components, Tailwind v4 utility class layouts, and interactive UI patterns. Uses context7 for current Svelte and Tailwind documentation. Never writes server-side TypeScript, API routes, or database logic. Use when the task is purely visual, layout-based, or component-level.
+description: Writes Svelte 5 components and Tailwind v4 layouts for Leaflet UI — never touches server-side code, API routes, or database logic.
 model: Gemini 3.1 Pro (Preview) (copilot)
 tools: [vscode, read, edit, search, web, 'io.github.upstash/context7/*', vscode/memory, todo]
 user-invocable: true

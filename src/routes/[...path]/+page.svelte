@@ -326,7 +326,14 @@
     return paths;
   }
   const noteSuggestions = $derived(flattenTree(tree));
+  const noteTitle = $derived(
+    activeFile ? (activeFile.split('/').pop()?.replace(/\.md$/i, '') ?? 'Leaflet') : 'Leaflet'
+  );
 </script>
+
+<svelte:head>
+  <title>{noteTitle}</title>
+</svelte:head>
 
 <svelte:window
   onkeydown={(e) => {
@@ -581,6 +588,8 @@
 
   {#if graphOpen}
     <NoteGraphPanel
+      workspaceFolder={activeWorkspace?.notes_folder ?? ''}
+      activePath={activeFile ?? ''}
       onClose={() => (graphOpen = false)}
       onNavigate={(path) => openFile(path)}
     />
