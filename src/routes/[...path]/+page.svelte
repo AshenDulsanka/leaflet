@@ -14,6 +14,7 @@
   import FlagTrackerPanel from '$lib/components/engagement/FlagTrackerPanel.svelte';
   import CommandSnippetsPanel from '$lib/components/panels/CommandSnippetsPanel.svelte';
   import AttackChainPanel from '$lib/components/engagement/AttackChainPanel.svelte';
+  import OperationLogPanel from '$lib/components/engagement/OperationLogPanel.svelte';
   import CommandPalette from '$lib/components/modals/CommandPalette.svelte';
   import MethodologyPanel from '$lib/components/panels/MethodologyPanel.svelte';
   import AiChat from '$lib/components/panels/AiChat.svelte';
@@ -77,6 +78,7 @@
   let snippetsOpen = $state(false);
   let attackChainOpen = $state(false);
   let graphOpen = $state(false);
+  let operationLogOpen = $state(false);
   let aiMessages = $state<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   let insertIntoEditor = $state<((text: string) => void) | null>(null);
   let helpOpen = $state(false);
@@ -158,9 +160,10 @@
   $effect(() => { if (hostTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; } });
   $effect(() => { if (credentialVaultOpen) { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; flagTrackerOpen = false; } });
   $effect(() => { if (flagTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; snippetsOpen = false; } });
-  $effect(() => { if (snippetsOpen)        { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; } });
+  $effect(() => { if (snippetsOpen)        { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; operationLogOpen = false; } });
   $effect(() => { if (attackChainOpen)     { /* full-screen modal - no sidebar conflict */ } });
   $effect(() => { if (graphOpen)           { /* full-screen overlay - close other full-screen panels */ attackChainOpen = false; } });
+  $effect(() => { if (operationLogOpen)    { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; } });
 
   onMount(async () => {
     // Load workspaces first so we can scope the tree to the active workspace
@@ -445,6 +448,7 @@
     onOpenFlagTracker={() => (flagTrackerOpen = !flagTrackerOpen)}
     onOpenSnippets={() => (snippetsOpen = !snippetsOpen)}
     onOpenAttackChain={() => (attackChainOpen = !attackChainOpen)}
+    onOpenOperationLog={() => (operationLogOpen = !operationLogOpen)}
   />
 
   <div class="flex flex-1 overflow-hidden">
@@ -565,6 +569,13 @@
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (snippetsOpen = false)}
         onInsert={(text) => { insertIntoEditor?.(text); }}
+      />
+    {/if}
+
+    {#if operationLogOpen}
+      <OperationLogPanel
+        workspaceId={activeWorkspace?.id ?? null}
+        onClose={() => (operationLogOpen = false)}
       />
     {/if}
 

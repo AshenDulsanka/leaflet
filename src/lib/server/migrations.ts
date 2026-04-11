@@ -266,6 +266,32 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       ALTER TABLE attack_chain_nodes ADD COLUMN mitre_technique_name TEXT NOT NULL DEFAULT '';
     `,
   },
+  {
+    // v7: add operation_log table for workspace-scoped pentest timeline entries.
+    // category check is enforced here; API layer also validates for defense in depth.
+    version: 7,
+    up: `
+      CREATE TABLE IF NOT EXISTS operation_log (
+        id           TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        category     TEXT NOT NULL DEFAULT 'action'
+                          CHECK(category IN (
+                            'recon','initial-access','exploitation',
+                            'post-exploitation','lateral-movement',
+                            'privilege-escalation','exfiltration','cleanup','other'
+                          )),
+        description  TEXT NOT NULL DEFAULT '',
+        host_id      TEXT REFERENCES hosts(id) ON DELETE SET NULL,
+        timestamp    TEXT NOT NULL,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_oplog_workspace  ON operation_log(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_oplog_timestamp  ON operation_log(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_oplog_host       ON operation_log(host_id);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

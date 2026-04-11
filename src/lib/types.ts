@@ -181,3 +181,30 @@ export interface AttackNode {
   mitre_technique_id: string;
   mitre_technique_name: string;
 }
+
+/** Category for an operation log timeline entry */
+export type OpLogCategory =
+  | 'recon'
+  | 'initial-access'
+  | 'exploitation'
+  | 'post-exploitation'
+  | 'lateral-movement'
+  | 'privilege-escalation'
+  | 'exfiltration'
+  | 'cleanup'
+  | 'other';
+
+/** An operation log entry in a pentest engagement workspace */
+export interface OperationLogEntry {
+  id: string;
+  workspace_id: string;
+  category: OpLogCategory;
+  description: string;
+  host_id: string | null;
+  timestamp: string;
+  created_at: string;
+  updated_at: string;
+  // Joined fields from hosts table
+  host_ip?: string | null;
+  host_hostname?: string | null;
+}
