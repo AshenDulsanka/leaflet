@@ -255,3 +255,22 @@ export function searchCommands(query: string, commands = DEFAULT_COMMANDS): Comm
       c.tags.some((t) => t.includes(q)),
   );
 }
+
+/**
+ * Extract all unique variable placeholder names from a list of command strings.
+ * Matches {NAME} where NAME is [A-Z0-9_]+ (uppercase letters, digits, underscores).
+ * Returns names sorted alphabetically.
+ */
+export function extractSnippetVarNames(commands: string[]): string[] {
+  const names = new Set<string>();
+  const re = /\{([A-Z0-9_]+)\}/g;
+  for (const cmd of commands) {
+    // Use a fresh regex per command to avoid sticky lastIndex issues
+    const local = new RegExp(re.source, 'g');
+    let match: RegExpExecArray | null;
+    while ((match = local.exec(cmd)) !== null) {
+      names.add(match[1]);
+    }
+  }
+  return [...names].sort();
+}

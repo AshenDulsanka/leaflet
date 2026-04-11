@@ -39,6 +39,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     os?: string;
     segment?: string;
     status?: string;
+    scope?: string;
     notes?: string;
   };
 
@@ -46,12 +47,15 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     return json({ error: 'ip is required' }, { status: 400 });
   }
 
+  const VALID_SCOPES = new Set(['in-scope', 'out-of-scope', 'unknown']);
+  const scope = VALID_SCOPES.has(body.scope ?? '') ? body.scope : 'unknown';
+
   const id = randomUUID();
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO hosts (id, workspace_id, ip, hostname, os, segment, status, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO hosts (id, workspace_id, ip, hostname, os, segment, status, scope, notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.id,
@@ -60,6 +64,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     body.os ?? '',
     body.segment ?? '',
     body.status ?? 'unknown',
+    scope,
     body.notes ?? '',
     now,
     now
