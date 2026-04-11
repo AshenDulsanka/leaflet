@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Keyboard, Search, FilePlus, FolderPlus, Settings, FileCode, Eye, Terminal, ListChecks, Bot, Sparkles, Link2, Camera, Download, Monitor, KeyRound, Flag, Network, GitGraph, ScrollText, ShieldAlert } from '@lucide/svelte';
+  import { Keyboard, Search, FilePlus, FolderPlus, Settings, FileCode, Eye, Terminal, ListChecks, Bot, Sparkles, Link2, Camera, Download, Monitor, KeyRound, Flag, Network, GitGraph, ScrollText, ShieldAlert, Bug } from '@lucide/svelte';
   import Dialog from '$lib/components/modals/Dialog.svelte';
   import NewNoteDialog from '$lib/components/modals/NewNoteDialog.svelte';
   import AnimatedThemeToggler from './AnimatedThemeToggler.svelte';
@@ -32,11 +32,12 @@
     onOpenAttackChain?: () => void;
     onOpenOperationLog?: () => void;
     onOpenCvssCalculator?: () => void;
+    onOpenFindingsTracker?: () => void;
     hasWorkspace?: boolean;
     isPentest?: boolean;
   }
 
-  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenOperationLog, onOpenCvssCalculator, hasWorkspace = false, isPentest = false }: Props =
+  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenOperationLog, onOpenCvssCalculator, onOpenFindingsTracker, hasWorkspace = false, isPentest = false }: Props =
     $props();
 
   let activeDialog: 'note' | 'folder' | null = $state(null);
@@ -246,6 +247,16 @@
       disabled={!hasWorkspace}
     >
       <ShieldAlert size={15} />
+    </button>
+
+    <!-- Engagement: Findings Tracker -->
+    <button
+      title="Findings Tracker (Ctrl+Shift+F)"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenFindingsTracker}
+      disabled={!hasWorkspace}
+    >
+      <Bug size={15} />
     </button>
     {/if}
 

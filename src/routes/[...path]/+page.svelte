@@ -16,6 +16,7 @@
   import AttackChainPanel from '$lib/components/engagement/AttackChainPanel.svelte';
   import OperationLogPanel from '$lib/components/engagement/OperationLogPanel.svelte';
   import CvssCalculatorPanel from '$lib/components/engagement/CvssCalculatorPanel.svelte';
+  import FindingsTrackerPanel from '$lib/components/engagement/FindingsTrackerPanel.svelte';
   import CommandPalette from '$lib/components/modals/CommandPalette.svelte';
   import MethodologyPanel from '$lib/components/panels/MethodologyPanel.svelte';
   import AiChat from '$lib/components/panels/AiChat.svelte';
@@ -81,6 +82,7 @@
   let graphOpen = $state(false);
   let operationLogOpen = $state(false);
   let cvssOpen = $state(false);
+  let findingsTrackerOpen = $state(false);
   let aiMessages = $state<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   let insertIntoEditor = $state<((text: string) => void) | null>(null);
   let helpOpen = $state(false);
@@ -156,17 +158,18 @@
   $effect(() => { if (summarizeOpen)   { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; helpOpen = false; settingsOpen = false; } });
   $effect(() => { if (helpOpen)        { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; settingsOpen = false; } });
   $effect(() => { if (settingsOpen)    { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; } });
-  $effect(() => { if (backlinksOpen)   { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; } });
-  $effect(() => { if (screenshotsOpen) { backlinksOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; } });
+  $effect(() => { if (backlinksOpen)   { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (screenshotsOpen) { backlinksOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
   $effect(() => { if (exportOpen)      { helpOpen = false; settingsOpen = false; } });
-  $effect(() => { if (hostTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; } });
-  $effect(() => { if (credentialVaultOpen) { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; flagTrackerOpen = false; } });
-  $effect(() => { if (flagTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; snippetsOpen = false; } });
-  $effect(() => { if (snippetsOpen)        { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; operationLogOpen = false; cvssOpen = false; } });
+  $effect(() => { if (hostTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (credentialVaultOpen) { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (flagTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; snippetsOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (snippetsOpen)        { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; operationLogOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
   $effect(() => { if (attackChainOpen)     { /* full-screen modal - no sidebar conflict */ } });
   $effect(() => { if (graphOpen)           { /* full-screen overlay - close other full-screen panels */ attackChainOpen = false; } });
-  $effect(() => { if (operationLogOpen)    { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; cvssOpen = false; } });
-  $effect(() => { if (cvssOpen)            { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; } });
+  $effect(() => { if (operationLogOpen)    { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (cvssOpen)            { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (findingsTrackerOpen) { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; } });
 
   onMount(async () => {
     // Load workspaces first so we can scope the tree to the active workspace
@@ -404,6 +407,10 @@
       e.preventDefault();
       cvssOpen = !cvssOpen;
     }
+    if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+      e.preventDefault();
+      findingsTrackerOpen = !findingsTrackerOpen;
+    }
     if (e.key === '?' && !e.ctrlKey && !e.altKey && !e.shiftKey) {
       const tag = (e.target as HTMLElement).tagName;
       if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
@@ -457,6 +464,7 @@
     onOpenAttackChain={() => (attackChainOpen = !attackChainOpen)}
     onOpenOperationLog={() => (operationLogOpen = !operationLogOpen)}
     onOpenCvssCalculator={() => (cvssOpen = !cvssOpen)}
+    onOpenFindingsTracker={() => (findingsTrackerOpen = !findingsTrackerOpen)}
   />
 
   <div class="flex flex-1 overflow-hidden">
@@ -591,6 +599,13 @@
       <CvssCalculatorPanel
         onClose={() => (cvssOpen = false)}
         onInsert={(text) => { insertIntoEditor?.(text); }}
+      />
+    {/if}
+
+    {#if findingsTrackerOpen}
+      <FindingsTrackerPanel
+        workspaceId={activeWorkspace?.id ?? null}
+        onClose={() => (findingsTrackerOpen = false)}
       />
     {/if}
 

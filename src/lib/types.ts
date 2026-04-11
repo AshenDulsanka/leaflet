@@ -148,6 +148,29 @@ export interface NoteTemplate {
   content: string;
 }
 
+export type FindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info' | 'none';
+
+export type FindingStatus = 'open' | 'confirmed' | 'remediated' | 'false-positive';
+
+/** A vulnerability/finding discovered during a pentest engagement */
+export interface Finding {
+  id: string;
+  workspace_id: string;
+  title: string;
+  description: string;
+  severity: FindingSeverity;
+  cvss_score: number;
+  cvss_vector: string;
+  status: FindingStatus;
+  host_id: string | null;
+  note_path: string;
+  created_at: string;
+  updated_at: string;
+  // Joined from hosts table
+  host_ip?: string | null;
+  host_hostname?: string | null;
+}
+
 /** A single port parsed from Nmap output */
 export interface NmapPort {
   number: number;

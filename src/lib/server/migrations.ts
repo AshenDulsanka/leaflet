@@ -292,6 +292,32 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       CREATE INDEX IF NOT EXISTS idx_oplog_host       ON operation_log(host_id);
     `,
   },
+  {
+    // v8: add findings table for vulnerability/finding tracking in pentest workspaces.
+    // severity and status CHECK constraints are also enforced in the API layer.
+    version: 8,
+    up: `
+      CREATE TABLE IF NOT EXISTS findings (
+        id           TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        title        TEXT NOT NULL DEFAULT '',
+        description  TEXT NOT NULL DEFAULT '',
+        severity     TEXT NOT NULL DEFAULT 'info'
+                          CHECK(severity IN ('critical','high','medium','low','info','none')),
+        cvss_score   REAL NOT NULL DEFAULT 0.0,
+        cvss_vector  TEXT NOT NULL DEFAULT '',
+        status       TEXT NOT NULL DEFAULT 'open'
+                          CHECK(status IN ('open','confirmed','remediated','false-positive')),
+        host_id      TEXT REFERENCES hosts(id) ON DELETE SET NULL,
+        note_path    TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_findings_workspace ON findings(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_findings_status    ON findings(status);
+      CREATE INDEX IF NOT EXISTS idx_findings_host      ON findings(host_id);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
