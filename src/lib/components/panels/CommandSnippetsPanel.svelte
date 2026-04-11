@@ -50,7 +50,7 @@
   let newDescription = $state('');
   let isGlobal = $state(false);
 
-  // Variable editing — inline with debounced autosave
+  // Variable editing - inline with debounced autosave
   let newVarName = $state('');
   let newVarValue = $state('');
   // Local input state: name → current typed value (pre-save)
