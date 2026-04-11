@@ -75,7 +75,7 @@ This project also serves as a reference for **agent orchestration** and open-sou
 Requires: Docker Desktop, Git.
 
 ```bash
-git clone <repo-url> leaflet
+git clone https://github.com/AshenDulsanka/leaflet.git
 cd leaflet
 cp .env.example .env
 # Edit .env to set AI API keys (optional)
@@ -89,7 +89,7 @@ App runs at http://localhost:5173.
 Requires: Node.js 22+, pnpm 9+.
 
 ```bash
-git clone <repo-url> leaflet
+git clone https://github.com/AshenDulsanka/leaflet.git
 cd leaflet
 cp .env.example .env
 pnpm install
