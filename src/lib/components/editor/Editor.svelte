@@ -6,7 +6,7 @@
   import { editorViewCtx, parserCtx } from '@milkdown/core';
   import ImageToolbar from '$lib/components/editor/ImageToolbar.svelte';
   // Builds a DecorationSet that highlights all [[note]] spans in the document.
-  // Receives ProseMirror classes as parameters (dynamic import — bypasses pnpm isolation).
+  // Receives ProseMirror classes as parameters (dynamic import - bypasses pnpm isolation).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function buildWikilinkDecorations(doc: any, Decoration: any, DecorationSet: any): any {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -292,7 +292,7 @@
       });
       const newState = pmv.state.reconfigure({ plugins: [...pmv.state.plugins, wikilinkPlugin] });
       pmv.updateState(newState);
-    } catch { /* prosemirror packages not accessible — wikilink highlighting disabled, click nav still works */ }
+    } catch { /* prosemirror packages not accessible - wikilink highlighting disabled, click nav still works */ }
   }
 
   async function recreateEditor() {

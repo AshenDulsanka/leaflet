@@ -237,6 +237,120 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       ALTER TABLE workspaces_v3 RENAME TO workspaces;
     `,
   },
+  {
+    // v4: add scope classification and screenshot_filename to hosts.
+    // scope: 'in-scope' | 'out-of-scope' | 'unknown' - validated in the API layer
+    // (SQLite CHECK constraints in ALTER TABLE ADD COLUMN are unreliable across versions)
+    // screenshot_filename: references a screenshot file stored in the screenshots panel
+    version: 4,
+    up: `
+      ALTER TABLE hosts ADD COLUMN scope TEXT NOT NULL DEFAULT 'unknown';
+      ALTER TABLE hosts ADD COLUMN screenshot_filename TEXT NOT NULL DEFAULT '';
+    `,
+  },
+  {
+    // v5: add linked_note_path to screenshot_metadata and a unique index on
+    // (workspace_id, filename) so upserts are safe.
+    version: 5,
+    up: `
+      ALTER TABLE screenshot_metadata ADD COLUMN linked_note_path TEXT NOT NULL DEFAULT '';
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_screenshot_metadata_workspace_filename ON screenshot_metadata(workspace_id, filename);
+    `,
+  },
+  {
+    // v6: add timestamp and MITRE ATT&CK tagging columns to attack_chain_nodes.
+    version: 6,
+    up: `
+      ALTER TABLE attack_chain_nodes ADD COLUMN timestamp TEXT;
+      ALTER TABLE attack_chain_nodes ADD COLUMN mitre_technique_id TEXT NOT NULL DEFAULT '';
+      ALTER TABLE attack_chain_nodes ADD COLUMN mitre_technique_name TEXT NOT NULL DEFAULT '';
+    `,
+  },
+  {
+    // v7: add operation_log table for workspace-scoped pentest timeline entries.
+    // category check is enforced here; API layer also validates for defense in depth.
+    version: 7,
+    up: `
+      CREATE TABLE IF NOT EXISTS operation_log (
+        id           TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        category     TEXT NOT NULL DEFAULT 'action'
+                          CHECK(category IN (
+                            'recon','initial-access','exploitation',
+                            'post-exploitation','lateral-movement',
+                            'privilege-escalation','exfiltration','cleanup','other'
+                          )),
+        description  TEXT NOT NULL DEFAULT '',
+        host_id      TEXT REFERENCES hosts(id) ON DELETE SET NULL,
+        timestamp    TEXT NOT NULL,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_oplog_workspace  ON operation_log(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_oplog_timestamp  ON operation_log(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_oplog_host       ON operation_log(host_id);
+    `,
+  },
+  {
+    // v8: add findings table for vulnerability/finding tracking in pentest workspaces.
+    // severity and status CHECK constraints are also enforced in the API layer.
+    version: 8,
+    up: `
+      CREATE TABLE IF NOT EXISTS findings (
+        id           TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        title        TEXT NOT NULL DEFAULT '',
+        description  TEXT NOT NULL DEFAULT '',
+        severity     TEXT NOT NULL DEFAULT 'info'
+                          CHECK(severity IN ('critical','high','medium','low','info','none')),
+        cvss_score   REAL NOT NULL DEFAULT 0.0,
+        cvss_vector  TEXT NOT NULL DEFAULT '',
+        status       TEXT NOT NULL DEFAULT 'open'
+                          CHECK(status IN ('open','confirmed','remediated','false-positive')),
+        host_id      TEXT REFERENCES hosts(id) ON DELETE SET NULL,
+        note_path    TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_findings_workspace ON findings(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_findings_status    ON findings(status);
+      CREATE INDEX IF NOT EXISTS idx_findings_host      ON findings(host_id);
+    `,
+  },
+  {
+    // v9: add MITRE ATT&CK technique tagging columns to findings.
+    // Empty string default means "no tag" — consistent with other optional text fields.
+    version: 9,
+    up: `
+      ALTER TABLE findings ADD COLUMN mitre_technique_id   TEXT NOT NULL DEFAULT '';
+      ALTER TABLE findings ADD COLUMN mitre_technique_name TEXT NOT NULL DEFAULT '';
+    `,
+  },
+  {
+    // v10: add network topology support.
+    // topo_x/topo_y store canvas positions for hosts in the topology diagram.
+    // topology_edges models directed reachability connections between hosts.
+    version: 10,
+    up: `
+      ALTER TABLE hosts ADD COLUMN topo_x REAL;
+      ALTER TABLE hosts ADD COLUMN topo_y REAL;
+
+      CREATE TABLE IF NOT EXISTS topology_edges (
+        id               TEXT PRIMARY KEY,
+        workspace_id     TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        source_host_id   TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+        target_host_id   TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+        label            TEXT NOT NULL DEFAULT '',
+        created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(workspace_id, source_host_id, target_host_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_topo_edges_workspace ON topology_edges(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_topo_edges_source    ON topology_edges(source_host_id);
+      CREATE INDEX IF NOT EXISTS idx_topo_edges_target    ON topology_edges(target_host_id);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

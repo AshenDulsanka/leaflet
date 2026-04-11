@@ -96,7 +96,7 @@ export async function createNote(relativePath: string, isDirectory = false): Pro
     try {
       await fs.unlink(gitkeep);
     } catch {
-      // .gitkeep may not exist — that's fine
+      // .gitkeep may not exist - that's fine
     }
   }
 }
