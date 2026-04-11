@@ -239,7 +239,7 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
   },
   {
     // v4: add scope classification and screenshot_filename to hosts.
-    // scope: 'in-scope' | 'out-of-scope' | 'unknown' — validated in the API layer
+    // scope: 'in-scope' | 'out-of-scope' | 'unknown' - validated in the API layer
     // (SQLite CHECK constraints in ALTER TABLE ADD COLUMN are unreliable across versions)
     // screenshot_filename: references a screenshot file stored in the screenshots panel
     version: 4,

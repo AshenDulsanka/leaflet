@@ -1,7 +1,7 @@
 /**
  * Tests for the operation_log migration (v7) and operation log data helpers.
  *
- * Uses an in-memory / temp SQLite DB — no real `notes.db` is touched.
+ * Uses an in-memory / temp SQLite DB - no real `notes.db` is touched.
  */
 
 import { tmpdir } from 'os';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Keyboard, Search, FilePlus, FolderPlus, Settings, FileCode, Eye, Terminal, ListChecks, Bot, Sparkles, Link2, Camera, Download, Monitor, KeyRound, Flag, Network, GitGraph, ScrollText } from '@lucide/svelte';
+  import { Keyboard, Search, FilePlus, FolderPlus, Settings, FileCode, Eye, Terminal, ListChecks, Bot, Sparkles, Link2, Camera, Download, Monitor, KeyRound, Flag, Network, GitGraph, ScrollText, ShieldAlert } from '@lucide/svelte';
   import Dialog from '$lib/components/modals/Dialog.svelte';
   import NewNoteDialog from '$lib/components/modals/NewNoteDialog.svelte';
   import AnimatedThemeToggler from './AnimatedThemeToggler.svelte';
@@ -31,11 +31,12 @@
     onOpenSnippets?: () => void;
     onOpenAttackChain?: () => void;
     onOpenOperationLog?: () => void;
+    onOpenCvssCalculator?: () => void;
     hasWorkspace?: boolean;
     isPentest?: boolean;
   }
 
-  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenOperationLog, hasWorkspace = false, isPentest = false }: Props =
+  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenOperationLog, onOpenCvssCalculator, hasWorkspace = false, isPentest = false }: Props =
     $props();
 
   let activeDialog: 'note' | 'folder' | null = $state(null);
@@ -50,7 +51,7 @@
 
   // Strip fixed width/height so CSS controls sizing of the inline SVGs.
   // SECURITY: ?raw imports are bundled at build time from static assets only.
-  // NEVER use {@html} with runtime user content — use DOMPurify instead.
+  // NEVER use {@html} with runtime user content - use DOMPurify instead.
   const logoSvg = logoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
   const typoSvg = typoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
 </script>
@@ -235,6 +236,16 @@
       disabled={!hasWorkspace}
     >
       <ScrollText size={15} />
+    </button>
+
+    <!-- Engagement: CVSS Calculator -->
+    <button
+      title="CVSS Calculator (Ctrl+Shift+V)"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenCvssCalculator}
+      disabled={!hasWorkspace}
+    >
+      <ShieldAlert size={15} />
     </button>
     {/if}
 

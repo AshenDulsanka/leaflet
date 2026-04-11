@@ -37,7 +37,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
     values.push(body.scope);
   }
 
-  // Validate screenshot_filename separately — allow empty string to clear the value
+  // Validate screenshot_filename separately - allow empty string to clear the value
   if ('screenshot_filename' in body) {
     const fname = String(body.screenshot_filename ?? '');
     if (fname !== '' && !SAFE_FILENAME_RE.test(fname)) {

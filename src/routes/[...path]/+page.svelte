@@ -15,6 +15,7 @@
   import CommandSnippetsPanel from '$lib/components/panels/CommandSnippetsPanel.svelte';
   import AttackChainPanel from '$lib/components/engagement/AttackChainPanel.svelte';
   import OperationLogPanel from '$lib/components/engagement/OperationLogPanel.svelte';
+  import CvssCalculatorPanel from '$lib/components/engagement/CvssCalculatorPanel.svelte';
   import CommandPalette from '$lib/components/modals/CommandPalette.svelte';
   import MethodologyPanel from '$lib/components/panels/MethodologyPanel.svelte';
   import AiChat from '$lib/components/panels/AiChat.svelte';
@@ -79,6 +80,7 @@
   let attackChainOpen = $state(false);
   let graphOpen = $state(false);
   let operationLogOpen = $state(false);
+  let cvssOpen = $state(false);
   let aiMessages = $state<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   let insertIntoEditor = $state<((text: string) => void) | null>(null);
   let helpOpen = $state(false);
@@ -160,10 +162,11 @@
   $effect(() => { if (hostTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; } });
   $effect(() => { if (credentialVaultOpen) { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; flagTrackerOpen = false; } });
   $effect(() => { if (flagTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; snippetsOpen = false; } });
-  $effect(() => { if (snippetsOpen)        { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; operationLogOpen = false; } });
+  $effect(() => { if (snippetsOpen)        { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; operationLogOpen = false; cvssOpen = false; } });
   $effect(() => { if (attackChainOpen)     { /* full-screen modal - no sidebar conflict */ } });
   $effect(() => { if (graphOpen)           { /* full-screen overlay - close other full-screen panels */ attackChainOpen = false; } });
-  $effect(() => { if (operationLogOpen)    { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; } });
+  $effect(() => { if (operationLogOpen)    { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; cvssOpen = false; } });
+  $effect(() => { if (cvssOpen)            { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; } });
 
   onMount(async () => {
     // Load workspaces first so we can scope the tree to the active workspace
@@ -397,6 +400,10 @@
       e.preventDefault();
       graphOpen = !graphOpen;
     }
+    if (e.ctrlKey && e.shiftKey && e.key === 'V') {
+      e.preventDefault();
+      cvssOpen = !cvssOpen;
+    }
     if (e.key === '?' && !e.ctrlKey && !e.altKey && !e.shiftKey) {
       const tag = (e.target as HTMLElement).tagName;
       if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
@@ -449,6 +456,7 @@
     onOpenSnippets={() => (snippetsOpen = !snippetsOpen)}
     onOpenAttackChain={() => (attackChainOpen = !attackChainOpen)}
     onOpenOperationLog={() => (operationLogOpen = !operationLogOpen)}
+    onOpenCvssCalculator={() => (cvssOpen = !cvssOpen)}
   />
 
   <div class="flex flex-1 overflow-hidden">
@@ -579,6 +587,13 @@
       />
     {/if}
 
+    {#if cvssOpen}
+      <CvssCalculatorPanel
+        onClose={() => (cvssOpen = false)}
+        onInsert={(text) => { insertIntoEditor?.(text); }}
+      />
+    {/if}
+
   </div>
 
   {#if attackChainOpen}
@@ -603,6 +618,7 @@
     <CommandPalette
       onClose={() => (commandOpen = false)}
       onInsert={(text) => { insertIntoEditor?.(text); }}
+      onOpenCvss={() => (cvssOpen = true)}
     />
   {/if}
 
