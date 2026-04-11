@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { Bug, X, Plus, RefreshCw, Pencil, Trash2, Check, Tag } from '@lucide/svelte';
+  import { Bug, X, Plus, RefreshCw, Pencil, Trash2, Check, Tag, BookOpen, ChevronDown } from '@lucide/svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { calculateCvss, METRIC_OPTIONS } from '$lib/data/cvss';
   import type { CvssMetrics } from '$lib/data/cvss';
   import { searchMitreTechniques } from '$lib/data/mitre-attack';
   import type { MitreTechnique } from '$lib/data/mitre-attack';
-  import type { Finding, FindingSeverity, FindingStatus } from '$lib/types';
+  import { FINDING_TEMPLATES, searchFindingTemplates } from '$lib/data/finding-templates';
+  import type { Finding, FindingSeverity, FindingStatus, FindingTemplate, FindingTemplateCategory } from '$lib/types';
 
   interface HostOption {
     id: string;
@@ -52,6 +53,11 @@
   let newMitreQuery    = $state('');
   let newMitreTechId   = $state('');
   let newMitreTechName = $state('');
+
+  // ─── Template picker state ─────────────────────────────────────────────────
+  let showTemplates    = $state(false);
+  let templateQuery    = $state('');
+  let templateCategory = $state<FindingTemplateCategory | 'all'>('all');
 
   // ─── Edit form state ───────────────────────────────────────────────────────
   let editingId = $state<string | null>(null);
@@ -105,6 +111,15 @@
   const severityMeta = Object.fromEntries(SEVERITIES.map((s) => [s.value, s]));
   const statusMeta   = Object.fromEntries(STATUSES.map((s) => [s.value, s]));
 
+  const TEMPLATE_CATEGORIES: { value: FindingTemplateCategory | 'all'; label: string }[] = [
+    { value: 'all',       label: 'All'       },
+    { value: 'injection', label: 'Injection' },
+    { value: 'auth',      label: 'Auth'      },
+    { value: 'crypto',    label: 'Crypto'    },
+    { value: 'exposure',  label: 'Exposure'  },
+    { value: 'misc',      label: 'Misc'      },
+  ];
+
   // ─── Derived ───────────────────────────────────────────────────────────────
   const newCvssResult  = $derived(calculateCvss(newMetrics));
   const editCvssResult = $derived(calculateCvss(editMetrics));
@@ -120,6 +135,14 @@
         (statusFilter   === 'all' || f.status   === statusFilter)
     )
   );
+
+  const filteredTemplates = $derived.by(() => {
+    let list = FINDING_TEMPLATES;
+    if (templateCategory !== 'all') {
+      list = list.filter((tmpl) => tmpl.category === templateCategory);
+    }
+    return searchFindingTemplates(templateQuery, list);
+  });
 
   // ─── CVSS auto-fill effects ────────────────────────────────────────────────
   $effect(() => {
@@ -234,7 +257,22 @@
     newMitreQuery    = '';
     newMitreTechId   = '';
     newMitreTechName = '';
+    showTemplates    = false;
+    templateQuery    = '';
+    templateCategory = 'all';
     addingFinding  = false;
+  }
+
+  function applyTemplate(template: FindingTemplate): void {
+    newTitle         = template.title;
+    newDescription   = template.description;
+    newSeverity      = template.severity;
+    newMitreTechId   = template.mitre_technique_id;
+    newMitreTechName = template.mitre_technique_name;
+    newMitreQuery    = '';
+    cvssAutoFilled   = false;
+    showTemplates    = false;
+    templateQuery    = '';
   }
 
   async function addFinding(): Promise<void> {
@@ -413,6 +451,68 @@
       <!-- Add-finding form -->
       {#if addingFinding}
         <div class="space-y-2 border-b border-border bg-muted/40 p-3">
+          <!-- Template picker (collapsible) -->
+          <div class="rounded border border-border bg-background">
+            <button
+              type="button"
+              onclick={() => { showTemplates = !showTemplates; templateQuery = ''; templateCategory = 'all'; }}
+              class="flex w-full items-center justify-between px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <span class="flex items-center gap-1.5">
+                <BookOpen size={11} />
+                Use Template
+              </span>
+              <ChevronDown
+                size={11}
+                class="transition-transform duration-150 {showTemplates ? 'rotate-180' : ''}"
+              />
+            </button>
+
+            {#if showTemplates}
+              <div class="border-t border-border px-2 py-1.5">
+                <input
+                  type="text"
+                  placeholder="Search templates..."
+                  bind:value={templateQuery}
+                  class="w-full rounded border border-border bg-muted px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+              </div>
+              <div class="flex gap-1 overflow-x-auto px-2 pb-1.5">
+                {#each TEMPLATE_CATEGORIES as cat (cat.value)}
+                  <button
+                    type="button"
+                    onclick={() => (templateCategory = cat.value)}
+                    class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors {templateCategory === cat.value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-accent'}"
+                  >
+                    {cat.label}
+                  </button>
+                {/each}
+              </div>
+              <ul class="max-h-44 overflow-y-auto border-t border-border">
+                {#if filteredTemplates.length === 0}
+                  <li class="px-2 py-3 text-center text-[10px] text-muted-foreground">No templates match</li>
+                {:else}
+                  {#each filteredTemplates as tpl (tpl.id)}
+                    <li>
+                      <button
+                        type="button"
+                        onclick={() => applyTemplate(tpl)}
+                        class="flex w-full flex-col gap-0.5 px-2 py-1.5 text-left hover:bg-accent"
+                      >
+                        <span class="text-xs font-medium text-foreground">{tpl.title}</span>
+                        <span class="line-clamp-1 text-[10px] text-muted-foreground">{tpl.description}</span>
+                      </button>
+                    </li>
+                  {/each}
+                {/if}
+              </ul>
+            {/if}
+          </div>
+
           <!-- Title -->
           <input
             type="text"

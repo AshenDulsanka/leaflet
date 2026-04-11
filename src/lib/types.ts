@@ -215,6 +215,24 @@ export interface AiPromptTemplate {
   prompt: string;
 }
 
+export type FindingTemplateCategory =
+  | 'injection'
+  | 'auth'
+  | 'crypto'
+  | 'exposure'
+  | 'misc';
+
+/** A built-in vulnerability finding template for pre-filling the findings form */
+export interface FindingTemplate {
+  id: string;
+  category: FindingTemplateCategory;
+  title: string;
+  description: string;
+  severity: FindingSeverity;
+  mitre_technique_id: string;
+  mitre_technique_name: string;
+}
+
 /** A node in the attack chain canvas (matches attack_chain_nodes DB schema) */
 export interface AttackNode {
   id: string;

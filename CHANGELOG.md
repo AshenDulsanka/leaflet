@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Finding templates library: 13 built-in vulnerability templates across 5 categories (Injection, Auth, Crypto, Exposure, Misc) with pre-fill support for title, description, severity, and MITRE technique (Issue #30)
 - MITRE ATT&CK technique tagging for vulnerability findings with search-as-you-type picker (Issue #29)
 - Vulnerability findings tracker panel: full CRUD findings management for pentest workspaces with severity levels (Critical/High/Medium/Low/Info/None), inline CVSS 3.1 metric pickers with live score display and auto-fill severity from score, status tracking (Open/Confirmed/Remediated/False Positive), optional host link and note reference; dual filter chips for severity and status; accessible via toolbar `Bug` icon and `Ctrl+Shift+F` ([#28](https://github.com/AshenDulsanka/leaflet/issues/28))
 - DB migration v8: `findings` table with `id`, `workspace_id` (FK cascade), `title`, `description`, `severity` (CHECK enum), `cvss_score`, `cvss_vector`, `status` (CHECK enum), `host_id` (FK set null), `note_path`, `created_at`, `updated_at`; indexes on `workspace_id`, `status`, and `host_id`; `FindingSeverity`, `FindingStatus`, and `Finding` types added to `src/lib/types.ts`; `GET`/`POST` at `/api/workspaces/[id]/findings` and `PATCH`/`DELETE` at `/api/workspaces/[id]/findings/[findingId]` ([#28](https://github.com/AshenDulsanka/leaflet/issues/28))
