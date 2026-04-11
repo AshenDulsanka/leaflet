@@ -1,9 +1,11 @@
 <script lang="ts">
-  import { Bug, X, Plus, RefreshCw, Pencil, Trash2, Check } from '@lucide/svelte';
+  import { Bug, X, Plus, RefreshCw, Pencil, Trash2, Check, Tag } from '@lucide/svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { calculateCvss, METRIC_OPTIONS } from '$lib/data/cvss';
   import type { CvssMetrics } from '$lib/data/cvss';
+  import { searchMitreTechniques } from '$lib/data/mitre-attack';
+  import type { MitreTechnique } from '$lib/data/mitre-attack';
   import type { Finding, FindingSeverity, FindingStatus } from '$lib/types';
 
   interface HostOption {
@@ -46,6 +48,11 @@
   // true = CVSS auto-fill controls severity; false = user manually overrode it
   let cvssAutoFilled = $state(true);
 
+  // ─── Add form MITRE state ──────────────────────────────────────────────────
+  let newMitreQuery    = $state('');
+  let newMitreTechId   = $state('');
+  let newMitreTechName = $state('');
+
   // ─── Edit form state ───────────────────────────────────────────────────────
   let editingId = $state<string | null>(null);
   let editTitle = $state('');
@@ -68,6 +75,11 @@
   });
   // false on edit start so stored severity is preserved; true again once CVSS auto-fills
   let editCvssAutoFilled = $state(false);
+
+  // ─── Edit form MITRE state ─────────────────────────────────────────────────
+  let editMitreQuery    = $state('');
+  let editMitreTechId   = $state('');
+  let editMitreTechName = $state('');
 
   // ─── Filters ───────────────────────────────────────────────────────────────
   let severityFilter = $state<'all' | FindingSeverity>('all');
@@ -96,6 +108,10 @@
   // ─── Derived ───────────────────────────────────────────────────────────────
   const newCvssResult  = $derived(calculateCvss(newMetrics));
   const editCvssResult = $derived(calculateCvss(editMetrics));
+
+  // Suppress suggestions once a technique is selected (newMitreTechId non-empty)
+  const newMitreSuggestions  = $derived(newMitreTechId  ? [] : searchMitreTechniques(newMitreQuery));
+  const editMitreSuggestions = $derived(editMitreTechId ? [] : searchMitreTechniques(editMitreQuery));
 
   const filteredFindings = $derived(
     findings.filter(
@@ -215,6 +231,9 @@
     newCvssVector  = '';
     newMetrics     = { AV: null, AC: null, PR: null, UI: null, S: null, C: null, I: null, A: null };
     cvssAutoFilled = true;
+    newMitreQuery    = '';
+    newMitreTechId   = '';
+    newMitreTechName = '';
     addingFinding  = false;
   }
 
@@ -225,14 +244,16 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title:       newTitle.trim(),
-          description: newDescription.trim(),
-          severity:    newSeverity,
-          status:      newStatus,
-          cvss_score:  newCvssScore,
-          cvss_vector: newCvssVector,
-          host_id:     newHostId || null,
-          note_path:   newNotePath.trim(),
+          title:                newTitle.trim(),
+          description:          newDescription.trim(),
+          severity:             newSeverity,
+          status:               newStatus,
+          cvss_score:           newCvssScore,
+          cvss_vector:          newCvssVector,
+          host_id:              newHostId || null,
+          note_path:            newNotePath.trim(),
+          mitre_technique_id:   newMitreTechId,
+          mitre_technique_name: newMitreTechName,
         }),
       });
       if (!res.ok) return;
@@ -257,6 +278,9 @@
     // Parse stored vector back to metric pickers; disable auto-fill to preserve stored severity
     editMetrics      = parseCvssVector(finding.cvss_vector);
     editCvssAutoFilled = false;
+    editMitreTechId   = finding.mitre_technique_id;
+    editMitreTechName = finding.mitre_technique_name;
+    editMitreQuery    = '';
     addingFinding    = false;
   }
 
@@ -267,14 +291,16 @@
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title:       editTitle.trim(),
-          description: editDescription.trim(),
-          severity:    editSeverity,
-          status:      editStatus,
-          cvss_score:  editCvssScore,
-          cvss_vector: editCvssVector,
-          host_id:     editHostId || null,
-          note_path:   editNotePath.trim(),
+          title:                editTitle.trim(),
+          description:          editDescription.trim(),
+          severity:             editSeverity,
+          status:               editStatus,
+          cvss_score:           editCvssScore,
+          cvss_vector:          editCvssVector,
+          host_id:              editHostId || null,
+          note_path:            editNotePath.trim(),
+          mitre_technique_id:   editMitreTechId,
+          mitre_technique_name: editMitreTechName,
         }),
       });
       if (!res.ok) return;
@@ -479,6 +505,50 @@
             class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
           />
 
+          <!-- MITRE ATT&CK technique -->
+          <div class="relative">
+            {#if newMitreTechId}
+              <div class="flex items-center justify-between rounded border border-border bg-background px-2 py-1">
+                <div class="flex min-w-0 flex-col">
+                  <span class="font-mono text-[10px] font-semibold text-primary">{newMitreTechId}</span>
+                  <span class="truncate text-[10px] text-muted-foreground">{newMitreTechName}</span>
+                </div>
+                <button
+                  type="button"
+                  onclick={() => { newMitreTechId = ''; newMitreTechName = ''; newMitreQuery = ''; }}
+                  class="ml-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                  title="Remove MITRE tag"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            {:else}
+              <input
+                type="text"
+                placeholder="Search MITRE ATT&CK technique..."
+                bind:value={newMitreQuery}
+                class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              {#if newMitreSuggestions.length > 0}
+                <ul class="absolute left-0 right-0 top-full z-10 mt-0.5 max-h-40 overflow-y-auto rounded border border-border bg-popover shadow-md">
+                  {#each newMitreSuggestions as technique (technique.id)}
+                    <li>
+                      <button
+                        type="button"
+                        onclick={() => { newMitreTechId = technique.id; newMitreTechName = technique.name; newMitreQuery = ''; }}
+                        class="flex w-full flex-col px-2 py-1.5 text-left hover:bg-accent"
+                      >
+                        <span class="font-mono text-[10px] font-semibold text-primary">{technique.id}</span>
+                        <span class="text-[10px] text-foreground">{technique.name}</span>
+                        <span class="text-[10px] text-muted-foreground">{technique.tactic}</span>
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            {/if}
+          </div>
+
           <div class="flex gap-2">
             <button
               onclick={addFinding}
@@ -601,6 +671,51 @@
                     placeholder="Note path"
                     class="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                   />
+
+                  <!-- MITRE ATT&CK technique (edit) -->
+                  <div class="relative">
+                    {#if editMitreTechId}
+                      <div class="flex items-center justify-between rounded border border-border bg-background px-2 py-1">
+                        <div class="flex min-w-0 flex-col">
+                          <span class="font-mono text-[10px] font-semibold text-primary">{editMitreTechId}</span>
+                          <span class="truncate text-[10px] text-muted-foreground">{editMitreTechName}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onclick={() => { editMitreTechId = ''; editMitreTechName = ''; editMitreQuery = ''; }}
+                          class="ml-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                          title="Remove MITRE tag"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    {:else}
+                      <input
+                        type="text"
+                        placeholder="Search MITRE ATT&CK technique..."
+                        bind:value={editMitreQuery}
+                        class="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      {#if editMitreSuggestions.length > 0}
+                        <ul class="absolute left-0 right-0 top-full z-10 mt-0.5 max-h-40 overflow-y-auto rounded border border-border bg-popover shadow-md">
+                          {#each editMitreSuggestions as technique (technique.id)}
+                            <li>
+                              <button
+                                type="button"
+                                onclick={() => { editMitreTechId = technique.id; editMitreTechName = technique.name; editMitreQuery = ''; }}
+                                class="flex w-full flex-col px-2 py-1.5 text-left hover:bg-accent"
+                              >
+                                <span class="font-mono text-[10px] font-semibold text-primary">{technique.id}</span>
+                                <span class="text-[10px] text-foreground">{technique.name}</span>
+                                <span class="text-[10px] text-muted-foreground">{technique.tactic}</span>
+                              </button>
+                            </li>
+                          {/each}
+                        </ul>
+                      {/if}
+                    {/if}
+                  </div>
+
                   <div class="flex gap-1.5">
                     <button
                       onclick={() => saveEdit(finding.id)}
@@ -667,6 +782,13 @@
                       </span>
                     {/if}
                   </div>
+                  {#if finding.mitre_technique_id}
+                    <div class="flex items-center gap-1">
+                      <Tag size={9} class="text-muted-foreground" />
+                      <span class="font-mono text-[10px] font-semibold text-primary">{finding.mitre_technique_id}</span>
+                      <span class="truncate text-[10px] text-muted-foreground">{finding.mitre_technique_name}</span>
+                    </div>
+                  {/if}
                 </div>
               {/if}
             </li>

@@ -318,6 +318,15 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       CREATE INDEX IF NOT EXISTS idx_findings_host      ON findings(host_id);
     `,
   },
+  {
+    // v9: add MITRE ATT&CK technique tagging columns to findings.
+    // Empty string default means "no tag" — consistent with other optional text fields.
+    version: 9,
+    up: `
+      ALTER TABLE findings ADD COLUMN mitre_technique_id   TEXT NOT NULL DEFAULT '';
+      ALTER TABLE findings ADD COLUMN mitre_technique_name TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

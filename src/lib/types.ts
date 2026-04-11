@@ -164,6 +164,8 @@ export interface Finding {
   status: FindingStatus;
   host_id: string | null;
   note_path: string;
+  mitre_technique_id: string;
+  mitre_technique_name: string;
   created_at: string;
   updated_at: string;
   // Joined from hosts table

@@ -239,3 +239,78 @@ describe('findings CRUD', () => {
     expect(row.host_id).toBeNull();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Migration v9 – MITRE ATT&CK columns
+// ─────────────────────────────────────────────────────────────────────────────
+describe('migration v9 – mitre columns', () => {
+  let db: Database.Database;
+  let workspaceId: string;
+
+  beforeEach(() => {
+    db = getDb();
+    workspaceId = 'ws-mitre-' + Date.now();
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO workspaces (id, name, type, icon_color, notes_folder, created_at, updated_at)
+       VALUES (?, 'MITRE WS', 'pentest', '#6366f1', 'mitre-folder', ?, ?)`
+    ).run(workspaceId, now, now);
+  });
+
+  it('mitre_technique_id has empty string default', () => {
+    const id = 'finding-mitre-default';
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO findings
+         (id, workspace_id, title, severity, cvss_score, status, created_at, updated_at)
+       VALUES (?, ?, 'No MITRE', 'info', 0, 'open', ?, ?)`
+    ).run(id, workspaceId, now, now);
+
+    const row = db
+      .prepare(`SELECT mitre_technique_id, mitre_technique_name FROM findings WHERE id = ?`)
+      .get(id) as { mitre_technique_id: string; mitre_technique_name: string };
+
+    expect(row.mitre_technique_id).toBe('');
+    expect(row.mitre_technique_name).toBe('');
+  });
+
+  it('stores and retrieves mitre technique tag', () => {
+    const id = 'finding-mitre-stored';
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO findings
+         (id, workspace_id, title, severity, cvss_score, status,
+          mitre_technique_id, mitre_technique_name, created_at, updated_at)
+       VALUES (?, ?, 'RCE via Shell', 'critical', 9.8, 'open', ?, ?, ?, ?)`
+    ).run(id, workspaceId, 'T1059', 'Command and Scripting Interpreter', now, now);
+
+    const row = db
+      .prepare(`SELECT mitre_technique_id, mitre_technique_name FROM findings WHERE id = ?`)
+      .get(id) as { mitre_technique_id: string; mitre_technique_name: string };
+
+    expect(row.mitre_technique_id).toBe('T1059');
+    expect(row.mitre_technique_name).toBe('Command and Scripting Interpreter');
+  });
+
+  it('clears mitre fields to empty string via UPDATE', () => {
+    const id = 'finding-mitre-clear';
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO findings
+         (id, workspace_id, title, severity, cvss_score, status,
+          mitre_technique_id, mitre_technique_name, created_at, updated_at)
+       VALUES (?, ?, 'SQLi', 'high', 7.5, 'open', ?, ?, ?, ?)`
+    ).run(id, workspaceId, 'T1190', 'Exploit Public-Facing Application', now, now);
+
+    db.prepare(
+      `UPDATE findings SET mitre_technique_id = '', mitre_technique_name = '', updated_at = ? WHERE id = ?`
+    ).run(now, id);
+
+    const row = db
+      .prepare(`SELECT mitre_technique_id, mitre_technique_name FROM findings WHERE id = ?`)
+      .get(id) as { mitre_technique_id: string; mitre_technique_name: string };
+
+    expect(row.mitre_technique_id).toBe('');
+    expect(row.mitre_technique_name).toBe('');
+  });
+});
