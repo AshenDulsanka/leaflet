@@ -148,6 +148,31 @@ export interface NoteTemplate {
   content: string;
 }
 
+export type FindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info' | 'none';
+
+export type FindingStatus = 'open' | 'confirmed' | 'remediated' | 'false-positive';
+
+/** A vulnerability/finding discovered during a pentest engagement */
+export interface Finding {
+  id: string;
+  workspace_id: string;
+  title: string;
+  description: string;
+  severity: FindingSeverity;
+  cvss_score: number;
+  cvss_vector: string;
+  status: FindingStatus;
+  host_id: string | null;
+  note_path: string;
+  mitre_technique_id: string;
+  mitre_technique_name: string;
+  created_at: string;
+  updated_at: string;
+  // Joined from hosts table
+  host_ip?: string | null;
+  host_hostname?: string | null;
+}
+
 /** A single port parsed from Nmap output */
 export interface NmapPort {
   number: number;
@@ -190,6 +215,24 @@ export interface AiPromptTemplate {
   prompt: string;
 }
 
+export type FindingTemplateCategory =
+  | 'injection'
+  | 'auth'
+  | 'crypto'
+  | 'exposure'
+  | 'misc';
+
+/** A built-in vulnerability finding template for pre-filling the findings form */
+export interface FindingTemplate {
+  id: string;
+  category: FindingTemplateCategory;
+  title: string;
+  description: string;
+  severity: FindingSeverity;
+  mitre_technique_id: string;
+  mitre_technique_name: string;
+}
+
 /** A node in the attack chain canvas (matches attack_chain_nodes DB schema) */
 export interface AttackNode {
   id: string;
@@ -230,4 +273,44 @@ export interface OperationLogEntry {
   // Joined fields from hosts table
   host_ip?: string | null;
   host_hostname?: string | null;
+}
+
+/** A directed connection between two hosts in the network topology diagram */
+export interface TopologyEdge {
+  id: string;
+  workspace_id: string;
+  source_host_id: string;
+  target_host_id: string;
+  label: string;
+  created_at: string;
+}
+
+/** A host row enriched with port count and canvas position for topology rendering */
+export interface TopologyHost {
+  id: string;
+  workspace_id: string;
+  ip: string;
+  hostname: string;
+  os: string;
+  status: string;
+  port_count: number;
+  topo_x: number | null;
+  topo_y: number | null;
+}
+
+/** A vulnerability finding parsed from a scanner export (Nessus / Burp Suite) */
+export interface ScannedFinding {
+  title: string;
+  description: string;
+  severity: FindingSeverity;
+  hostIp: string;
+  hostPort: number | null;
+  pluginId: string;
+  source: 'nessus' | 'burp';
+}
+
+/** Result returned by parseScanner() / parseNessus() / parseBurp() */
+export interface ScannerParseResult {
+  findings: ScannedFinding[];
+  errors: Array<{ message: string }>;
 }

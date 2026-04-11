@@ -292,6 +292,65 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       CREATE INDEX IF NOT EXISTS idx_oplog_host       ON operation_log(host_id);
     `,
   },
+  {
+    // v8: add findings table for vulnerability/finding tracking in pentest workspaces.
+    // severity and status CHECK constraints are also enforced in the API layer.
+    version: 8,
+    up: `
+      CREATE TABLE IF NOT EXISTS findings (
+        id           TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        title        TEXT NOT NULL DEFAULT '',
+        description  TEXT NOT NULL DEFAULT '',
+        severity     TEXT NOT NULL DEFAULT 'info'
+                          CHECK(severity IN ('critical','high','medium','low','info','none')),
+        cvss_score   REAL NOT NULL DEFAULT 0.0,
+        cvss_vector  TEXT NOT NULL DEFAULT '',
+        status       TEXT NOT NULL DEFAULT 'open'
+                          CHECK(status IN ('open','confirmed','remediated','false-positive')),
+        host_id      TEXT REFERENCES hosts(id) ON DELETE SET NULL,
+        note_path    TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_findings_workspace ON findings(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_findings_status    ON findings(status);
+      CREATE INDEX IF NOT EXISTS idx_findings_host      ON findings(host_id);
+    `,
+  },
+  {
+    // v9: add MITRE ATT&CK technique tagging columns to findings.
+    // Empty string default means "no tag" — consistent with other optional text fields.
+    version: 9,
+    up: `
+      ALTER TABLE findings ADD COLUMN mitre_technique_id   TEXT NOT NULL DEFAULT '';
+      ALTER TABLE findings ADD COLUMN mitre_technique_name TEXT NOT NULL DEFAULT '';
+    `,
+  },
+  {
+    // v10: add network topology support.
+    // topo_x/topo_y store canvas positions for hosts in the topology diagram.
+    // topology_edges models directed reachability connections between hosts.
+    version: 10,
+    up: `
+      ALTER TABLE hosts ADD COLUMN topo_x REAL;
+      ALTER TABLE hosts ADD COLUMN topo_y REAL;
+
+      CREATE TABLE IF NOT EXISTS topology_edges (
+        id               TEXT PRIMARY KEY,
+        workspace_id     TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        source_host_id   TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+        target_host_id   TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+        label            TEXT NOT NULL DEFAULT '',
+        created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(workspace_id, source_host_id, target_host_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_topo_edges_workspace ON topology_edges(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_topo_edges_source    ON topology_edges(source_host_id);
+      CREATE INDEX IF NOT EXISTS idx_topo_edges_target    ON topology_edges(target_host_id);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
