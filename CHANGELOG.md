@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Nessus and Burp Suite XML import for vulnerability findings — upload scanner exports via the Import button in the Findings Tracker panel; auto-deduplicates by title, maps scanner severity to FindingSeverity, and links findings to tracked hosts by IP (Issue #32)
 - Network Topology Diagram panel for pentest workspaces — interactive canvas with host nodes (colour-coded by status: up/down/rooted/unknown), drag-to-connect edges, position persistence, and Ctrl+Shift+T shortcut (Issue #31, migration v10)
 - DB migration v10: `topo_x`/`topo_y` REAL columns on `hosts` table; `topology_edges` table with `id`, `workspace_id` (FK cascade), `source_host_id`/`target_host_id` (FK cascade), `label`, `created_at`, UNIQUE on `(workspace_id, source_host_id, target_host_id)`; indexes on `workspace_id`, `source_host_id`, `target_host_id`; `TopologyEdge` and `TopologyHost` interfaces added to `src/lib/types.ts`
 - `GET /api/workspaces/[id]/topology` — returns all hosts (with port counts and stored canvas positions) and edges for a workspace

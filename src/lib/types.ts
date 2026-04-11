@@ -297,3 +297,20 @@ export interface TopologyHost {
   topo_x: number | null;
   topo_y: number | null;
 }
+
+/** A vulnerability finding parsed from a scanner export (Nessus / Burp Suite) */
+export interface ScannedFinding {
+  title: string;
+  description: string;
+  severity: FindingSeverity;
+  hostIp: string;
+  hostPort: number | null;
+  pluginId: string;
+  source: 'nessus' | 'burp';
+}
+
+/** Result returned by parseScanner() / parseNessus() / parseBurp() */
+export interface ScannerParseResult {
+  findings: ScannedFinding[];
+  errors: Array<{ message: string }>;
+}
