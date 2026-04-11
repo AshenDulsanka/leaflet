@@ -148,6 +148,25 @@ export interface NoteTemplate {
   content: string;
 }
 
+/** Category for an AI prompt template */
+export type AiPromptCategory =
+  | 'recon'
+  | 'exploitation'
+  | 'privesc'
+  | 'post-exploitation'
+  | 'reporting'
+  | 'ad-attacks'
+  | 'general';
+
+/** A built-in AI prompt template; prompts may contain [PLACEHOLDER] tokens */
+export interface AiPromptTemplate {
+  id: string;
+  category: AiPromptCategory;
+  title: string;
+  description: string;
+  prompt: string;
+}
+
 /** A node in the attack chain canvas (matches attack_chain_nodes DB schema) */
 export interface AttackNode {
   id: string;
