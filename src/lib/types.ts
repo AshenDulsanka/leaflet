@@ -148,6 +148,29 @@ export interface NoteTemplate {
   content: string;
 }
 
+/** A single port parsed from Nmap output */
+export interface NmapPort {
+  number: number;
+  protocol: 'tcp' | 'udp';
+  service: string;
+  version: string;
+  state: 'open' | 'closed' | 'filtered';
+}
+
+/** A host parsed from Nmap output */
+export interface NmapHost {
+  ip: string;
+  hostname: string;
+  os: string;
+  ports: NmapPort[];
+}
+
+/** Result returned by the Nmap parser */
+export interface NmapParseResult {
+  hosts: NmapHost[];
+  errors: Array<{ line: number; message: string }>;
+}
+
 /** Category for an AI prompt template */
 export type AiPromptCategory =
   | 'recon'
