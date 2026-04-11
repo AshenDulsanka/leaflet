@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Network Topology Diagram panel for pentest workspaces — interactive canvas with host nodes (colour-coded by status: up/down/rooted/unknown), drag-to-connect edges, position persistence, and Ctrl+Shift+T shortcut (Issue #31, migration v10)
+- DB migration v10: `topo_x`/`topo_y` REAL columns on `hosts` table; `topology_edges` table with `id`, `workspace_id` (FK cascade), `source_host_id`/`target_host_id` (FK cascade), `label`, `created_at`, UNIQUE on `(workspace_id, source_host_id, target_host_id)`; indexes on `workspace_id`, `source_host_id`, `target_host_id`; `TopologyEdge` and `TopologyHost` interfaces added to `src/lib/types.ts`
+- `GET /api/workspaces/[id]/topology` — returns all hosts (with port counts and stored canvas positions) and edges for a workspace
+- `POST /api/workspaces/[id]/topology/edges` and `DELETE /api/workspaces/[id]/topology/edges/[edgeId]` — create and remove topology connections
+- `topo_x` and `topo_y` added to the allowed PATCH fields for `/api/workspaces/[id]/hosts/[hostId]` for position persistence
 - Finding templates library: 13 built-in vulnerability templates across 5 categories (Injection, Auth, Crypto, Exposure, Misc) with pre-fill support for title, description, severity, and MITRE technique (Issue #30)
 - MITRE ATT&CK technique tagging for vulnerability findings with search-as-you-type picker (Issue #29)
 - Vulnerability findings tracker panel: full CRUD findings management for pentest workspaces with severity levels (Critical/High/Medium/Low/Info/None), inline CVSS 3.1 metric pickers with live score display and auto-fill severity from score, status tracking (Open/Confirmed/Remediated/False Positive), optional host link and note reference; dual filter chips for severity and status; accessible via toolbar `Bug` icon and `Ctrl+Shift+F` ([#28](https://github.com/AshenDulsanka/leaflet/issues/28))

@@ -274,3 +274,26 @@ export interface OperationLogEntry {
   host_ip?: string | null;
   host_hostname?: string | null;
 }
+
+/** A directed connection between two hosts in the network topology diagram */
+export interface TopologyEdge {
+  id: string;
+  workspace_id: string;
+  source_host_id: string;
+  target_host_id: string;
+  label: string;
+  created_at: string;
+}
+
+/** A host row enriched with port count and canvas position for topology rendering */
+export interface TopologyHost {
+  id: string;
+  workspace_id: string;
+  ip: string;
+  hostname: string;
+  os: string;
+  status: string;
+  port_count: number;
+  topo_x: number | null;
+  topo_y: number | null;
+}
