@@ -530,6 +530,8 @@
 
     {#if screenshotsOpen}
       <ScreenshotPanel
+        workspaceId={activeWorkspace?.id ?? null}
+        notesFolder={activeWorkspace?.notes_folder ?? ''}
         onClose={() => (screenshotsOpen = false)}
         onInsert={(md) => { insertIntoEditor?.(md); }}
       />

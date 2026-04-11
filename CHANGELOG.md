@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Screenshot captions: inline editable caption field on each screenshot tile in the Screenshots panel; click to edit, saved on blur or Enter via PATCH endpoint ([#21](https://github.com/AshenDulsanka/leaflet/issues/21))
+- Screenshot note linking: link any screenshot to a note via a searchable picker in the Screenshots panel; linked note name displayed with an unlink button ([#21](https://github.com/AshenDulsanka/leaflet/issues/21))
+- Workspace-scoped screenshot metadata stored in DB (migration v5): `linked_note_path` column added to `screenshot_metadata`, unique index on `(workspace_id, filename)` ([#21](https://github.com/AshenDulsanka/leaflet/issues/21))
+- `ScreenshotMeta` interface added to `src/lib/types.ts` with `caption` and `linked_note_path` fields
+- `PATCH /api/screenshots/[filename]` endpoint for updating caption and linked note path
+- `GET /api/screenshots` extended with optional `?workspaceId=` query parameter to merge DB metadata into response
+- `POST /api/screenshots` extended: saves metadata row when `workspace_id` is provided in formData
+- Insert screenshot into editor now uses caption as markdown alt text (`![caption](url)`)
 - Host scope status field (`in-scope` / `out-of-scope` / `unknown`) with filter toggle bar and color-coded badges on Host Tracker panel; scope selectable per host in expanded view ([#20](https://github.com/AshenDulsanka/leaflet/issues/20))
 - Screenshot filename link on host entries in Host Tracker — enter a screenshot filename to get a direct link to `/api/screenshots/{filename}` in the expanded host details ([#20](https://github.com/AshenDulsanka/leaflet/issues/20))
 - Note templates via Command Palette — five pentest-oriented templates (Recon, Vulnerability Finding, Exploit Log, Post-Exploitation Checklist, Active Directory) accessible from a new **Templates** tab in the Command Palette; inserting a template writes raw markdown directly into the editor (no bash code-block wrapper); template search filters by title and description; `NoteTemplate` type added to `src/lib/types.ts`; data module at `src/lib/data/templates.ts` with `searchTemplates` helper covered by unit tests ([#19](https://github.com/AshenDulsanka/leaflet/issues/19))

@@ -12,6 +12,15 @@ export interface FileNode {
   extension?: string; // only present when type === 'file'
 }
 
+/** A screenshot with workspace-scoped metadata */
+export interface ScreenshotMeta {
+  filename: string;
+  url: string;
+  sizeBytes: number;
+  caption: string;
+  linked_note_path: string;
+}
+
 /** Result from the search API */
 export interface SearchResult {
   path: string;

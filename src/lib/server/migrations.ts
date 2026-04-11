@@ -248,6 +248,15 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       ALTER TABLE hosts ADD COLUMN screenshot_filename TEXT NOT NULL DEFAULT '';
     `,
   },
+  {
+    // v5: add linked_note_path to screenshot_metadata and a unique index on
+    // (workspace_id, filename) so upserts are safe.
+    version: 5,
+    up: `
+      ALTER TABLE screenshot_metadata ADD COLUMN linked_note_path TEXT NOT NULL DEFAULT '';
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_screenshot_metadata_workspace_filename ON screenshot_metadata(workspace_id, filename);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
