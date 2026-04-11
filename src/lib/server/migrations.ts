@@ -327,6 +327,30 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       ALTER TABLE findings ADD COLUMN mitre_technique_name TEXT NOT NULL DEFAULT '';
     `,
   },
+  {
+    // v10: add network topology support.
+    // topo_x/topo_y store canvas positions for hosts in the topology diagram.
+    // topology_edges models directed reachability connections between hosts.
+    version: 10,
+    up: `
+      ALTER TABLE hosts ADD COLUMN topo_x REAL;
+      ALTER TABLE hosts ADD COLUMN topo_y REAL;
+
+      CREATE TABLE IF NOT EXISTS topology_edges (
+        id               TEXT PRIMARY KEY,
+        workspace_id     TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        source_host_id   TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+        target_host_id   TEXT NOT NULL REFERENCES hosts(id) ON DELETE CASCADE,
+        label            TEXT NOT NULL DEFAULT '',
+        created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(workspace_id, source_host_id, target_host_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_topo_edges_workspace ON topology_edges(workspace_id);
+      CREATE INDEX IF NOT EXISTS idx_topo_edges_source    ON topology_edges(source_host_id);
+      CREATE INDEX IF NOT EXISTS idx_topo_edges_target    ON topology_edges(target_host_id);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bug, X, Plus, RefreshCw, Pencil, Trash2, Check, Tag, BookOpen, ChevronDown } from '@lucide/svelte';
+  import { Bug, X, Plus, RefreshCw, Pencil, Trash2, Check, Tag, BookOpen, ChevronDown, Upload } from '@lucide/svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { calculateCvss, METRIC_OPTIONS } from '$lib/data/cvss';
@@ -26,6 +26,9 @@
   let hosts = $state<HostOption[]>([]);
   let loading = $state(false);
   let addingFinding = $state(false);
+  let importStatus = $state<{ imported: number; skipped: number } | null>(null);
+  let importing = $state(false);
+  let fileInputEl = $state<HTMLInputElement | null>(null);
 
   // ─── Add form state ────────────────────────────────────────────────────────
   let newTitle = $state('');
@@ -205,6 +208,34 @@
       I:  (map['I']  as CvssMetrics['I'])    ?? null,
       A:  (map['A']  as CvssMetrics['A'])    ?? null,
     };
+  }
+
+  // ─── Import ────────────────────────────────────────────────────────────────
+  async function handleImport(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || !workspaceId) return;
+
+    importing = true;
+    importStatus = null;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`/api/workspaces/${workspaceId}/findings/import`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as { imported: number; skipped: number };
+        importStatus = data;
+        if (data.imported > 0) await loadFindings();
+      }
+    } finally {
+      importing = false;
+      input.value = '';
+    }
   }
 
   // ─── Data fetching ─────────────────────────────────────────────────────────
@@ -392,6 +423,22 @@
       >
         <Plus size={13} />
       </button>
+      <!-- Hidden file input for scanner XML import -->
+      <input
+        bind:this={fileInputEl}
+        type="file"
+        accept=".nessus,.xml"
+        class="hidden"
+        onchange={handleImport}
+      />
+      <button
+        title="Import from Nessus / Burp Suite XML"
+        onclick={() => fileInputEl?.click()}
+        disabled={importing}
+        class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+      >
+        <Upload size={13} />
+      </button>
       <button
         onclick={onClose}
         title="Close"
@@ -444,6 +491,12 @@
         {/each}
       </div>
     </div>
+
+    {#if importStatus}
+      <div class="mx-2 mb-1 mt-1 rounded border border-border bg-muted px-2 py-1 text-[10px] text-muted-foreground">
+        Imported {importStatus.imported} finding{importStatus.imported === 1 ? '' : 's'}{importStatus.skipped > 0 ? `, skipped ${importStatus.skipped} duplicate${importStatus.skipped === 1 ? '' : 's'}` : ''}.
+      </div>
+    {/if}
 
     <!-- Scrollable content: add form + findings list -->
     <div class="flex-1 overflow-y-auto">
