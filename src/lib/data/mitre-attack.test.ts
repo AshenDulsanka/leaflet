@@ -69,7 +69,7 @@ describe('searchMitreTechniques', () => {
   });
 
   it('returns at most 8 results', () => {
-    // 'T1' matches almost everything — there should still be a cap of 8
+    // 'T1' matches almost everything - there should still be a cap of 8
     const results = searchMitreTechniques('T1');
     expect(results.length).toBeLessThanOrEqual(8);
   });

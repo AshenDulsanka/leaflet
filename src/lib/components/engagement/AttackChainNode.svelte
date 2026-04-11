@@ -20,7 +20,7 @@
     'flag': '#22c55e'
   };
 
-  // NodeProps from @xyflow/svelte — data is Record<string,unknown> at the framework level
+  // NodeProps from @xyflow/svelte - data is Record<string,unknown> at the framework level
   const { data }: NodeProps = $props();
 
   // Cast through unknown so TypeScript accepts the narrowing; wrapped in $derived so it

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Keyboard, Search, FilePlus, FolderPlus, Settings, FileCode, Eye, Terminal, ListChecks, Bot, Sparkles, Link2, Camera, Download, Monitor, KeyRound, Flag, Network, GitGraph } from '@lucide/svelte';
+  import { Keyboard, Search, FilePlus, FolderPlus, Settings, FileCode, Eye, Terminal, ListChecks, Bot, Sparkles, Link2, Camera, Download, Monitor, KeyRound, Flag, Network, GitGraph, ScrollText, ShieldAlert, Bug, Workflow } from '@lucide/svelte';
   import Dialog from '$lib/components/modals/Dialog.svelte';
   import NewNoteDialog from '$lib/components/modals/NewNoteDialog.svelte';
   import AnimatedThemeToggler from './AnimatedThemeToggler.svelte';
@@ -30,11 +30,15 @@
     onOpenFlagTracker?: () => void;
     onOpenSnippets?: () => void;
     onOpenAttackChain?: () => void;
+    onOpenOperationLog?: () => void;
+    onOpenCvssCalculator?: () => void;
+    onOpenFindingsTracker?: () => void;
+    onOpenTopology?: () => void;
     hasWorkspace?: boolean;
     isPentest?: boolean;
   }
 
-  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, hasWorkspace = false, isPentest = false }: Props =
+  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenOperationLog, onOpenCvssCalculator, onOpenFindingsTracker, onOpenTopology, hasWorkspace = false, isPentest = false }: Props =
     $props();
 
   let activeDialog: 'note' | 'folder' | null = $state(null);
@@ -49,7 +53,7 @@
 
   // Strip fixed width/height so CSS controls sizing of the inline SVGs.
   // SECURITY: ?raw imports are bundled at build time from static assets only.
-  // NEVER use {@html} with runtime user content — use DOMPurify instead.
+  // NEVER use {@html} with runtime user content - use DOMPurify instead.
   const logoSvg = logoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
   const typoSvg = typoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
 </script>
@@ -224,6 +228,46 @@
       disabled={!hasWorkspace}
     >
       <Network size={15} />
+    </button>
+
+    <!-- Engagement: Operation Log -->
+    <button
+      title="Operation log"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenOperationLog}
+      disabled={!hasWorkspace}
+    >
+      <ScrollText size={15} />
+    </button>
+
+    <!-- Engagement: CVSS Calculator -->
+    <button
+      title="CVSS Calculator (Ctrl+Shift+V)"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenCvssCalculator}
+      disabled={!hasWorkspace}
+    >
+      <ShieldAlert size={15} />
+    </button>
+
+    <!-- Engagement: Findings Tracker -->
+    <button
+      title="Findings Tracker (Ctrl+Shift+F)"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenFindingsTracker}
+      disabled={!hasWorkspace}
+    >
+      <Bug size={15} />
+    </button>
+
+    <!-- Engagement: Network Topology -->
+    <button
+      title="Network Topology (Ctrl+Shift+T)"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenTopology}
+      disabled={!hasWorkspace}
+    >
+      <Workflow size={15} />
     </button>
     {/if}
 

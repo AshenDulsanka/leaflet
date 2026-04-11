@@ -6,8 +6,8 @@ const t = (f: Omit<NoteTemplate, 'id'>): NoteTemplate => ({ id: String(++_id), .
 export const NOTE_TEMPLATES: NoteTemplate[] = [
   t({
     title: 'Recon',
-    description: 'Initial reconnaissance notes — scope, ports, web, SMB/LDAP and key findings',
-    content: `# Recon — {TARGET}
+    description: 'Initial reconnaissance notes - scope, ports, web, SMB/LDAP and key findings',
+    content: `# Recon - {TARGET}
 
 ## Scope
 
@@ -66,8 +66,8 @@ export const NOTE_TEMPLATES: NoteTemplate[] = [
 
   t({
     title: 'Vulnerability Finding',
-    description: 'Document a single vulnerability — CVSS score, PoC steps, impact, and remediation',
-    content: `# Vulnerability Finding — {TITLE}
+    description: 'Document a single vulnerability - CVSS score, PoC steps, impact, and remediation',
+    content: `# Vulnerability Finding - {TITLE}
 
 ## Summary
 
@@ -132,8 +132,8 @@ Recommended fix or mitigation.
 
   t({
     title: 'Exploit Log',
-    description: 'Step-by-step record of an exploitation attempt — commands used, outcome, and next path',
-    content: `# Exploit Log — {TARGET}
+    description: 'Step-by-step record of an exploitation attempt - commands used, outcome, and next path',
+    content: `# Exploit Log - {TARGET}
 
 ## Date / Time
 
@@ -195,7 +195,7 @@ Recommended fix or mitigation.
   t({
     title: 'Post-Exploitation Checklist',
     description: 'Systematic checklist covering identity, enumeration, persistence, lateral movement, and flags',
-    content: `# Post-Exploitation Checklist — {TARGET}
+    content: `# Post-Exploitation Checklist - {TARGET}
 
 ## Identity
 
@@ -267,7 +267,7 @@ Recommended fix or mitigation.
   t({
     title: 'Active Directory',
     description: 'Domain enumeration, attack path, Kerberoast/ASREPRoast findings, ACL abuse, and domain compromise',
-    content: `# Active Directory — {DOMAIN}
+    content: `# Active Directory - {DOMAIN}
 
 ## Environment
 
