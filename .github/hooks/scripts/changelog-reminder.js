@@ -23,6 +23,6 @@ process.stdin.on('end', function() {
         return;
       }
     }
-  } catch (_) { /* invalid or missing stdin — output empty object below */ }
+  } catch (_) { /* invalid or missing stdin - output empty object below */ }
   process.stdout.write('{}');
 });

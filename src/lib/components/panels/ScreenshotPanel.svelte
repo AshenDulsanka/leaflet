@@ -217,7 +217,7 @@
     return parts[parts.length - 1].replace(/\.md$/, '');
   }
 
-  /** Programmatic focus action — avoids the a11y autofocus attribute warning. */
+  /** Programmatic focus action - avoids the a11y autofocus attribute warning. */
   function focusOnMount(node: HTMLInputElement): void {
     node.focus();
   }
