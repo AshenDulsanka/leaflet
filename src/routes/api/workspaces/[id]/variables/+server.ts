@@ -1,6 +1,7 @@
 /**
- * GET  /api/workspaces/[id]/variables  - List snippet variables for a workspace
- * POST /api/workspaces/[id]/variables  - Create/upsert a variable
+ * GET    /api/workspaces/[id]/variables  - List snippet variables for a workspace
+ * POST   /api/workspaces/[id]/variables  - Create/upsert a variable
+ * DELETE /api/workspaces/[id]/variables  - Bulk-delete all variables for a workspace
  */
 
 import { json } from '@sveltejs/kit';
@@ -32,4 +33,10 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   db.prepare('INSERT INTO snippet_variables (id, workspace_id, name, value) VALUES (?, ?, ?, ?)').run(id, params.id, body.name.trim(), body.value ?? '');
   const v = db.prepare('SELECT * FROM snippet_variables WHERE id = ?').get(id);
   return json(v, { status: 201 });
+};
+
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+  const { db } = locals;
+  db.prepare('DELETE FROM snippet_variables WHERE workspace_id = ?').run(params.id);
+  return new Response(null, { status: 204 });
 };

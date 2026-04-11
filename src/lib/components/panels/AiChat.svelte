@@ -2,7 +2,10 @@
   import { onMount } from 'svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { X, Send, Bot, FileText } from '@lucide/svelte';
+  import { X, Send, Bot, FileText, Sparkles, ChevronUp } from '@lucide/svelte';
+
+  import { AI_PROMPT_TEMPLATES } from '$lib/data/ai-prompts';
+  import type { AiPromptCategory } from '$lib/types';
 
   interface ChatMessage {
     role: 'user' | 'assistant';
@@ -22,13 +25,41 @@
   let includeNote = $state(true);
   let messagesEl = $state<HTMLDivElement | null>(null);
   let inputEl = $state<HTMLTextAreaElement | null>(null);
+  let showTemplatePicker = $state(false);
 
-  const STARTERS = [
-    'Summarize the key findings in this note',
-    'What privilege escalation vectors should I try?',
-    'Help me write a professional finding for this vulnerability',
-    'What Active Directory attacks should I try next?',
-  ];
+  /** Insert a prompt template text into the input field without auto-sending. */
+  function insertTemplate(prompt: string): void {
+    input = prompt;
+    showTemplatePicker = false;
+    // Let the DOM update then resize and focus the textarea
+    requestAnimationFrame(() => {
+      if (inputEl) {
+        inputEl.style.height = 'auto';
+        inputEl.style.height = Math.min(inputEl.scrollHeight, 112) + 'px';
+        inputEl.focus();
+      }
+    });
+  }
+
+  const CATEGORY_LABELS: Record<AiPromptCategory, string> = {
+    recon: 'Recon',
+    exploitation: 'Exploit',
+    privesc: 'PrivEsc',
+    'post-exploitation': 'Post-Exp',
+    reporting: 'Reporting',
+    'ad-attacks': 'AD',
+    general: 'General',
+  };
+
+  const CATEGORY_COLORS: Record<AiPromptCategory, string> = {
+    recon: 'bg-blue-500/15 text-blue-400',
+    exploitation: 'bg-red-500/15 text-red-400',
+    privesc: 'bg-orange-500/15 text-orange-400',
+    'post-exploitation': 'bg-purple-500/15 text-purple-400',
+    reporting: 'bg-green-500/15 text-green-400',
+    'ad-attacks': 'bg-yellow-500/15 text-yellow-400',
+    general: 'bg-muted text-muted-foreground',
+  };
 
   async function send(text?: string) {
     const content = (text ?? input).trim();
@@ -197,15 +228,21 @@
   <!-- Messages -->
   <div bind:this={messagesEl} class="flex-1 overflow-y-auto px-3 py-3">
     {#if messages.length === 0}
-      <!-- Empty state - quick starters -->
+      <!-- Empty state - prompt template cards -->
       <div class="flex flex-col gap-2">
-        <p class="mb-2 text-center text-xs text-muted-foreground">Ask me anything about your engagement</p>
-        {#each STARTERS as starter}
+        <p class="mb-2 text-center text-xs text-muted-foreground">Select a prompt to get started</p>
+        {#each AI_PROMPT_TEMPLATES as template (template.id)}
           <button
-            class="rounded-lg border border-border px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-accent hover:text-foreground"
-            onclick={() => send(starter)}
+            class="group rounded-lg border border-border px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-accent"
+            onclick={() => insertTemplate(template.prompt)}
           >
-            {starter}
+            <div class="flex items-center gap-1.5 mb-0.5">
+              <span class="text-xs font-medium text-foreground group-hover:text-primary">{template.title}</span>
+              <span class="ml-auto shrink-0 rounded px-1 py-0.5 text-[10px] font-medium {CATEGORY_COLORS[template.category]}">
+                {CATEGORY_LABELS[template.category]}
+              </span>
+            </div>
+            <p class="text-[10px] text-muted-foreground leading-snug">{template.description}</p>
           </button>
         {/each}
       </div>
@@ -237,8 +274,44 @@
     {/if}
   </div>
 
+  <!-- Compact template picker (visible only during an active conversation) -->
+  {#if messages.length > 0 && showTemplatePicker}
+    <div
+      class="shrink-0 border-t border-border bg-card px-3 py-2 max-h-52 overflow-y-auto"
+      transition:fly={{ y: 8, duration: 120, easing: cubicOut }}
+    >
+      <p class="mb-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Prompt templates</p>
+      <div class="flex flex-col gap-1">
+        {#each AI_PROMPT_TEMPLATES as template (template.id)}
+          <button
+            class="group flex items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-accent"
+            onclick={() => insertTemplate(template.prompt)}
+          >
+            <span class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium {CATEGORY_COLORS[template.category]}">
+              {CATEGORY_LABELS[template.category]}
+            </span>
+            <span class="text-xs text-foreground group-hover:text-primary truncate">{template.title}</span>
+          </button>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
   <!-- Input -->
   <div class="shrink-0 border-t border-border p-3">
+    {#if messages.length > 0}
+      <div class="mb-1.5 flex items-center justify-end">
+        <button
+          class="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground {showTemplatePicker ? 'bg-accent text-foreground' : ''}"
+          onclick={() => (showTemplatePicker = !showTemplatePicker)}
+          title="Prompt templates"
+        >
+          <Sparkles size={10} />
+          Prompts
+          <ChevronUp size={10} class="transition-transform {showTemplatePicker ? '' : 'rotate-180'}" />
+        </button>
+      </div>
+    {/if}
     <div class="flex items-end gap-2 rounded-xl border border-border bg-background px-3 py-2 focus-within:border-primary/50">
       <textarea
         bind:this={inputEl}

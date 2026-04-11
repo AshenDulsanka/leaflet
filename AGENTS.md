@@ -37,7 +37,7 @@ Leaflet is a self-hosted markdown note-taking app. Notes are `.md` files on disk
 | Term | Meaning |
 |------|---------|
 | Workspace | An isolated context for notes. Can be `general` or `ctf`. |
-| CTF Workspace | Unlocks engagement tools: host tracker, credential vault, flag tracker, attack chain, report generator. |
+| CTF Workspace | Unlocks engagement tools: host tracker, credential vault, flag tracker, attack chain. |
 | General Workspace | Standard note-taking without engagement panels. |
 | Notes Folder | Each workspace maps to a subfolder in `data/notes/`. |
 | Default Workspace | Auto-created on first run so the user always starts in a valid context. |
@@ -52,7 +52,7 @@ leaflet/
         editor/       - Milkdown, CodeMirror, ImageToolbar, Lightbox, FindPanel
         layout/       - Sidebar, FileTree, StatusBar, Toolbar, SyncButton
         panels/       - SearchPanel, AiChat, Backlinks, Screenshots, Export, NoteGraph
-        engagement/   - HostTracker, CredentialVault, FlagTracker, AttackChain, ReportGenerator
+        engagement/   - HostTracker, CredentialVault, FlagTracker, AttackChain
         modals/       - HelpModal, ExportModal, CommandPalette, SettingsModal
       data/           - commands.ts, methodology.ts, sync-messages.ts
       server/         - database.ts, migrations.ts, notes.ts, screenshots.ts, ai.ts

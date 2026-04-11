@@ -6,7 +6,7 @@ A self-hosted markdown note-taking app for general use and for CTF and penetrati
 
 Leaflet was created to capture notes from the HackTheBox CPTS (Certified Penetration Testing Specialist) course. The app was inspired by **Obsidian** and **Cherry Tree** (an open-source hierarchical note-taking tool), but I decided to build my own to:
 
-1. Add features tailored to **pentest/CTF workflows** — Host tracker, credential vault, flag tracker, attack chain visualizer, and report generation
+1. Add features tailored to **pentest/CTF workflows** — Host tracker, credential vault, flag tracker, and attack chain visualizer
 2. Keep notes as **plain `.md` files** — maximizing portability and Git-friendly sync
 3. Support **both general and pentest modes** via workspace selection, since the app proved useful for everyday note-taking too
 
@@ -41,7 +41,6 @@ This project also serves as a reference for **agent orchestration** and open-sou
 - Flag tracker
 - Attack chain visualizer
 - Command snippets with variable substitution
-- Report generator (Markdown export)
 
 **AI Integration** (optional)
 - AI chat assistant with current note as context
@@ -76,7 +75,7 @@ This project also serves as a reference for **agent orchestration** and open-sou
 Requires: Docker Desktop, Git.
 
 ```bash
-git clone <repo-url> leaflet
+git clone https://github.com/AshenDulsanka/leaflet.git
 cd leaflet
 cp .env.example .env
 # Edit .env to set AI API keys (optional)
@@ -90,7 +89,7 @@ App runs at http://localhost:5173.
 Requires: Node.js 22+, pnpm 9+.
 
 ```bash
-git clone <repo-url> leaflet
+git clone https://github.com/AshenDulsanka/leaflet.git
 cd leaflet
 cp .env.example .env
 pnpm install
