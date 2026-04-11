@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { KeyRound, Plus, X, RefreshCw, Copy, Eye, EyeOff, Trash2, ShieldCheck } from '@lucide/svelte';
+  import { KeyRound, Plus, X, RefreshCw, Eye, EyeOff, Trash2, ShieldCheck } from '@lucide/svelte';
+  import CopyButton from '$lib/components/ui/CopyButton.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -104,14 +105,6 @@
     if (next.has(id)) next.delete(id);
     else next.add(id);
     revealedIds = next;
-  }
-
-  async function copyToClipboard(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // Silently ignore clipboard errors
-    }
   }
 
   const typeLabels: Record<string, string> = {
@@ -270,6 +263,12 @@
                 {cred.domain ? `${cred.domain}\\` : ''}{cred.username || '(no username)'}
               </span>
               <div class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                {#if cred.username}
+                  <CopyButton
+                    text={cred.domain ? `${cred.domain}\\${cred.username}` : cred.username}
+                    size={10}
+                  />
+                {/if}
                 <select
                   value={cred.status}
                   onchange={(e) => updateStatus(cred, (e.currentTarget as HTMLSelectElement).value)}
@@ -307,13 +306,7 @@
                   <Eye size={10} />
                 {/if}
               </button>
-              <button
-                onclick={() => copyToClipboard(cred.secret)}
-                class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-                title="Copy secret"
-              >
-                <Copy size={10} />
-              </button>
+              <CopyButton text={cred.secret} size={10} />
             </div>
 
             {#if cred.source}

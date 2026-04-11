@@ -1,3 +1,8 @@
+---
+name: coding-standards
+description: Use when writing or reviewing TypeScript, Svelte 5 components, or API routes. Covers strict mode requirements, rune syntax ($state, $derived, $effect, $props), naming conventions, file organisation, error handling, import ordering, load() function patterns, and what never to do.
+---
+
 # Coding Standards
 
 This document defines the coding conventions for the Leaflet project. All contributors and AI agents must follow these standards.

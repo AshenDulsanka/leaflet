@@ -1,11 +1,16 @@
 <script lang="ts">
-  import { CloudUpload, CloudDownload, RefreshCw, AlertCircle, Check } from '@lucide/svelte';
+  import { CloudUpload, CloudDownload, RefreshCw } from '@lucide/svelte';
+  import { notifications } from '$lib/notifications.svelte';
 
-  type SyncStatus = 'idle' | 'pushing' | 'pulling' | 'success' | 'error' | 'no-repo';
+  type SyncStatus = 'idle' | 'pushing' | 'pulling' | 'no-repo';
+
+  interface Props {
+    onPullSuccess?: () => void;
+  }
+
+  let { onPullSuccess }: Props = $props();
 
   let status = $state<SyncStatus>('idle');
-  let message = $state('');
-  let showTooltip = $state(false);
 
   async function checkRepo() {
     try {
@@ -18,7 +23,7 @@
         const data = await res.json();
         if (data.error?.includes('not a git repository')) {
           status = 'no-repo';
-          message = 'No git repo in data dir';
+          notifications.add('warning', 'No git repo found in data directory');
         }
       }
     } catch {
@@ -29,7 +34,6 @@
   async function sync(action: 'push' | 'pull') {
     if (status === 'pushing' || status === 'pulling') return;
     status = action === 'push' ? 'pushing' : 'pulling';
-    message = '';
 
     try {
       const res = await fetch('/api/sync', {
@@ -40,24 +44,19 @@
       const data = await res.json();
 
       if (!res.ok) {
-        status = 'error';
-        message = data.error ?? 'Sync failed';
+        notifications.add('error', data.error ?? 'Sync failed');
         return;
       }
 
-      status = 'success';
-      message = data.message ?? 'Done';
+      notifications.add('success', data.message ?? 'Done');
+
+      if (action === 'pull') {
+        onPullSuccess?.();
+      }
     } catch (err: unknown) {
-      status = 'error';
-      message = err instanceof Error ? err.message : 'Network error';
+      notifications.add('error', err instanceof Error ? err.message : 'Network error');
     } finally {
-      // Auto-reset after 3s
-      setTimeout(() => {
-        if (status === 'success' || status === 'error') {
-          status = 'idle';
-          message = '';
-        }
-      }, 3000);
+      status = 'idle';
     }
   }
 
@@ -67,13 +66,7 @@
   });
 </script>
 
-<div
-  class="relative flex items-center gap-0.5"
-  onmouseenter={() => (showTooltip = true)}
-  onmouseleave={() => (showTooltip = false)}
-  role="group"
-  aria-label="Git sync"
->
+<div class="flex items-center gap-0.5" role="group" aria-label="Git sync">
   <button
     onclick={() => sync('pull')}
     disabled={status === 'pushing' || status === 'pulling' || status === 'no-repo'}
@@ -101,21 +94,4 @@
       <CloudUpload size={13} />
     {/if}
   </button>
-
-  <!-- Status indicator -->
-  {#if status === 'success'}
-    <Check size={11} class="text-green-500" />
-  {:else if status === 'error' || status === 'no-repo'}
-    <AlertCircle size={11} class="text-destructive" />
-  {/if}
-
-  <!-- Tooltip -->
-  {#if showTooltip && message}
-    <div
-      class="absolute bottom-full left-1/2 z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded
-             border border-border bg-popover px-2 py-1 text-[10px] text-popover-foreground shadow-md"
-    >
-      {message}
-    </div>
-  {/if}
 </div>

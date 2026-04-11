@@ -1,10 +1,15 @@
+---
+name: pr-standards
+description: Use when creating or reviewing pull requests. Covers PR title format (Conventional Commits), required issue reference, three-section description template (What changed / Why / How to test), 400-line diff limit, screenshot requirements for UI changes, squash merge strategy, and review requirements.
+---
+
 # Pull Request Standards
 
 All pull requests in this repository must follow these standards.
 
 ## PR Title
 
-PR titles must follow the same format as commit messages (Conventional Commits — see `commit-conventions.md`):
+PR titles must follow the same format as commit messages (Conventional Commits — see `commit-conventions/SKILL.md`):
 
 ```
 <type>(<scope>): <subject>

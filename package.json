@@ -12,7 +12,9 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -36,7 +38,8 @@
     "tailwindcss": "^4.0.15",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.58.0",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vitest": "^4.1.3"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.3.2",
@@ -48,6 +51,7 @@
     "@lucide/svelte": "^0.577.0",
     "@milkdown/core": "^7.6.3",
     "@milkdown/crepe": "^7.6.3",
+    "@milkdown/kit": "^7.20.0",
     "@milkdown/plugin-listener": "^7.19.0",
     "@milkdown/plugin-math": "^7.5.0",
     "@milkdown/plugin-prism": "^7.6.3",

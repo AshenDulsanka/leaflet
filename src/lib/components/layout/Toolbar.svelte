@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { Keyboard, Search, FilePlus, FolderPlus, Settings, FileCode, Eye, Terminal, ListChecks, Bot, Sparkles, Link2, Camera, Download, Monitor, KeyRound, Flag, Network, FileText, GitGraph } from '@lucide/svelte';
+  import { Keyboard, Search, FilePlus, FolderPlus, Settings, FileCode, Eye, Terminal, ListChecks, Bot, Sparkles, Link2, Camera, Download, Monitor, KeyRound, Flag, Network, GitGraph, ScrollText, ShieldAlert, Bug, Workflow } from '@lucide/svelte';
   import Dialog from '$lib/components/modals/Dialog.svelte';
   import NewNoteDialog from '$lib/components/modals/NewNoteDialog.svelte';
   import AnimatedThemeToggler from './AnimatedThemeToggler.svelte';
+  import logoRaw from '$lib/assets/logo.svg?raw';
+  import typoRaw from '$lib/assets/typo.svg?raw';
 
   interface Props {
     searchOpen: boolean;
@@ -28,12 +30,15 @@
     onOpenFlagTracker?: () => void;
     onOpenSnippets?: () => void;
     onOpenAttackChain?: () => void;
-    onOpenReport?: () => void;
+    onOpenOperationLog?: () => void;
+    onOpenCvssCalculator?: () => void;
+    onOpenFindingsTracker?: () => void;
+    onOpenTopology?: () => void;
     hasWorkspace?: boolean;
     isPentest?: boolean;
   }
 
-  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenReport, hasWorkspace = false, isPentest = false }: Props =
+  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenOperationLog, onOpenCvssCalculator, onOpenFindingsTracker, onOpenTopology, hasWorkspace = false, isPentest = false }: Props =
     $props();
 
   let activeDialog: 'note' | 'folder' | null = $state(null);
@@ -45,11 +50,20 @@
       newNoteOpen = false;
     }
   });
+
+  // Strip fixed width/height so CSS controls sizing of the inline SVGs.
+  // SECURITY: ?raw imports are bundled at build time from static assets only.
+  // NEVER use {@html} with runtime user content - use DOMPurify instead.
+  const logoSvg = logoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
+  const typoSvg = typoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
 </script>
 
 <header class="flex h-10 items-center gap-1 border-b border-border bg-card px-2">
-  <!-- App name -->
-  <span class="mr-2 select-none text-sm font-semibold tracking-wide text-foreground">Notes</span>
+  <!-- App logo -->
+  <a href="/" class="mr-3 flex shrink-0 select-none items-center gap-1.5 text-foreground" aria-label="Leaflet">
+    <span class="flex h-6 w-[22px] items-center invert dark:invert-0 [&>svg]:h-full [&>svg]:w-full">{@html logoSvg}</span>
+    <span class="flex h-[13px] items-center invert dark:invert-0 [&>svg]:h-full [&>svg]:w-auto">{@html typoSvg}</span>
+  </a>
 
   <div class="flex flex-1 items-center gap-0.5">
     <!-- New Note -->
@@ -216,14 +230,44 @@
       <Network size={15} />
     </button>
 
-    <!-- Engagement: Report Generator -->
+    <!-- Engagement: Operation Log -->
     <button
-      title="Report generator"
+      title="Operation log"
       class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
-      onclick={onOpenReport}
+      onclick={onOpenOperationLog}
       disabled={!hasWorkspace}
     >
-      <FileText size={15} />
+      <ScrollText size={15} />
+    </button>
+
+    <!-- Engagement: CVSS Calculator -->
+    <button
+      title="CVSS Calculator (Ctrl+Shift+V)"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenCvssCalculator}
+      disabled={!hasWorkspace}
+    >
+      <ShieldAlert size={15} />
+    </button>
+
+    <!-- Engagement: Findings Tracker -->
+    <button
+      title="Findings Tracker (Ctrl+Shift+F)"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenFindingsTracker}
+      disabled={!hasWorkspace}
+    >
+      <Bug size={15} />
+    </button>
+
+    <!-- Engagement: Network Topology -->
+    <button
+      title="Network Topology (Ctrl+Shift+T)"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenTopology}
+      disabled={!hasWorkspace}
+    >
+      <Workflow size={15} />
     </button>
     {/if}
 

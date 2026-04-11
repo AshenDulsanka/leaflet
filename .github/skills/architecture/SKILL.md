@@ -1,3 +1,8 @@
+---
+name: architecture
+description: Use when understanding the Leaflet project structure, folder layout, data flow, API routes, database design, SQLite WAL mode, Docker setup, or key design decisions. Covers the full high-level architecture, component map, and sync mechanism.
+---
+
 # Architecture Overview
 
 ## What Is Leaflet
@@ -194,7 +199,7 @@ Normal DB write:  INSERT → notes.db-wal (fast)
                          notes.db (persisted)
 
 Git sync push:  wal_checkpoint → git add . → git commit → git push
-Git sync pull:  git pull → app reloads from disk
+Git sync pull:  git pull → reloadDb() → app reads fresh DB
 ```
 
 ## Docker Setup

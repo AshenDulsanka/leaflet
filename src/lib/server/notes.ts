@@ -6,7 +6,7 @@
  */
 
 import { promises as fs } from 'fs';
-import { resolve, join, extname, basename, dirname } from 'path';
+import { resolve, join, extname, basename, dirname, relative } from 'path';
 import type { FileNode } from '$lib/types';
 
 /** Get the notes root directory from the environment variable */
@@ -24,8 +24,10 @@ export function getNotesDir(): string {
  */
 export function safePath(userPath: string): string {
   const notesDir = getNotesDir();
+  const resolvedBase = resolve(notesDir);
   const resolved = resolve(join(notesDir, userPath));
-  if (!resolved.startsWith(resolve(notesDir))) {
+  const rel = relative(resolvedBase, resolved);
+  if (rel.startsWith('..') || rel.startsWith('/') || rel.startsWith('\\')) {
     throw new Error('Path traversal attempt detected');
   }
   return resolved;
@@ -83,10 +85,19 @@ export async function createNote(relativePath: string, isDirectory = false): Pro
   const filePath = safePath(relativePath);
   if (isDirectory) {
     await fs.mkdir(filePath, { recursive: true });
+    // Mark the empty directory so git tracks it
+    await fs.writeFile(join(filePath, '.gitkeep'), '');
   } else {
     await fs.mkdir(dirname(filePath), { recursive: true });
     // Create with empty content if it doesn't exist
     await fs.writeFile(filePath, '', { flag: 'wx' });
+    // Now that the directory has a real note, remove the placeholder
+    const gitkeep = join(dirname(filePath), '.gitkeep');
+    try {
+      await fs.unlink(gitkeep);
+    } catch {
+      // .gitkeep may not exist - that's fine
+    }
   }
 }
 

@@ -5,6 +5,29 @@
   import { Crepe } from '@milkdown/crepe';
   import { editorViewCtx, parserCtx } from '@milkdown/core';
   import ImageToolbar from '$lib/components/editor/ImageToolbar.svelte';
+  // Builds a DecorationSet that highlights all [[note]] spans in the document.
+  // Receives ProseMirror classes as parameters (dynamic import - bypasses pnpm isolation).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function buildWikilinkDecorations(doc: any, Decoration: any, DecorationSet: any): any {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const decorations: any[] = [];
+    const WIKI_RE = /\[\[([^\]]+)\]\]/g;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    doc.descendants((node: any, pos: number) => {
+      if (!node.isText || !node.text) return;
+      WIKI_RE.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = WIKI_RE.exec(node.text)) !== null) {
+        decorations.push(
+          Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
+            class: 'wikilink-highlight',
+            nodeName: 'span'
+          })
+        );
+      }
+    });
+    return DecorationSet.create(doc, decorations);
+  }
 
   interface FindOptions {
     caseSensitive: boolean;
@@ -55,23 +78,24 @@
     selectedIndex: number;
   }
   let wikilinkDropdown = $state<WikilinkDropdownState | null>(null);
+  let dropdownSearchText = $state('');
   const wikilinkFiltered = $derived.by(() => {
     if (!wikilinkDropdown) return [] as string[];
-    const q = wikilinkDropdown.query.toLowerCase();
+    // Use explicit search box text if provided; otherwise use query from typed [[...text
+    const q = (dropdownSearchText.trim() || wikilinkDropdown.query).toLowerCase();
     return noteSuggestions
       .filter((p) => {
         const name = p.split('/').pop()!.replace(/\.md$/i, '').toLowerCase();
         return name.includes(q) || p.toLowerCase().includes(q);
       })
-      .slice(0, 8);
+      .slice(0, 50);
   });
 
   // Cleanup refs for ProseMirror view DOM event listeners
   let viewListenerDom: HTMLElement | null = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let viewKeyupRef: ((e: any) => void) | null = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let viewKeydownRef: ((e: any) => void) | null = null;
+  let viewKeyupRef: (() => void) | null = null;
+  let viewInputRef: (() => void) | null = null;
+  let viewKeydownRef: ((e: KeyboardEvent) => void) | null = null;
 
   // Close image toolbar when clicking outside the toolbar (the toolbar uses
   // onpointerdown|stopPropagation to absorb events directed at itself).
@@ -173,20 +197,26 @@
                 icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>`,
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 onRun: () => {
-                  // Crepe's block-edit plugin dispatches its own cleanup transaction
-                  // after onRun returns (deleting the slash + any filter text the user
-                  // typed). We wait for that cleanup to settle, then insert [[ at the
-                  // resulting cursor position and open the wikilink dropdown.
-                  setTimeout(() => {
-                    if (!crepeEditor || !editorReady) return;
-                    try {
-                      const v = crepeEditor.editor.ctx.get(editorViewCtx);
-                      const pos = v.state.selection.from;
-                      v.dispatch(v.state.tr.insertText('[[', pos, pos));
-                      v.focus();
-                      checkAndUpdateWikilinkDropdown();
-                    } catch { /* ignore */ }
-                  }, 50);
+                  // Double-rAF: yields two browser frames so block-edit's cleanup
+                  // transaction has been dispatched AND committed before we read the
+                  // cursor position. setTimeout(50) was unreliable depending on CPU speed.
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                      if (!crepeEditor || !editorReady) return;
+                      try {
+                        const v = crepeEditor.editor.ctx.get(editorViewCtx);
+                        const { from } = v.state.selection;
+                        const resolvedPos = v.state.doc.resolve(from);
+                        const textBefore = resolvedPos.parent.textContent.slice(0, resolvedPos.parentOffset);
+                        // If block-edit left a slash command remnant (e.g. "/w"), remove it ourselves
+                        const slashRemnant = textBefore.match(/\/\w+$/);
+                        const deleteFrom = slashRemnant ? from - slashRemnant[0].length : from;
+                        v.dispatch(v.state.tr.insertText('[[', deleteFrom, from));
+                        v.focus();
+                        checkAndUpdateWikilinkDropdown();
+                      } catch { /* ignore */ }
+                    });
+                  });
                 }
               });
           }
@@ -217,10 +247,52 @@
       const pview = crepeEditor.editor.ctx.get(editorViewCtx);
       viewListenerDom = pview.dom as HTMLElement;
       viewKeyupRef = () => checkAndUpdateWikilinkDropdown();
+      viewInputRef = () => checkAndUpdateWikilinkDropdown();
       viewKeydownRef = (e: KeyboardEvent) => handleWikilinkDropdownKey(e);
       viewListenerDom.addEventListener('keyup', viewKeyupRef);
+      viewListenerDom.addEventListener('input', viewInputRef);
       viewListenerDom.addEventListener('keydown', viewKeydownRef, { capture: true });
     } catch { /* ignore */ }
+
+    // Inject wikilink decoration plugin via ProseMirror state.reconfigure().
+    // Dynamic import bypasses pnpm module isolation for transitive dependencies.
+    // 'as string' prevents TypeScript from statically resolving the module path,
+    // yielding Promise<any> so strict mode does not error on inaccessible types.
+    try {
+      const pmv = crepeEditor.editor.ctx.get(editorViewCtx);
+      const pmStateMod = 'prosemirror-state' as string;
+      const pmViewMod = 'prosemirror-view' as string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const [pmState, pmView]: [any, any] = await Promise.all([
+        import(/* @vite-ignore */ pmStateMod),
+        import(/* @vite-ignore */ pmViewMod)
+      ]);
+      const { Plugin, PluginKey } = pmState;
+      const { Decoration, DecorationSet } = pmView;
+      const wikilinkKey = new PluginKey('wikilink-highlight');
+      const wikilinkPlugin = new Plugin({
+        key: wikilinkKey,
+        state: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          init(_: unknown, state: any) {
+            return buildWikilinkDecorations(state.doc, Decoration, DecorationSet);
+          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          apply(tr: any, old: any) {
+            if (!tr.docChanged) return old;
+            return buildWikilinkDecorations(tr.doc, Decoration, DecorationSet);
+          },
+        },
+        props: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          decorations(state: any) {
+            return wikilinkKey.getState(state);
+          },
+        },
+      });
+      const newState = pmv.state.reconfigure({ plugins: [...pmv.state.plugins, wikilinkPlugin] });
+      pmv.updateState(newState);
+    } catch { /* prosemirror packages not accessible - wikilink highlighting disabled, click nav still works */ }
   }
 
   async function recreateEditor() {
@@ -236,9 +308,11 @@
     wikilinkDropdown = null;
     if (viewListenerDom) {
       if (viewKeyupRef) viewListenerDom.removeEventListener('keyup', viewKeyupRef);
+      if (viewInputRef) viewListenerDom.removeEventListener('input', viewInputRef);
       if (viewKeydownRef) viewListenerDom.removeEventListener('keydown', viewKeydownRef, { capture: true });
       viewListenerDom = null;
       viewKeyupRef = null;
+      viewInputRef = null;
       viewKeydownRef = null;
     }
     if (crepeEditor) {
@@ -268,49 +342,42 @@
     }
   });
 
-  // ─── Wiki-link highlighting ────────────────────────────────────────────────
-  // Tracks [[note-name]] spans for CSS highlight + click navigation.
-  // No extra packages needed - piggybacks on the existing CSS Highlight API.
+  // ─── Wiki-link click navigation ────────────────────────────────────────────
+  // Tracks [[note-name]] spans for click navigation. Visual highlighting is
+  // handled by the wikilinkHighlightPlugin ProseMirror Decoration plugin.
   interface WikiRange { start: number; end: number; name: string }
   let wikilinkPositions: WikiRange[] = [];
 
-  function updateWikilinkHighlights() {
-    if (!cssHL || !HighlightCtor) return;
-    cssHL.delete('wikilink');
-    wikilinkPositions = [];
-    if (!crepeEditor || !editorReady) return;
+  function updateWikilinkClickPositions() {
+    if (!crepeEditor || !editorReady) {
+      wikilinkPositions = [];
+      return;
+    }
+    const newPositions: WikiRange[] = [];
     try {
       const view = crepeEditor.editor.ctx.get(editorViewCtx);
-      const domRanges: Range[] = [];
       const WIKI_RE = /\[\[([^\]]+)\]\]/g;
-      view.state.doc.descendants((node, pos) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      view.state.doc.descendants((node: any, pos: number) => {
         if (!node.isText || !node.text) return;
-        let m: RegExpExecArray | null;
         WIKI_RE.lastIndex = 0;
+        let m: RegExpExecArray | null;
         while ((m = WIKI_RE.exec(node.text)) !== null) {
           const start = pos + m.index;
           const end = start + m[0].length;
-          wikilinkPositions.push({ start, end, name: m[1].trim() });
-          try {
-            const s = view.domAtPos(start);
-            const e = view.domAtPos(end);
-            const r = new Range();
-            r.setStart(s.node, s.offset);
-            r.setEnd(e.node, e.offset);
-            domRanges.push(r);
-          } catch { /* stale DOM */ }
+          newPositions.push({ start, end, name: m[1].trim() });
         }
       });
-      if (domRanges.length > 0) cssHL.set('wikilink', new HighlightCtor(...domRanges));
     } catch { /* ignore */ }
+    wikilinkPositions = newPositions;
   }
 
-  // Re-highlight whenever content changes (editorReady ensures Crepe has rendered)
+  // Update click positions whenever content changes (editorReady ensures Crepe has rendered)
   $effect(() => {
     if (editorReady && mode === 'wysiwyg') {
       // eslint-disable-next-line @typescript-eslint/no-unused-expressions
       internalContent; // track
-      requestAnimationFrame(() => updateWikilinkHighlights());
+      requestAnimationFrame(() => updateWikilinkClickPositions());
     }
   });
 
@@ -361,12 +428,14 @@
       if (!match) { wikilinkDropdown = null; return; }
       const query = match[1];
       const coords = view.coordsAtPos(from);
+      const prev = wikilinkDropdown;
+      const sameQuery = prev !== null && prev.query === query;
       wikilinkDropdown = {
         query,
         fromPos: from - match[0].length,
         x: coords.left,
         y: coords.bottom,
-        selectedIndex: 0,
+        selectedIndex: sameQuery ? prev!.selectedIndex : 0,
       };
     } catch { wikilinkDropdown = null; }
   }
@@ -408,6 +477,12 @@
     function closeDropdown() { wikilinkDropdown = null; }
     const tid = setTimeout(() => window.addEventListener('pointerdown', closeDropdown), 10);
     return () => { clearTimeout(tid); window.removeEventListener('pointerdown', closeDropdown); };
+  });
+  // Reset the search input whenever the dropdown closes
+  $effect(() => {
+    if (!wikilinkDropdown) {
+      dropdownSearchText = '';
+    }
   });
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -828,30 +903,69 @@
   </div>
 
   <!-- Wikilink autocomplete dropdown -->
-  {#if wikilinkDropdown && wikilinkFiltered.length > 0 && mode === 'wysiwyg'}
+  {#if wikilinkDropdown && mode === 'wysiwyg'}
     <div
-      class="fixed z-[100] min-w-48 max-w-xs overflow-hidden rounded-lg border border-border bg-card py-1 shadow-xl"
+      class="fixed z-[100] min-w-64 max-w-sm overflow-hidden rounded-lg border border-border bg-card shadow-xl"
       style="left: {wikilinkDropdown.x}px; top: {wikilinkDropdown.y + 6}px;"
       onpointerdown={(e) => e.stopPropagation()}
-      role="listbox"
-      aria-label="Note suggestions"
+      role="dialog"
+      aria-label="Note search"
       tabindex="-1"
     >
-      {#each wikilinkFiltered as suggestion, i}
-        {@const name = suggestion.split('/').pop()!.replace(/\.md$/i, '')}
-        {@const folder = suggestion.includes('/') ? suggestion.split('/').slice(0, -1).join('/') : ''}
-        <button
-          class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === wikilinkDropdown.selectedIndex ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/60'}"
-          role="option"
-          aria-selected={i === wikilinkDropdown.selectedIndex}
-          onmousedown={(e) => { e.preventDefault(); selectWikilinkSuggestion(suggestion); }}
-        >
-          <span class="truncate font-medium">{name}</span>
-          {#if folder}
-            <span class="ml-auto shrink-0 text-xs text-muted-foreground">{folder}</span>
-          {/if}
-        </button>
-      {/each}
+      <!-- Search input at top -->
+      <div class="border-b border-border px-2 py-1.5">
+        <input
+          type="text"
+          role="combobox"
+          aria-expanded="true"
+          aria-autocomplete="list"
+          aria-controls="wikilink-listbox"
+          aria-activedescendant={wikilinkDropdown && wikilinkFiltered.length > 0
+            ? `wikilink-opt-${wikilinkDropdown.selectedIndex}`
+            : undefined}
+          placeholder="Search notes..."
+          bind:value={dropdownSearchText}
+          class="w-full rounded bg-transparent px-1 py-0.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          onkeydown={(e) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              if (wikilinkDropdown) wikilinkDropdown = { ...wikilinkDropdown, selectedIndex: Math.min(wikilinkDropdown.selectedIndex + 1, wikilinkFiltered.length - 1) };
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              if (wikilinkDropdown) wikilinkDropdown = { ...wikilinkDropdown, selectedIndex: Math.max(wikilinkDropdown.selectedIndex - 1, 0) };
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+              e.preventDefault();
+              if (wikilinkDropdown && wikilinkFiltered[wikilinkDropdown.selectedIndex]) selectWikilinkSuggestion(wikilinkFiltered[wikilinkDropdown.selectedIndex]);
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              wikilinkDropdown = null;
+            }
+          }}
+        />
+      </div>
+      <!-- Results -->
+      {#if wikilinkFiltered.length > 0}
+        <div id="wikilink-listbox" class="max-h-64 overflow-y-auto py-1" role="listbox" aria-label="Note suggestions">
+          {#each wikilinkFiltered as suggestion, i}
+            {@const name = suggestion.split('/').pop()!.replace(/\.md$/i, '')}
+            {@const folder = suggestion.includes('/') ? suggestion.split('/').slice(0, -1).join('/') : ''}
+            <button
+              id="wikilink-opt-{i}"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === wikilinkDropdown.selectedIndex ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/60'}"
+              role="option"
+              aria-selected={i === wikilinkDropdown.selectedIndex}
+              onmousedown={(e) => { e.preventDefault(); selectWikilinkSuggestion(suggestion); }}
+            >
+              <span class="truncate font-medium">{name}</span>
+              {#if folder}
+                <span class="ml-auto shrink-0 text-xs text-muted-foreground">{folder}</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      {:else}
+        <div class="px-3 py-3 text-center text-xs text-muted-foreground">No notes found</div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -928,13 +1042,14 @@
     background-color: rgba(234, 179, 8, 0.5);
   }
 
-  /* Wiki-links: [[note-name]] highlighted in the WYSIWYG editor */
-  :global(::highlight(wikilink)) {
-    background-color: rgba(99, 102, 241, 0.12); /* indigo tint */
+  /* Wiki-links: [[note-name]] decorated by ProseMirror Decoration.inline */
+  :global(.milkdown-editor .wikilink-highlight) {
+    background-color: rgba(99, 102, 241, 0.15);
     color: hsl(var(--primary));
+    text-decoration: underline dashed;
     cursor: pointer;
-    text-decoration: underline;
-    text-decoration-style: dashed;
+    border-radius: 2px;
+    padding: 0 1px;
   }
 
   /* Images in WYSIWYG - show pointer so users know they're clickable */
