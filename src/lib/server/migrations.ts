@@ -237,6 +237,17 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       ALTER TABLE workspaces_v3 RENAME TO workspaces;
     `,
   },
+  {
+    // v4: add scope classification and screenshot_filename to hosts.
+    // scope: 'in-scope' | 'out-of-scope' | 'unknown' — validated in the API layer
+    // (SQLite CHECK constraints in ALTER TABLE ADD COLUMN are unreliable across versions)
+    // screenshot_filename: references a screenshot file stored in the screenshots panel
+    version: 4,
+    up: `
+      ALTER TABLE hosts ADD COLUMN scope TEXT NOT NULL DEFAULT 'unknown';
+      ALTER TABLE hosts ADD COLUMN screenshot_filename TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
