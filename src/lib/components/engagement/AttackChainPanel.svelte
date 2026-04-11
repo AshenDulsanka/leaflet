@@ -244,7 +244,7 @@
           : n
       );
     } catch {
-      drawerError = 'Network error — try again';
+      drawerError = 'Network error - try again';
     } finally {
       savingDrawer = false;
     }
@@ -381,7 +381,7 @@
         {/if}
       </div>
 
-      <!-- Detail drawer — visible when a node is selected -->
+      <!-- Detail drawer - visible when a node is selected -->
       {#if selectedNodeId}
         {@const selectedNode = nodes.find((n) => n.id === selectedNodeId)}
         <div

@@ -331,14 +331,14 @@
         <!-- View mode toggle -->
         <div class="flex overflow-hidden rounded border border-border">
           <button
-            title="Workspace graph — all notes in this workspace"
+            title="Workspace graph - all notes in this workspace"
             class="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground {viewMode === 'global' ? 'bg-accent text-accent-foreground' : ''}"
             onclick={() => (viewMode = 'global')}
           >
             <Network size={12} />
           </button>
           <button
-            title="Local graph — current note and its connections"
+            title="Local graph - current note and its connections"
             class="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground {viewMode === 'local' ? 'bg-accent text-accent-foreground' : ''}"
             onclick={() => (viewMode = 'local')}
           >

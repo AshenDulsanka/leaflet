@@ -228,7 +228,7 @@
   <!-- Messages -->
   <div bind:this={messagesEl} class="flex-1 overflow-y-auto px-3 py-3">
     {#if messages.length === 0}
-      <!-- Empty state — prompt template cards -->
+      <!-- Empty state - prompt template cards -->
       <div class="flex flex-col gap-2">
         <p class="mb-2 text-center text-xs text-muted-foreground">Select a prompt to get started</p>
         {#each AI_PROMPT_TEMPLATES as template (template.id)}

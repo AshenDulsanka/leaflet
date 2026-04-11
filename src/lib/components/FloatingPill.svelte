@@ -17,7 +17,7 @@
   };
 </script>
 
-<!-- Stacked pill container — fixed bottom-right, pointer-events only on pills -->
+<!-- Stacked pill container - fixed bottom-right, pointer-events only on pills -->
 <div
   class="pointer-events-none fixed bottom-5 right-5 z-[9999] flex flex-col-reverse gap-2"
   aria-live="polite"

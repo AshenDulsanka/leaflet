@@ -15,7 +15,7 @@ Read these documents in order:
 ## Development Setup
 
 ```bash
-git clone <repo-url> leaflet
+git clone https://github.com/AshenDulsanka/leaflet.git
 cd leaflet
 cp .env.example .env
 pnpm install
