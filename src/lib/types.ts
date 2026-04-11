@@ -130,3 +130,11 @@ export type SnippetCategory =
 export interface SnippetContext {
   [variableName: string]: string;
 }
+
+/** A reusable note template with pre-filled markdown content */
+export interface NoteTemplate {
+  id: string;
+  title: string;
+  description: string;
+  content: string;
+}
