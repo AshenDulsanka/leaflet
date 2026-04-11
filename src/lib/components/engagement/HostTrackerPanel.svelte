@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Monitor, Plus, X, ChevronDown, ChevronRight, Trash2, RefreshCw, Globe, Image } from '@lucide/svelte';
+  import { Monitor, Plus, X, ChevronDown, ChevronRight, Trash2, RefreshCw, Globe, Image, FileInput } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -58,6 +58,23 @@
   // Editing screenshot_filename inline
   let editingScreenshotFor = $state<string | null>(null);
   let newScreenshotFilename = $state('');
+
+  // Nmap import
+  let importingNmap = $state(false);
+  let nmapRaw = $state('');
+  let nmapImportStatus = $state<'idle' | 'loading' | 'done' | 'error'>('idle');
+  let nmapErrors = $state<Array<{ line: number; message: string }>>([]);
+  let nmapSummary = $state('');
+
+  // Client-side format detection (mirrors server parser; client cannot import server modules).
+  function detectNmapFormat(raw: string): 'grepable' | 'xml' | 'unknown' {
+    const t = raw.trimStart();
+    if (t.startsWith('<?xml') || t.startsWith('<nmaprun')) return 'xml';
+    if (/# Nmap|^Host:/m.test(raw)) return 'grepable';
+    return 'unknown';
+  }
+
+  const detectedFormat = $derived(detectNmapFormat(nmapRaw));
 
   $effect(() => {
     if (workspaceId) loadHosts();
@@ -184,6 +201,39 @@
     'unknown':      { label: '?',   classes: 'bg-muted text-muted-foreground' }
   };
 
+  async function importNmap(): Promise<void> {
+    if (!workspaceId || !nmapRaw.trim()) return;
+    nmapImportStatus = 'loading';
+    nmapErrors = [];
+    nmapSummary = '';
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/hosts/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw: nmapRaw }),
+      });
+      const data = await res.json() as {
+        imported?: number;
+        updated?: number;
+        portCount?: number;
+        errors?: Array<{ line: number; message: string }>;
+        error?: string;
+      };
+      if (!res.ok) {
+        nmapImportStatus = 'error';
+        nmapErrors = [{ line: 0, message: data.error ?? 'Import failed' }];
+        return;
+      }
+      nmapErrors = data.errors ?? [];
+      nmapSummary = `Imported ${data.imported ?? 0} new host(s), updated ${data.updated ?? 0}, ${data.portCount ?? 0} port(s).`;
+      nmapImportStatus = 'done';
+      await loadHosts();
+    } catch {
+      nmapImportStatus = 'error';
+      nmapErrors = [{ line: 0, message: 'Network error — import failed.' }];
+    }
+  }
+
   function handleKeydown(e: KeyboardEvent): void {
     if (e.key === 'Escape') onClose();
   }
@@ -208,6 +258,13 @@
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
+      </button>
+      <button
+        onclick={() => (importingNmap = !importingNmap)}
+        title="Import from Nmap"
+        class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground {importingNmap ? 'bg-accent text-foreground' : ''}"
+      >
+        <FileInput size={12} />
       </button>
       <button
         onclick={() => (addingHost = !addingHost)}
@@ -282,6 +339,56 @@
           </button>
           <button
             onclick={() => (addingHost = false)}
+            class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Nmap import form -->
+    {#if importingNmap}
+      <div class="border-b border-border bg-muted/40 p-3 space-y-2">
+        <!-- Format badge -->
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-muted-foreground">Format:</span>
+          {#if detectedFormat === 'grepable'}
+            <span class="rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">Grepable (-oG)</span>
+          {:else if detectedFormat === 'xml'}
+            <span class="rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">XML (-oX)</span>
+          {:else}
+            <span class="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Unknown</span>
+          {/if}
+        </div>
+        <textarea
+          rows={8}
+          bind:value={nmapRaw}
+          placeholder="Paste Nmap -oG or -oX output here…"
+          class="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+        ></textarea>
+        <!-- Error list -->
+        {#if nmapErrors.length > 0}
+          <ul class="space-y-0.5">
+            {#each nmapErrors as err}
+              <li class="text-[10px] text-destructive">{err.line > 0 ? `Line ${err.line}: ` : ''}{err.message}</li>
+            {/each}
+          </ul>
+        {/if}
+        <!-- Summary -->
+        {#if nmapSummary}
+          <p class="text-[10px] text-green-600 dark:text-green-400">{nmapSummary}</p>
+        {/if}
+        <div class="flex gap-2">
+          <button
+            onclick={importNmap}
+            disabled={nmapRaw.trim() === '' || nmapImportStatus === 'loading'}
+            class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {nmapImportStatus === 'loading' ? 'Importing…' : 'Import'}
+          </button>
+          <button
+            onclick={() => { importingNmap = false; nmapRaw = ''; nmapImportStatus = 'idle'; nmapErrors = []; nmapSummary = ''; }}
             class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
           >
             Cancel

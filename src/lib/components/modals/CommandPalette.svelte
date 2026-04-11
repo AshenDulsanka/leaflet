@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { fly, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { X, Copy, CornerDownLeft, Terminal, FileText } from '@lucide/svelte';
+  import { X, Copy, CornerDownLeft, Terminal, FileText, ShieldAlert } from '@lucide/svelte';
   import { DEFAULT_COMMANDS, searchCommands } from '$lib/data/commands';
   import { NOTE_TEMPLATES, searchTemplates } from '$lib/data/templates';
   import type { SnippetCategory } from '$lib/types';
@@ -10,9 +10,10 @@
   interface Props {
     onClose: () => void;
     onInsert: (text: string) => void;
+    onOpenCvss?: () => void;
   }
 
-  let { onClose, onInsert }: Props = $props();
+  let { onClose, onInsert, onOpenCvss }: Props = $props();
 
   let query = $state('');
   let mode = $state<'commands' | 'templates'>('commands');
@@ -140,6 +141,17 @@
     </div>
 
     {#if mode === 'commands'}
+      <!-- CVSS Calculator quick action -->
+      <div class="border-b border-border/50 px-3 py-2">
+        <button
+          class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          onclick={() => { onOpenCvss?.(); onClose(); }}
+        >
+          <ShieldAlert size={13} class="shrink-0" />
+          Open CVSS Calculator
+        </button>
+      </div>
+
       <!-- Category filter chips -->
       <div class="flex gap-1 overflow-x-auto px-3 py-2">
         {#each CATEGORIES as cat (cat.value)}
