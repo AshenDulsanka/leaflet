@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- MITRE ATT&CK technique tagging on attack-chain nodes: migration v6 adds `timestamp`, `mitre_technique_id`, and `mitre_technique_name` columns to `attack_chain_nodes`; MITRE data module (`src/lib/data/mitre-attack.ts`) exposes 130+ techniques with `getMitreTechnique` (exact lookup) and `searchMitreTechniques` (prefix/substring, max 8 results); node PATCH endpoint validates ID format (`T\d{4}(\.\d{3})?`); custom `AttackChainNode` component renders coloured node with linked badge and date; detail drawer in `AttackChainPanel` provides date picker, live MITRE ID search with autocomplete suggestions, and Save (PATCH) action ([#22](https://github.com/AshenDulsanka/leaflet/issues/22))
 - Screenshot captions: inline editable caption field on each screenshot tile in the Screenshots panel; click to edit, saved on blur or Enter via PATCH endpoint ([#21](https://github.com/AshenDulsanka/leaflet/issues/21))
 - Screenshot note linking: link any screenshot to a note via a searchable picker in the Screenshots panel; linked note name displayed with an unlink button ([#21](https://github.com/AshenDulsanka/leaflet/issues/21))
 - Workspace-scoped screenshot metadata stored in DB (migration v5): `linked_note_path` column added to `screenshot_metadata`, unique index on `(workspace_id, filename)` ([#21](https://github.com/AshenDulsanka/leaflet/issues/21))

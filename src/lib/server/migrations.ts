@@ -257,6 +257,15 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       CREATE UNIQUE INDEX IF NOT EXISTS idx_screenshot_metadata_workspace_filename ON screenshot_metadata(workspace_id, filename);
     `,
   },
+  {
+    // v6: add timestamp and MITRE ATT&CK tagging columns to attack_chain_nodes.
+    version: 6,
+    up: `
+      ALTER TABLE attack_chain_nodes ADD COLUMN timestamp TEXT;
+      ALTER TABLE attack_chain_nodes ADD COLUMN mitre_technique_id TEXT NOT NULL DEFAULT '';
+      ALTER TABLE attack_chain_nodes ADD COLUMN mitre_technique_name TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

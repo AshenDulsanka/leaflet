@@ -147,3 +147,18 @@ export interface NoteTemplate {
   description: string;
   content: string;
 }
+
+/** A node in the attack chain canvas (matches attack_chain_nodes DB schema) */
+export interface AttackNode {
+  id: string;
+  workspace_id: string;
+  label: string;
+  node_type: string;
+  x: number;
+  y: number;
+  host_id: string | null;
+  metadata: string;
+  timestamp: string | null;
+  mitre_technique_id: string;
+  mitre_technique_name: string;
+}
