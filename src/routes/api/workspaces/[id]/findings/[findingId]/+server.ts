@@ -36,6 +36,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
     'cvss_vector',
     'host_id',
     'note_path',
+    'mitre_technique_id',
+    'mitre_technique_name',
   ];
   const updates: string[] = [];
   const values: unknown[] = [];
@@ -78,7 +80,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
       }
     }
 
-    if (key === 'note_path' || key === 'cvss_vector') {
+    if (key === 'note_path' || key === 'cvss_vector' || key === 'mitre_technique_id' || key === 'mitre_technique_name') {
       updates.push(`${key} = ?`);
       values.push((body[key] as string).trim());
       continue;

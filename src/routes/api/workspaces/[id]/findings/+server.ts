@@ -51,6 +51,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     cvss_vector?: string;
     host_id?: string | null;
     note_path?: string;
+    mitre_technique_id?: string;
+    mitre_technique_name?: string;
   };
 
   const title = (body.title ?? '').trim();
@@ -79,8 +81,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   db.prepare(
     `
     INSERT INTO findings
-      (id, workspace_id, title, description, severity, cvss_score, cvss_vector, status, host_id, note_path, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, workspace_id, title, description, severity, cvss_score, cvss_vector, status, host_id, note_path, mitre_technique_id, mitre_technique_name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `
   ).run(
     id,
@@ -93,6 +95,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     status,
     body.host_id ?? null,
     (body.note_path ?? '').trim(),
+    (body.mitre_technique_id ?? '').trim(),
+    (body.mitre_technique_name ?? '').trim(),
     now,
     now
   );

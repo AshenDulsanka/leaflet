@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { Bug, X, Plus, RefreshCw, Pencil, Trash2, Check } from '@lucide/svelte';
+  import { Bug, X, Plus, RefreshCw, Pencil, Trash2, Check, Tag, BookOpen, ChevronDown, Upload } from '@lucide/svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { calculateCvss, METRIC_OPTIONS } from '$lib/data/cvss';
   import type { CvssMetrics } from '$lib/data/cvss';
-  import type { Finding, FindingSeverity, FindingStatus } from '$lib/types';
+  import { searchMitreTechniques } from '$lib/data/mitre-attack';
+  import type { MitreTechnique } from '$lib/data/mitre-attack';
+  import { FINDING_TEMPLATES, searchFindingTemplates } from '$lib/data/finding-templates';
+  import type { Finding, FindingSeverity, FindingStatus, FindingTemplate, FindingTemplateCategory } from '$lib/types';
 
   interface HostOption {
     id: string;
@@ -23,6 +26,9 @@
   let hosts = $state<HostOption[]>([]);
   let loading = $state(false);
   let addingFinding = $state(false);
+  let importStatus = $state<{ imported: number; skipped: number } | null>(null);
+  let importing = $state(false);
+  let fileInputEl = $state<HTMLInputElement | null>(null);
 
   // ─── Add form state ────────────────────────────────────────────────────────
   let newTitle = $state('');
@@ -46,6 +52,16 @@
   // true = CVSS auto-fill controls severity; false = user manually overrode it
   let cvssAutoFilled = $state(true);
 
+  // ─── Add form MITRE state ──────────────────────────────────────────────────
+  let newMitreQuery    = $state('');
+  let newMitreTechId   = $state('');
+  let newMitreTechName = $state('');
+
+  // ─── Template picker state ─────────────────────────────────────────────────
+  let showTemplates    = $state(false);
+  let templateQuery    = $state('');
+  let templateCategory = $state<FindingTemplateCategory | 'all'>('all');
+
   // ─── Edit form state ───────────────────────────────────────────────────────
   let editingId = $state<string | null>(null);
   let editTitle = $state('');
@@ -68,6 +84,11 @@
   });
   // false on edit start so stored severity is preserved; true again once CVSS auto-fills
   let editCvssAutoFilled = $state(false);
+
+  // ─── Edit form MITRE state ─────────────────────────────────────────────────
+  let editMitreQuery    = $state('');
+  let editMitreTechId   = $state('');
+  let editMitreTechName = $state('');
 
   // ─── Filters ───────────────────────────────────────────────────────────────
   let severityFilter = $state<'all' | FindingSeverity>('all');
@@ -93,9 +114,22 @@
   const severityMeta = Object.fromEntries(SEVERITIES.map((s) => [s.value, s]));
   const statusMeta   = Object.fromEntries(STATUSES.map((s) => [s.value, s]));
 
+  const TEMPLATE_CATEGORIES: { value: FindingTemplateCategory | 'all'; label: string }[] = [
+    { value: 'all',       label: 'All'       },
+    { value: 'injection', label: 'Injection' },
+    { value: 'auth',      label: 'Auth'      },
+    { value: 'crypto',    label: 'Crypto'    },
+    { value: 'exposure',  label: 'Exposure'  },
+    { value: 'misc',      label: 'Misc'      },
+  ];
+
   // ─── Derived ───────────────────────────────────────────────────────────────
   const newCvssResult  = $derived(calculateCvss(newMetrics));
   const editCvssResult = $derived(calculateCvss(editMetrics));
+
+  // Suppress suggestions once a technique is selected (newMitreTechId non-empty)
+  const newMitreSuggestions  = $derived(newMitreTechId  ? [] : searchMitreTechniques(newMitreQuery));
+  const editMitreSuggestions = $derived(editMitreTechId ? [] : searchMitreTechniques(editMitreQuery));
 
   const filteredFindings = $derived(
     findings.filter(
@@ -104,6 +138,14 @@
         (statusFilter   === 'all' || f.status   === statusFilter)
     )
   );
+
+  const filteredTemplates = $derived.by(() => {
+    let list = FINDING_TEMPLATES;
+    if (templateCategory !== 'all') {
+      list = list.filter((tmpl) => tmpl.category === templateCategory);
+    }
+    return searchFindingTemplates(templateQuery, list);
+  });
 
   // ─── CVSS auto-fill effects ────────────────────────────────────────────────
   $effect(() => {
@@ -168,6 +210,34 @@
     };
   }
 
+  // ─── Import ────────────────────────────────────────────────────────────────
+  async function handleImport(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || !workspaceId) return;
+
+    importing = true;
+    importStatus = null;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`/api/workspaces/${workspaceId}/findings/import`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = (await res.json()) as { imported: number; skipped: number };
+        importStatus = data;
+        if (data.imported > 0) await loadFindings();
+      }
+    } finally {
+      importing = false;
+      input.value = '';
+    }
+  }
+
   // ─── Data fetching ─────────────────────────────────────────────────────────
   async function loadFindings(): Promise<void> {
     if (!workspaceId) return;
@@ -215,7 +285,25 @@
     newCvssVector  = '';
     newMetrics     = { AV: null, AC: null, PR: null, UI: null, S: null, C: null, I: null, A: null };
     cvssAutoFilled = true;
+    newMitreQuery    = '';
+    newMitreTechId   = '';
+    newMitreTechName = '';
+    showTemplates    = false;
+    templateQuery    = '';
+    templateCategory = 'all';
     addingFinding  = false;
+  }
+
+  function applyTemplate(template: FindingTemplate): void {
+    newTitle         = template.title;
+    newDescription   = template.description;
+    newSeverity      = template.severity;
+    newMitreTechId   = template.mitre_technique_id;
+    newMitreTechName = template.mitre_technique_name;
+    newMitreQuery    = '';
+    cvssAutoFilled   = false;
+    showTemplates    = false;
+    templateQuery    = '';
   }
 
   async function addFinding(): Promise<void> {
@@ -225,14 +313,16 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title:       newTitle.trim(),
-          description: newDescription.trim(),
-          severity:    newSeverity,
-          status:      newStatus,
-          cvss_score:  newCvssScore,
-          cvss_vector: newCvssVector,
-          host_id:     newHostId || null,
-          note_path:   newNotePath.trim(),
+          title:                newTitle.trim(),
+          description:          newDescription.trim(),
+          severity:             newSeverity,
+          status:               newStatus,
+          cvss_score:           newCvssScore,
+          cvss_vector:          newCvssVector,
+          host_id:              newHostId || null,
+          note_path:            newNotePath.trim(),
+          mitre_technique_id:   newMitreTechId,
+          mitre_technique_name: newMitreTechName,
         }),
       });
       if (!res.ok) return;
@@ -257,6 +347,9 @@
     // Parse stored vector back to metric pickers; disable auto-fill to preserve stored severity
     editMetrics      = parseCvssVector(finding.cvss_vector);
     editCvssAutoFilled = false;
+    editMitreTechId   = finding.mitre_technique_id;
+    editMitreTechName = finding.mitre_technique_name;
+    editMitreQuery    = '';
     addingFinding    = false;
   }
 
@@ -267,14 +360,16 @@
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title:       editTitle.trim(),
-          description: editDescription.trim(),
-          severity:    editSeverity,
-          status:      editStatus,
-          cvss_score:  editCvssScore,
-          cvss_vector: editCvssVector,
-          host_id:     editHostId || null,
-          note_path:   editNotePath.trim(),
+          title:                editTitle.trim(),
+          description:          editDescription.trim(),
+          severity:             editSeverity,
+          status:               editStatus,
+          cvss_score:           editCvssScore,
+          cvss_vector:          editCvssVector,
+          host_id:              editHostId || null,
+          note_path:            editNotePath.trim(),
+          mitre_technique_id:   editMitreTechId,
+          mitre_technique_name: editMitreTechName,
         }),
       });
       if (!res.ok) return;
@@ -327,6 +422,22 @@
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <Plus size={13} />
+      </button>
+      <!-- Hidden file input for scanner XML import -->
+      <input
+        bind:this={fileInputEl}
+        type="file"
+        accept=".nessus,.xml"
+        class="hidden"
+        onchange={handleImport}
+      />
+      <button
+        title="Import from Nessus / Burp Suite XML"
+        onclick={() => fileInputEl?.click()}
+        disabled={importing}
+        class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+      >
+        <Upload size={13} />
       </button>
       <button
         onclick={onClose}
@@ -381,12 +492,80 @@
       </div>
     </div>
 
+    {#if importStatus}
+      <div class="mx-2 mb-1 mt-1 rounded border border-border bg-muted px-2 py-1 text-[10px] text-muted-foreground">
+        Imported {importStatus.imported} finding{importStatus.imported === 1 ? '' : 's'}{importStatus.skipped > 0 ? `, skipped ${importStatus.skipped} duplicate${importStatus.skipped === 1 ? '' : 's'}` : ''}.
+      </div>
+    {/if}
+
     <!-- Scrollable content: add form + findings list -->
     <div class="flex-1 overflow-y-auto">
 
       <!-- Add-finding form -->
       {#if addingFinding}
         <div class="space-y-2 border-b border-border bg-muted/40 p-3">
+          <!-- Template picker (collapsible) -->
+          <div class="rounded border border-border bg-background">
+            <button
+              type="button"
+              onclick={() => { showTemplates = !showTemplates; templateQuery = ''; templateCategory = 'all'; }}
+              class="flex w-full items-center justify-between px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <span class="flex items-center gap-1.5">
+                <BookOpen size={11} />
+                Use Template
+              </span>
+              <ChevronDown
+                size={11}
+                class="transition-transform duration-150 {showTemplates ? 'rotate-180' : ''}"
+              />
+            </button>
+
+            {#if showTemplates}
+              <div class="border-t border-border px-2 py-1.5">
+                <input
+                  type="text"
+                  placeholder="Search templates..."
+                  bind:value={templateQuery}
+                  class="w-full rounded border border-border bg-muted px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+              </div>
+              <div class="flex gap-1 overflow-x-auto px-2 pb-1.5">
+                {#each TEMPLATE_CATEGORIES as cat (cat.value)}
+                  <button
+                    type="button"
+                    onclick={() => (templateCategory = cat.value)}
+                    class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors {templateCategory === cat.value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-accent'}"
+                  >
+                    {cat.label}
+                  </button>
+                {/each}
+              </div>
+              <ul class="max-h-44 overflow-y-auto border-t border-border">
+                {#if filteredTemplates.length === 0}
+                  <li class="px-2 py-3 text-center text-[10px] text-muted-foreground">No templates match</li>
+                {:else}
+                  {#each filteredTemplates as tpl (tpl.id)}
+                    <li>
+                      <button
+                        type="button"
+                        onclick={() => applyTemplate(tpl)}
+                        class="flex w-full flex-col gap-0.5 px-2 py-1.5 text-left hover:bg-accent"
+                      >
+                        <span class="text-xs font-medium text-foreground">{tpl.title}</span>
+                        <span class="line-clamp-1 text-[10px] text-muted-foreground">{tpl.description}</span>
+                      </button>
+                    </li>
+                  {/each}
+                {/if}
+              </ul>
+            {/if}
+          </div>
+
           <!-- Title -->
           <input
             type="text"
@@ -478,6 +657,50 @@
             bind:value={newNotePath}
             class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
           />
+
+          <!-- MITRE ATT&CK technique -->
+          <div class="relative">
+            {#if newMitreTechId}
+              <div class="flex items-center justify-between rounded border border-border bg-background px-2 py-1">
+                <div class="flex min-w-0 flex-col">
+                  <span class="font-mono text-[10px] font-semibold text-primary">{newMitreTechId}</span>
+                  <span class="truncate text-[10px] text-muted-foreground">{newMitreTechName}</span>
+                </div>
+                <button
+                  type="button"
+                  onclick={() => { newMitreTechId = ''; newMitreTechName = ''; newMitreQuery = ''; }}
+                  class="ml-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                  title="Remove MITRE tag"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            {:else}
+              <input
+                type="text"
+                placeholder="Search MITRE ATT&CK technique..."
+                bind:value={newMitreQuery}
+                class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              {#if newMitreSuggestions.length > 0}
+                <ul class="absolute left-0 right-0 top-full z-10 mt-0.5 max-h-40 overflow-y-auto rounded border border-border bg-popover shadow-md">
+                  {#each newMitreSuggestions as technique (technique.id)}
+                    <li>
+                      <button
+                        type="button"
+                        onclick={() => { newMitreTechId = technique.id; newMitreTechName = technique.name; newMitreQuery = ''; }}
+                        class="flex w-full flex-col px-2 py-1.5 text-left hover:bg-accent"
+                      >
+                        <span class="font-mono text-[10px] font-semibold text-primary">{technique.id}</span>
+                        <span class="text-[10px] text-foreground">{technique.name}</span>
+                        <span class="text-[10px] text-muted-foreground">{technique.tactic}</span>
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            {/if}
+          </div>
 
           <div class="flex gap-2">
             <button
@@ -601,6 +824,51 @@
                     placeholder="Note path"
                     class="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                   />
+
+                  <!-- MITRE ATT&CK technique (edit) -->
+                  <div class="relative">
+                    {#if editMitreTechId}
+                      <div class="flex items-center justify-between rounded border border-border bg-background px-2 py-1">
+                        <div class="flex min-w-0 flex-col">
+                          <span class="font-mono text-[10px] font-semibold text-primary">{editMitreTechId}</span>
+                          <span class="truncate text-[10px] text-muted-foreground">{editMitreTechName}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onclick={() => { editMitreTechId = ''; editMitreTechName = ''; editMitreQuery = ''; }}
+                          class="ml-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                          title="Remove MITRE tag"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    {:else}
+                      <input
+                        type="text"
+                        placeholder="Search MITRE ATT&CK technique..."
+                        bind:value={editMitreQuery}
+                        class="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      {#if editMitreSuggestions.length > 0}
+                        <ul class="absolute left-0 right-0 top-full z-10 mt-0.5 max-h-40 overflow-y-auto rounded border border-border bg-popover shadow-md">
+                          {#each editMitreSuggestions as technique (technique.id)}
+                            <li>
+                              <button
+                                type="button"
+                                onclick={() => { editMitreTechId = technique.id; editMitreTechName = technique.name; editMitreQuery = ''; }}
+                                class="flex w-full flex-col px-2 py-1.5 text-left hover:bg-accent"
+                              >
+                                <span class="font-mono text-[10px] font-semibold text-primary">{technique.id}</span>
+                                <span class="text-[10px] text-foreground">{technique.name}</span>
+                                <span class="text-[10px] text-muted-foreground">{technique.tactic}</span>
+                              </button>
+                            </li>
+                          {/each}
+                        </ul>
+                      {/if}
+                    {/if}
+                  </div>
+
                   <div class="flex gap-1.5">
                     <button
                       onclick={() => saveEdit(finding.id)}
@@ -667,6 +935,13 @@
                       </span>
                     {/if}
                   </div>
+                  {#if finding.mitre_technique_id}
+                    <div class="flex items-center gap-1">
+                      <Tag size={9} class="text-muted-foreground" />
+                      <span class="font-mono text-[10px] font-semibold text-primary">{finding.mitre_technique_id}</span>
+                      <span class="truncate text-[10px] text-muted-foreground">{finding.mitre_technique_name}</span>
+                    </div>
+                  {/if}
                 </div>
               {/if}
             </li>

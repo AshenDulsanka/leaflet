@@ -17,6 +17,7 @@
   import OperationLogPanel from '$lib/components/engagement/OperationLogPanel.svelte';
   import CvssCalculatorPanel from '$lib/components/engagement/CvssCalculatorPanel.svelte';
   import FindingsTrackerPanel from '$lib/components/engagement/FindingsTrackerPanel.svelte';
+  import NetworkTopologyPanel from '$lib/components/engagement/NetworkTopologyPanel.svelte';
   import CommandPalette from '$lib/components/modals/CommandPalette.svelte';
   import MethodologyPanel from '$lib/components/panels/MethodologyPanel.svelte';
   import AiChat from '$lib/components/panels/AiChat.svelte';
@@ -83,6 +84,7 @@
   let operationLogOpen = $state(false);
   let cvssOpen = $state(false);
   let findingsTrackerOpen = $state(false);
+  let topologyOpen = $state(false);
   let aiMessages = $state<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   let insertIntoEditor = $state<((text: string) => void) | null>(null);
   let helpOpen = $state(false);
@@ -170,6 +172,7 @@
   $effect(() => { if (operationLogOpen)    { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
   $effect(() => { if (cvssOpen)            { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; findingsTrackerOpen = false; } });
   $effect(() => { if (findingsTrackerOpen) { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; } });
+  $effect(() => { if (topologyOpen) { attackChainOpen = false; graphOpen = false; } });
 
   onMount(async () => {
     // Load workspaces first so we can scope the tree to the active workspace
@@ -411,6 +414,10 @@
       e.preventDefault();
       findingsTrackerOpen = !findingsTrackerOpen;
     }
+    if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+      e.preventDefault();
+      topologyOpen = !topologyOpen;
+    }
     if (e.key === '?' && !e.ctrlKey && !e.altKey && !e.shiftKey) {
       const tag = (e.target as HTMLElement).tagName;
       if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
@@ -465,6 +472,7 @@
     onOpenOperationLog={() => (operationLogOpen = !operationLogOpen)}
     onOpenCvssCalculator={() => (cvssOpen = !cvssOpen)}
     onOpenFindingsTracker={() => (findingsTrackerOpen = !findingsTrackerOpen)}
+    onOpenTopology={() => (topologyOpen = !topologyOpen)}
   />
 
   <div class="flex flex-1 overflow-hidden">
@@ -615,6 +623,13 @@
     <AttackChainPanel
       workspaceId={activeWorkspace?.id ?? null}
       onClose={() => (attackChainOpen = false)}
+    />
+  {/if}
+
+  {#if topologyOpen}
+    <NetworkTopologyPanel
+      workspaceId={activeWorkspace?.id ?? null}
+      onClose={() => (topologyOpen = false)}
     />
   {/if}
 
