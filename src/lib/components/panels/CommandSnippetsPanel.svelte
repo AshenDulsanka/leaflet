@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Terminal, Plus, X, RefreshCw, Copy, ChevronDown, ChevronRight, Trash2, Settings2 } from '@lucide/svelte';
+  import { Terminal, Plus, X, RefreshCw, Copy, ChevronDown, ChevronRight, Trash2 } from '@lucide/svelte';
+  import { extractSnippetVarNames } from '$lib/data/commands.js';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -17,6 +18,13 @@
     id: string;
     name: string;
     value: string;
+  }
+
+  interface MergedVar {
+    id: string | null;
+    name: string;
+    value: string;
+    persisted: boolean;
   }
 
   interface Props {
@@ -42,10 +50,13 @@
   let newDescription = $state('');
   let isGlobal = $state(false);
 
-  // Variable editing
-  let editingVar = $state<string | null>(null);
+  // Variable editing — inline with debounced autosave
   let newVarName = $state('');
   let newVarValue = $state('');
+  // Local input state: name → current typed value (pre-save)
+  let editValues = $state<Record<string, string>>({});
+  // Non-reactive debounce timers
+  const debounceMap = new Map<string, ReturnType<typeof setTimeout>>();
 
   $effect(() => {
     if (workspaceId) {
@@ -75,7 +86,12 @@
     if (!workspaceId) return;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/variables`);
-      variables = await res.json();
+      const data: SnippetVar[] = await res.json();
+      variables = data;
+      // Seed local edit state from persisted values
+      const vals: Record<string, string> = {};
+      for (const v of data) vals[v.name] = v.value;
+      editValues = vals;
     } catch {
       console.error('Failed to load variables');
     }
@@ -148,8 +164,38 @@
       } else {
         variables = [...variables, updated];
       }
+      editValues = { ...editValues, [name]: value };
     }
-    editingVar = null;
+  }
+
+  /** Trigger debounced autosave when a variable value is typed */
+  function handleVarInput(name: string, value: string) {
+    editValues = { ...editValues, [name]: value };
+    const existing = debounceMap.get(name);
+    if (existing !== undefined) clearTimeout(existing);
+    debounceMap.set(name, setTimeout(() => {
+      void saveVariable(name, editValues[name] ?? value);
+      debounceMap.delete(name);
+    }, 500));
+  }
+
+  async function deleteVariable(id: string) {
+    if (!workspaceId) return;
+    const toDelete = variables.find((v) => v.id === id);
+    await fetch(`/api/workspaces/${workspaceId}/variables/${id}`, { method: 'DELETE' });
+    variables = variables.filter((v) => v.id !== id);
+    if (toDelete) {
+      const { [toDelete.name]: _, ...rest } = editValues;
+      editValues = rest;
+    }
+  }
+
+  async function clearAllVariables() {
+    if (!workspaceId) return;
+    if (!confirm('Clear all variables for this workspace? This cannot be undone.')) return;
+    await fetch(`/api/workspaces/${workspaceId}/variables`, { method: 'DELETE' });
+    variables = [];
+    editValues = {};
   }
 
   function toggleCategory(cat: string) {
@@ -178,6 +224,21 @@
       groups.get(cat)!.push(s);
     }
     return groups;
+  });
+
+  /** Merge persisted variables with names auto-extracted from snippet commands. */
+  const mergedVars = $derived(() => {
+    const extractedNames = extractSnippetVarNames(snippets.map((s) => s.command));
+    const persistedMap = new Map(variables.map((v) => [v.name, v]));
+    const result: MergedVar[] = variables.map((v) => ({
+      id: v.id, name: v.name, value: v.value, persisted: true
+    }));
+    for (const name of extractedNames) {
+      if (!persistedMap.has(name)) {
+        result.push({ id: null, name, value: '', persisted: false });
+      }
+    }
+    return result.sort((a, b) => a.name.localeCompare(b.name));
   });
 
   const CATEGORIES = [
@@ -385,82 +446,80 @@
 
     {:else}
       <!-- Variables tab -->
-      <div class="flex-1 overflow-y-auto p-3 space-y-2">
-        <p class="text-[10px] text-muted-foreground">
-          Define variables to substitute in commands. Use &#123;NAME&#125; in commands.
-        </p>
-
-        {#each variables as v (v.id)}
-          {#if editingVar === v.id}
-            <div class="rounded border border-primary/40 bg-muted/40 p-2 space-y-1">
-              <input
-                type="text"
-                value={v.name}
-                class="w-full rounded border border-border bg-background px-2 py-0.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-                readonly
-              />
-              <!-- svelte-ignore a11y_autofocus -->
-              <input
-                type="text"
-                bind:value={newVarValue}
-                autofocus
-                class="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="Value"
-                onkeydown={(e) => { if (e.key === 'Enter') saveVariable(v.name, newVarValue); if (e.key === 'Escape') editingVar = null; }}
-              />
-              <div class="flex gap-1">
-                <button
-                  onclick={() => saveVariable(v.name, newVarValue)}
-                  class="flex-1 rounded bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
-                >
-                  Save
-                </button>
-                <button
-                  onclick={() => (editingVar = null)}
-                  class="flex-1 rounded border border-border px-2 py-0.5 text-[10px] hover:bg-accent"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          {:else}
-            <div
-              class="group flex items-center gap-2 rounded border border-border px-2 py-1.5 hover:bg-accent/30 cursor-pointer"
-              role="button"
-              tabindex="0"
-              onclick={() => { editingVar = v.id; newVarValue = v.value; }}
-              onkeydown={(e) => { if (e.key === 'Enter') { editingVar = v.id; newVarValue = v.value; } }}
-            >
-              <code class="flex-shrink-0 text-[10px] font-mono text-primary">{'{' + v.name + '}'}</code>
-              <span class="flex-1 truncate text-[10px] text-muted-foreground">{v.value || '(unset)'}</span>
-              <Settings2 size={10} class="flex-shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-            </div>
-          {/if}
-        {/each}
-
-        <!-- Add new variable -->
-        <div class="rounded border border-dashed border-border p-2 space-y-1">
-          <p class="text-[10px] font-medium text-muted-foreground">New variable</p>
-          <div class="flex gap-1">
-            <input
-              type="text"
-              placeholder="NAME"
-              bind:value={newVarName}
-              class="w-24 rounded border border-border bg-background px-2 py-0.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <input
-              type="text"
-              placeholder="value"
-              bind:value={newVarValue}
-              class="flex-1 rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-              onkeydown={(e) => { if (e.key === 'Enter' && newVarName.trim()) saveVariable(newVarName.trim().toUpperCase(), newVarValue); }}
-            />
+      <div class="flex-1 overflow-y-auto">
+        <!-- Toolbar row -->
+        <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
+          <p class="text-[10px] text-muted-foreground">
+            Use <code class="font-mono">&#123;NAME&#125;</code> in commands. Values auto-save.
+          </p>
+          {#if variables.length > 0}
             <button
-              onclick={() => { if (newVarName.trim()) { saveVariable(newVarName.trim().toUpperCase(), newVarValue); newVarName = ''; newVarValue = ''; } }}
-              class="rounded bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
+              onclick={clearAllVariables}
+              title="Clear all variables"
+              class="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-destructive hover:bg-destructive/10"
             >
-              Add
+              <Trash2 size={10} />
+              Clear all
             </button>
+          {/if}
+        </div>
+
+        <div class="p-3 space-y-1.5">
+          {#each mergedVars() as v (v.name)}
+            <div class="flex items-center gap-1.5 rounded border border-border px-2 py-1 hover:bg-accent/20">
+              <code class="w-28 flex-shrink-0 truncate text-[10px] font-mono text-primary" title={'{' + v.name + '}'}>{'{' + v.name + '}'}</code>
+              <input
+                type="text"
+                value={editValues[v.name] ?? v.value}
+                placeholder={v.persisted ? '' : 'unset'}
+                oninput={(e) => handleVarInput(v.name, (e.currentTarget as HTMLInputElement).value)}
+                class="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary {!v.persisted ? 'placeholder:text-muted-foreground/50 italic' : ''}"
+              />
+              {#if v.id}
+                <button
+                  onclick={() => deleteVariable(v.id!)}
+                  title="Delete variable"
+                  class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 size={10} />
+                </button>
+              {:else}
+                <!-- Placeholder to keep row height consistent -->
+                <span class="w-5 flex-shrink-0"></span>
+              {/if}
+            </div>
+          {/each}
+
+          {#if mergedVars().length === 0}
+            <p class="py-4 text-center text-[10px] text-muted-foreground">
+              No variables yet. Add snippets with &#123;VARIABLE&#125; placeholders or add one below.
+            </p>
+          {/if}
+
+          <!-- Add new variable manually -->
+          <div class="rounded border border-dashed border-border p-2 space-y-1 mt-2">
+            <p class="text-[10px] font-medium text-muted-foreground">Add variable</p>
+            <div class="flex gap-1">
+              <input
+                type="text"
+                placeholder="NAME"
+                bind:value={newVarName}
+                class="w-24 rounded border border-border bg-background px-2 py-0.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <input
+                type="text"
+                placeholder="value"
+                bind:value={newVarValue}
+                class="flex-1 rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                onkeydown={(e) => { if (e.key === 'Enter' && newVarName.trim()) { void saveVariable(newVarName.trim().toUpperCase(), newVarValue); newVarName = ''; newVarValue = ''; } }}
+              />
+              <button
+                onclick={() => { if (newVarName.trim()) { void saveVariable(newVarName.trim().toUpperCase(), newVarValue); newVarName = ''; newVarValue = ''; } }}
+                class="rounded bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Add
+              </button>
+            </div>
           </div>
         </div>
       </div>
