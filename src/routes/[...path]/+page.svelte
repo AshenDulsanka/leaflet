@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
+  import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
   import { theme } from '$lib/theme.svelte';
   import Sidebar from '$lib/components/layout/Sidebar.svelte';
@@ -147,6 +147,31 @@
       selectWorkspace(ws);
     } catch {
       console.error('Failed to create workspace');
+    }
+  }
+
+  async function deleteWorkspace(id: string) {
+    const res = await fetch(`/api/workspaces/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      if (activeWorkspace?.id === id) {
+        const fallback = workspaces.find(w => w.id !== id);
+        if (fallback) selectWorkspace(fallback);
+      }
+      await invalidateAll();
+      await loadWorkspaces();
+    }
+  }
+
+  async function renameWorkspace(id: string, newName: string) {
+    if (!newName.trim()) return;
+    const res = await fetch(`/api/workspaces/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName.trim() })
+    });
+    if (res.ok) {
+      await invalidateAll();
+      await loadWorkspaces();
     }
   }
 
@@ -492,6 +517,8 @@
       onMoveItem={moveFile}
       onSelectWorkspace={selectWorkspace}
       onCreateWorkspace={() => (createWorkspaceOpen = true)}
+      ondeleteWorkspace={deleteWorkspace}
+      onrenameWorkspace={renameWorkspace}
       onPullSuccess={async () => {
         await loadWorkspaces();
         await loadTree(activeWorkspace?.notes_folder ?? '');
@@ -561,7 +588,6 @@
     {#if screenshotsOpen}
       <ScreenshotPanel
         workspaceId={activeWorkspace?.id ?? null}
-        notesFolder={activeWorkspace?.notes_folder ?? ''}
         onClose={() => (screenshotsOpen = false)}
         onInsert={(md) => { insertIntoEditor?.(md); }}
       />
@@ -649,6 +675,8 @@
   {#if commandOpen}
     <CommandPalette
       onClose={() => (commandOpen = false)}
+      workspaceId={activeWorkspace?.id}
+      currentContent={activeContent}
       onInsert={(text) => { insertIntoEditor?.(text); }}
       onOpenCvss={() => (cvssOpen = true)}
     />

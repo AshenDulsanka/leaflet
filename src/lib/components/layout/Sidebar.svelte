@@ -2,6 +2,7 @@
   import { PanelLeftClose, PanelLeftOpen, FileText, Pin, PinOff, Pencil, Trash2, ChevronDown, Plus } from '@lucide/svelte';
   import FileTree from './FileTree.svelte';
   import SyncButton from './SyncButton.svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
   import Dialog from '$lib/components/modals/Dialog.svelte';
   import type { FileNode, Workspace } from '$lib/types';
 
@@ -20,11 +21,17 @@
     onSelectWorkspace?: (ws: Workspace) => void;
     onCreateWorkspace?: () => void;
     onPullSuccess?: () => void;
+    ondeleteWorkspace?: (id: string) => void;
+    onrenameWorkspace?: (id: string, newName: string) => void;
   }
 
-  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess }: Props = $props();
+  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess, ondeleteWorkspace, onrenameWorkspace }: Props = $props();
 
   let wsDropdownOpen = $state(false);
+
+  let confirmDeleteWorkspace = $state<{ id: string; label: string } | null>(null);
+  let editingWorkspaceId = $state<string | null>(null);
+  let editingWorkspaceName = $state('');
 
   function handleSelectWorkspace(ws: Workspace) {
     wsDropdownOpen = false;
@@ -186,17 +193,72 @@
           onclick={(e) => e.stopPropagation()}
         >
           {#each workspaces as ws (ws.id)}
-            <button
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent
-                     {activeWorkspace?.id === ws.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}"
-              onclick={() => handleSelectWorkspace(ws)}
+            <div
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs {activeWorkspace?.id === ws.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-accent'}"
             >
-              <div class="h-2.5 w-2.5 flex-shrink-0 rounded-sm" style="background-color: {ws.icon_color}"></div>
-              <span class="flex-1 truncate">{ws.name}</span>
-              {#if ws.host_count || ws.flag_count}
-                <span class="text-[10px] text-muted-foreground">{ws.host_count ?? 0}H / {ws.flag_count ?? 0}F</span>
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <div
+                class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
+                onclick={() => handleSelectWorkspace(ws)}
+                role="button"
+                tabindex="0"
+              >
+                <div class="h-2.5 w-2.5 flex-shrink-0 rounded-sm" style="background-color: {ws.icon_color}"></div>
+                {#if editingWorkspaceId === ws.id}
+                  <!-- svelte-ignore a11y_autofocus -->
+                  <input
+                    type="text"
+                    bind:value={editingWorkspaceName}
+                    class="min-w-0 flex-1 bg-transparent px-1 py-0.5 outline-none rounded border border-border"
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter') {
+                        onrenameWorkspace?.(ws.id, editingWorkspaceName.trim());
+                        editingWorkspaceId = null;
+                      } else if (e.key === 'Escape') {
+                        editingWorkspaceId = null;
+                      }
+                    }}
+                    onblur={() => {
+                      onrenameWorkspace?.(ws.id, editingWorkspaceName.trim());
+                      editingWorkspaceId = null;
+                    }}
+                    onclick={(e) => e.stopPropagation()}
+                    autofocus
+                  />
+                {:else}
+                  <span class="flex-1 truncate text-left">{ws.name}</span>
+                {/if}
+              </div>
+              
+              {#if editingWorkspaceId !== ws.id}
+                <div class="flex items-center gap-1.5 ml-auto">
+                  {#if ws.host_count || ws.flag_count}
+                    <span class="text-[10px] text-muted-foreground mr-1">{ws.host_count ?? 0}H / {ws.flag_count ?? 0}F</span>
+                  {/if}
+                  <button
+                    class="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                    title="Rename Workspace"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      editingWorkspaceId = ws.id;
+                      editingWorkspaceName = ws.name;
+                    }}
+                  >
+                    <Pencil size={11} />
+                  </button>
+                  <button
+                    class="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                    title="Delete Workspace"
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      confirmDeleteWorkspace = { id: ws.id, label: ws.name };
+                    }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
               {/if}
-            </button>
+            </div>
           {/each}
           {#if onCreateWorkspace}
             {#if workspaces.length > 0}
@@ -357,4 +419,18 @@
       onCancel={() => (pinnedDialog = null)}
     />
   {/if}
+{/if}
+
+{#if confirmDeleteWorkspace}
+  <ConfirmDialog
+    title="Delete Workspace"
+    message={`Are you sure you want to delete the workspace "${confirmDeleteWorkspace.label}"? This action cannot be undone.`}
+    confirmLabel="Delete"
+    destructive={true}
+    onConfirm={() => {
+      ondeleteWorkspace?.(confirmDeleteWorkspace!.id);
+      confirmDeleteWorkspace = null;
+    }}
+    onCancel={() => (confirmDeleteWorkspace = null)}
+  />
 {/if}

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { KeyRound, Plus, X, RefreshCw, Eye, EyeOff, Trash2, ShieldCheck } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import Select from '$lib/components/ui/Select.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -27,6 +29,7 @@
   let loading = $state(false);
   let addingCred = $state(false);
   let revealedIds = $state<Set<string>>(new Set());
+  let confirmDelete = $state<{ id: string; label: string } | null>(null);
 
   // Add-cred form
   let newUsername = $state('');
@@ -196,26 +199,30 @@
           onkeydown={(e) => { if (e.key === 'Enter') addCredential(); if (e.key === 'Escape') addingCred = false; }}
         />
         <div class="flex gap-2">
-          <select
-            bind:value={newCredType}
-            class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-          >
-            <option value="password">Password</option>
-            <option value="hash">Hash</option>
-            <option value="key">SSH Key</option>
-            <option value="ticket">Kerberos Ticket</option>
-            <option value="token">Token</option>
-            <option value="other">Other</option>
-          </select>
-          <select
-            bind:value={newStatus}
-            class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-          >
-            <option value="unknown">Unknown</option>
-            <option value="valid">Valid</option>
-            <option value="invalid">Invalid</option>
-            <option value="expired">Expired</option>
-          </select>
+          <Select
+            size="sm"
+            value={newCredType}
+            onchange={(v) => newCredType = v}
+            options={[
+              { value: 'password', label: 'Password' },
+              { value: 'hash', label: 'Hash' },
+              { value: 'key', label: 'SSH Key' },
+              { value: 'ticket', label: 'Kerberos Ticket' },
+              { value: 'token', label: 'Token' },
+              { value: 'other', label: 'Other' }
+            ]}
+          />
+          <Select
+            size="sm"
+            value={newStatus}
+            onchange={(v) => newStatus = v}
+            options={[
+              { value: 'unknown', label: 'Unknown' },
+              { value: 'valid', label: 'Valid' },
+              { value: 'invalid', label: 'Invalid' },
+              { value: 'expired', label: 'Expired' }
+            ]}
+          />
         </div>
         <input
           type="text"
@@ -262,26 +269,26 @@
               <span class="flex-1 truncate text-xs font-medium">
                 {cred.domain ? `${cred.domain}\\` : ''}{cred.username || '(no username)'}
               </span>
-              <div class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+              <div class="flex items-center gap-0.5">
                 {#if cred.username}
                   <CopyButton
                     text={cred.domain ? `${cred.domain}\\${cred.username}` : cred.username}
                     size={10}
                   />
                 {/if}
-                <select
+                <Select
+                  size="xs"
                   value={cred.status}
-                  onchange={(e) => updateStatus(cred, (e.currentTarget as HTMLSelectElement).value)}
-                  class="rounded border border-border bg-background px-0.5 py-0.5 text-[9px] focus:outline-none"
-                  title="Set status"
-                >
-                  <option value="unknown">?</option>
-                  <option value="valid">Valid</option>
-                  <option value="invalid">Invalid</option>
-                  <option value="expired">Expired</option>
-                </select>
+                  onchange={(v) => updateStatus(cred, v)}
+                  options={[
+                    { value: 'unknown', label: '?' },
+                    { value: 'valid', label: 'Valid' },
+                    { value: 'invalid', label: 'Invalid' },
+                    { value: 'expired', label: 'Expired' }
+                  ]}
+                />
                 <button
-                  onclick={() => deleteCredential(cred.id)}
+                  onclick={() => confirmDelete = { id: cred.id, label: cred.username || 'Credential' }}
                   class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
                   title="Delete"
                 >
@@ -298,7 +305,6 @@
               <button
                 onclick={() => toggleReveal(cred.id)}
                 class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-                title={revealedIds.has(cred.id) ? 'Hide' : 'Reveal'}
               >
                 {#if revealedIds.has(cred.id)}
                   <EyeOff size={10} />
@@ -306,15 +312,20 @@
                   <Eye size={10} />
                 {/if}
               </button>
-              <CopyButton text={cred.secret} size={10} />
             </div>
-
-            {#if cred.source}
-              <p class="mt-0.5 truncate text-[10px] text-muted-foreground">from: {cred.source}</p>
-            {/if}
           </div>
         {/each}
       {/if}
     </div>
   {/if}
 </div>
+
+{#if confirmDelete !== null}
+  {@const pending = confirmDelete}
+  <ConfirmDialog
+    title="Delete Credential"
+    message="Delete '{pending.label}'? This cannot be undone."
+    onConfirm={() => { deleteCredential(pending.id); confirmDelete = null; }}
+    onCancel={() => confirmDelete = null}
+  />
+{/if}
