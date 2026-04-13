@@ -155,24 +155,24 @@
   // No cascades: the others are already false so their effects don't re-trigger.
   $effect(() => { if (searchOpen)      { commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; } });
   $effect(() => { if (commandOpen)     { searchOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; } });
-  $effect(() => { if (methodologyOpen) { searchOpen = false; commandOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; } });
-  $effect(() => { if (aiChatOpen)      { searchOpen = false; commandOpen = false; methodologyOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; } });
+  $effect(() => { if (methodologyOpen) { searchOpen = false; commandOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; findingsTrackerOpen = false; topologyOpen = false; } });
+  $effect(() => { if (aiChatOpen)      { searchOpen = false; commandOpen = false; methodologyOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; findingsTrackerOpen = false; topologyOpen = false; } });
   $effect(() => { if (summarizeOpen)   { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; helpOpen = false; settingsOpen = false; } });
   $effect(() => { if (helpOpen)        { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; settingsOpen = false; } });
   $effect(() => { if (settingsOpen)    { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; } });
   $effect(() => { if (backlinksOpen)   { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (screenshotsOpen) { backlinksOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (screenshotsOpen) { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
   $effect(() => { if (exportOpen)      { helpOpen = false; settingsOpen = false; } });
-  $effect(() => { if (hostTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (credentialVaultOpen) { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (flagTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; snippetsOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (snippetsOpen)        { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; operationLogOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (hostTrackerOpen)     { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (credentialVaultOpen) { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (flagTrackerOpen)     { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; snippetsOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (snippetsOpen)        { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; operationLogOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
   $effect(() => { if (attackChainOpen)     { /* full-screen modal - no sidebar conflict */ } });
   $effect(() => { if (graphOpen)           { /* full-screen overlay - close other full-screen panels */ attackChainOpen = false; } });
-  $effect(() => { if (operationLogOpen)    { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (cvssOpen)            { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (findingsTrackerOpen) { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; } });
-  $effect(() => { if (topologyOpen) { attackChainOpen = false; graphOpen = false; } });
+  $effect(() => { if (operationLogOpen)    { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (cvssOpen)            { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (findingsTrackerOpen) { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; } });
+  $effect(() => { if (topologyOpen) { methodologyOpen = false; aiChatOpen = false; attackChainOpen = false; graphOpen = false; } });
 
   onMount(async () => {
     // Load workspaces first so we can scope the tree to the active workspace
@@ -376,7 +376,9 @@
     }
     if (e.ctrlKey && e.key === '.') {
       e.preventDefault();
-      methodologyOpen = !methodologyOpen;
+      if (activeWorkspace?.type === 'pentest') {
+        methodologyOpen = !methodologyOpen;
+      }
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'A') {
       e.preventDefault();

@@ -146,6 +146,18 @@ export interface NoteTemplate {
   title: string;
   description: string;
   content: string;
+  workspaceId?: string | null;
+}
+
+/** A user-created note template stored in the database */
+export interface UserTemplate {
+  id: string;
+  workspace_id: string | null;
+  title: string;
+  description: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export type FindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info' | 'none';

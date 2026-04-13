@@ -351,6 +351,24 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       CREATE INDEX IF NOT EXISTS idx_topo_edges_target    ON topology_edges(target_host_id);
     `,
   },
+  {
+    // v11: add user_templates table for workspace-scoped and global note templates.
+    // workspace_id IS NULL means the template is global (visible in all workspaces).
+    // workspace_id non-null means the template is scoped to that workspace.
+    version: 11,
+    up: `
+      CREATE TABLE IF NOT EXISTS user_templates (
+        id           TEXT PRIMARY KEY,
+        workspace_id TEXT REFERENCES workspaces(id) ON DELETE CASCADE,
+        title        TEXT NOT NULL,
+        description  TEXT NOT NULL DEFAULT '',
+        content      TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_user_templates_workspace ON user_templates(workspace_id);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {
@@ -402,7 +420,7 @@ export function seedDefaultWorkspace(db: Database.Database): void {
   db.prepare(`
     INSERT INTO workspaces (id, name, type, icon_color, notes_folder, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, 'Default Workspace', 'general', '#6366f1', 'default-workspace', now, now);
+  `).run(id, 'Default Workspace', 'pentest', '#6366f1', 'default-workspace', now, now);
 
   // Create notes subfolder if NOTES_DIR is set
   const notesDir = process.env.NOTES_DIR;

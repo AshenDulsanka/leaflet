@@ -87,3 +87,12 @@ export function deleteScreenshotMetadata(filename: string): void {
   const db = getDb();
   db.prepare(`DELETE FROM screenshot_metadata WHERE filename = ?`).run(filename);
 }
+
+/** Return the list of filenames recorded for a given workspace. */
+export function getScreenshotFilenamesForWorkspace(workspaceId: string): string[] {
+  const db = getDb();
+  return (db
+    .prepare('SELECT filename FROM screenshot_metadata WHERE workspace_id = ?')
+    .all(workspaceId) as { filename: string }[])
+    .map((r) => r.filename);
+}
