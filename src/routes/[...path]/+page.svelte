@@ -150,17 +150,23 @@
     }
   }
 
-  async function deleteWorkspace(id: string) {
-    const res = await fetch(`/api/workspaces/${id}`, { method: 'DELETE' });
-    if (res.ok) {
+  async function deleteWorkspace(id: string): Promise<void> {
+    try {
+      const res = await fetch(`/api/workspaces/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        console.error('Failed to delete workspace:', res.status, res.statusText);
+        showError('Failed to delete workspace. Please try again.');
+        return;
+      }
       if (activeWorkspace?.id === id) {
         const fallback = workspaces.find(w => w.id !== id);
         if (fallback) selectWorkspace(fallback);
       }
       await invalidateAll();
       await loadWorkspaces();
-    } else {
-      console.error('Failed to delete workspace');
+    } catch (err) {
+      console.error('Failed to delete workspace:', err);
+      showError('Failed to delete workspace. Please try again.');
     }
   }
 

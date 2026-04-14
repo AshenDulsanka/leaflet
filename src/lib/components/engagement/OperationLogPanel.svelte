@@ -1,5 +1,8 @@
 <script lang="ts">
   import { ScrollText, Plus, X, RefreshCw, Pencil, Trash2, Check } from '@lucide/svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import Select from '$lib/components/ui/Select.svelte';
+  import DateTimePicker from '$lib/components/ui/DateTimePicker.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import type { OpLogCategory, OperationLogEntry } from '$lib/types';
@@ -21,6 +24,7 @@
   let hosts = $state<HostOption[]>([]);
   let loading = $state(false);
   let addingEntry = $state(false);
+  let confirmDelete = $state<{ id: string; label: string } | null>(null);
 
   // Add-entry form
   let newCategory = $state<OpLogCategory>('other');
@@ -265,28 +269,25 @@
           onkeydown={(e) => { if (e.key === 'Enter' && e.ctrlKey) addEntry(); if (e.key === 'Escape') { addingEntry = false; } }}
         ></textarea>
         <div class="flex gap-2">
-          <select
-            bind:value={newCategory}
-            class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-          >
-            {#each CATEGORIES as cat}
-              <option value={cat.value}>{cat.label}</option>
-            {/each}
-          </select>
-          <select
-            bind:value={newHostId}
-            class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-          >
-            <option value="">No host</option>
-            {#each hosts as h}
-              <option value={h.id}>{h.ip}{h.hostname ? ` (${h.hostname})` : ''}</option>
-            {/each}
-          </select>
+          <Select
+            size="sm"
+            value={newCategory}
+            onchange={(v) => newCategory = v as OpLogCategory}
+            options={CATEGORIES.map(c => ({ value: c.value, label: c.label }))}
+          />
+          <Select
+            size="sm"
+            value={newHostId}
+            onchange={(v) => newHostId = v}
+            options={[
+              { value: '', label: 'No host' },
+              ...hosts.map(h => ({ value: h.id, label: h.hostname ? `${h.ip} (${h.hostname})` : h.ip }))
+            ]}
+          />
         </div>
-        <input
-          type="datetime-local"
-          bind:value={newTimestamp}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        <DateTimePicker
+          value={newTimestamp}
+          onchange={(v) => newTimestamp = v}
         />
         <div class="flex gap-2">
           <button
@@ -331,28 +332,25 @@
                     onkeydown={(e) => { if (e.key === 'Enter' && e.ctrlKey) saveEdit(entry.id); if (e.key === 'Escape') editingId = null; }}
                   ></textarea>
                   <div class="flex gap-1.5">
-                    <select
-                      bind:value={editCategory}
-                      class="flex-1 rounded border border-border bg-background px-1 py-0.5 text-xs focus:outline-none"
-                    >
-                      {#each CATEGORIES as cat}
-                        <option value={cat.value}>{cat.label}</option>
-                      {/each}
-                    </select>
-                    <select
-                      bind:value={editHostId}
-                      class="flex-1 rounded border border-border bg-background px-1 py-0.5 text-xs focus:outline-none"
-                    >
-                      <option value="">No host</option>
-                      {#each hosts as h}
-                        <option value={h.id}>{h.ip}{h.hostname ? ` (${h.hostname})` : ''}</option>
-                      {/each}
-                    </select>
+                    <Select
+                      size="sm"
+                      value={editCategory}
+                      onchange={(v) => editCategory = v as OpLogCategory}
+                      options={CATEGORIES.map(c => ({ value: c.value, label: c.label }))}
+                    />
+                    <Select
+                      size="sm"
+                      value={editHostId}
+                      onchange={(v) => editHostId = v}
+                      options={[
+                        { value: '', label: 'No host' },
+                        ...hosts.map(h => ({ value: h.id, label: h.hostname ? `${h.ip} (${h.hostname})` : h.ip }))
+                      ]}
+                    />
                   </div>
-                  <input
-                    type="datetime-local"
-                    bind:value={editTimestamp}
-                    class="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  <DateTimePicker
+                    value={editTimestamp}
+                    onchange={(v) => editTimestamp = v}
                   />
                   <div class="flex gap-1.5">
                     <button
@@ -392,7 +390,7 @@
                           <Pencil size={10} />
                         </button>
                         <button
-                          onclick={() => deleteEntry(entry.id)}
+                          onclick={() => confirmDelete = { id: entry.id, label: entry.description }}
                           title="Delete"
                           class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
                         >
@@ -419,3 +417,13 @@
     </div>
   {/if}
 </div>
+
+{#if confirmDelete !== null}
+  {@const pending = confirmDelete}
+  <ConfirmDialog
+    title="Delete Action"
+    message="Delete this action from the operation log? This cannot be undone."
+    onConfirm={() => { deleteEntry(pending.id); confirmDelete = null; }}
+    onCancel={() => confirmDelete = null}
+  />
+{/if}

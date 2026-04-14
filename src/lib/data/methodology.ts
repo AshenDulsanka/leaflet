@@ -114,3 +114,10 @@ export const METHODOLOGY: MethodologyStep[] = [
     ],
   },
 ];
+
+export const METHODOLOGY_PRESETS: Record<string, { label: string; steps: typeof METHODOLOGY }> = {
+  cpts: {
+    label: 'HTB CPTS',
+    steps: METHODOLOGY
+  }
+};

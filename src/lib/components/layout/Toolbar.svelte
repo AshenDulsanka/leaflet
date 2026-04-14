@@ -106,16 +106,18 @@
   </div>
 
   <div class="flex items-center gap-0.5">
-    <!-- Methodology checklist -->
-    <button
-      title="Methodology checklist (Ctrl+.)"
-      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {methodologyOpen
-        ? 'bg-accent text-accent-foreground'
-        : ''}"
-      onclick={() => (methodologyOpen = !methodologyOpen)}
-    >
-      <ListChecks size={15} />
-    </button>
+    {#if isPentest}
+      <!-- Methodology checklist -->
+      <button
+        title="Methodology checklist (Ctrl+.)"
+        class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {methodologyOpen
+          ? 'bg-accent text-accent-foreground'
+          : ''}"
+        onclick={() => (methodologyOpen = !methodologyOpen)}
+      >
+        <ListChecks size={15} />
+      </button>
+    {/if}
 
     <!-- AI Chat -->
     <button

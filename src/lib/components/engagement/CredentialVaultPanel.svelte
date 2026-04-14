@@ -94,7 +94,7 @@
     credentials = credentials.filter((c) => c.id !== id);
   }
 
-  async function updateStatus(cred: Credential, status: string): Promise<void> {
+  async function updateStatus(cred: Credential, status: Credential['status']): Promise<void> {
     if (!workspaceId) return;
     const res = await fetch(`/api/workspaces/${workspaceId}/credentials/${cred.id}`, {
       method: 'PATCH',
@@ -102,7 +102,7 @@
       body: JSON.stringify({ status })
     });
     if (!res.ok) { console.error('Failed to update credential status'); return; }
-    credentials = credentials.map((c) => c.id === cred.id ? { ...c, status: status as Credential['status'] } : c);
+    credentials = credentials.map((c) => c.id === cred.id ? { ...c, status } : c);
   }
 
   function toggleReveal(id: string) {
@@ -281,7 +281,7 @@
                 <Select
                   size="xs"
                   value={cred.status}
-                  onchange={(v) => updateStatus(cred, v)}
+                  onchange={(v) => updateStatus(cred, v as Credential['status'])}
                   options={[
                     { value: 'unknown', label: '?' },
                     { value: 'valid', label: 'Valid' },

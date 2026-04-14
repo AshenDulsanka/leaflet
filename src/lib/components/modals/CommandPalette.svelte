@@ -30,9 +30,17 @@
       ? `/api/templates?workspaceId=${encodeURIComponent(workspaceId)}`
       : '/api/templates';
     fetch(url)
-      .then(r => r.json())
-      .then((data: UserTemplate[]) => { userTemplates = Array.isArray(data) ? data : []; })
-      .catch(() => {});
+      .then(async (res) => {
+        if (!res.ok) return [];
+        const data: unknown = await res.json();
+        return Array.isArray(data) ? data : [];
+      })
+      .then((templates) => {
+        userTemplates = templates;
+      })
+      .catch((err) => {
+        console.error('Failed to load templates:', err);
+      });
   });
 
   const CATEGORIES: { value: SnippetCategory | 'all'; label: string }[] = [
@@ -98,7 +106,12 @@
       if (!res.ok) { console.error('Failed to save template'); return; }
       newTemplateName = '';
       const url = workspaceId ? `/api/templates?workspaceId=${encodeURIComponent(workspaceId)}` : '/api/templates';
-      const refreshed: UserTemplate[] = await fetch(url).then(r => r.json());
+      const refreshedRes = await fetch(url);
+      if (!refreshedRes.ok) {
+        console.error('Failed to refresh templates');
+        return;
+      }
+      const refreshed: unknown = await refreshedRes.json();
       userTemplates = Array.isArray(refreshed) ? refreshed : [];
     } catch (err) {
       console.error('Failed to save template:', err);
