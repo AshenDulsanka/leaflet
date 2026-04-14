@@ -908,7 +908,7 @@
                         {statusMeta[finding.status]?.label ?? finding.status}
                       </span>
                     </div>
-                    <div class="flex flex-shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <div class="flex flex-shrink-0 items-center gap-0.5">
                       <button
                         onclick={() => startEdit(finding)}
                         title="Edit"

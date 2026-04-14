@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Terminal, Plus, X, RefreshCw, Copy, ChevronDown, ChevronRight, Trash2 } from '@lucide/svelte';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import Select from '$lib/components/ui/Select.svelte';
   import { extractSnippetVarNames } from '$lib/data/commands.js';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -249,6 +250,8 @@
     'pivoting', 'ad-attacks', 'file-transfer', 'credential-attacks'
   ];
 
+  const categoryOptions = CATEGORIES.map((category) => ({ value: category, label: category }));
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') onClose();
   }
@@ -339,14 +342,12 @@
             class="w-full resize-none rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
           ></textarea>
           <div class="flex gap-2">
-            <select
-              bind:value={newCategory}
-              class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-            >
-              {#each CATEGORIES as cat}
-                <option value={cat}>{cat}</option>
-              {/each}
-            </select>
+            <Select
+              options={categoryOptions}
+              value={newCategory}
+              onchange={(value) => { newCategory = value; }}
+              class="flex-1"
+            />
             <label class="flex items-center gap-1 text-[10px] text-muted-foreground">
               <input type="checkbox" bind:checked={isGlobal} class="rounded" />
               Global
