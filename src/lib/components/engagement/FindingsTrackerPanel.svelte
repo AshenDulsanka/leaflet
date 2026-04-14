@@ -5,7 +5,6 @@
   import { calculateCvss, METRIC_OPTIONS } from '$lib/data/cvss';
   import type { CvssMetrics } from '$lib/data/cvss';
   import { searchMitreTechniques } from '$lib/data/mitre-attack';
-  import type { MitreTechnique } from '$lib/data/mitre-attack';
   import { FINDING_TEMPLATES, searchFindingTemplates } from '$lib/data/finding-templates';
   import type { Finding, FindingSeverity, FindingStatus, FindingTemplate, FindingTemplateCategory } from '$lib/types';
 

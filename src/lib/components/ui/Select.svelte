@@ -10,8 +10,18 @@
     size?: 'xs' | 'sm';
     disabled?: boolean;
     class?: string;
+    stopPropagation?: boolean;
   }
-  const { options, value, onchange, placeholder = 'Select...', size = 'sm', disabled = false, class: className = '' }: Props = $props();
+  const {
+    options,
+    value,
+    onchange,
+    placeholder = 'Select...',
+    size = 'sm',
+    disabled = false,
+    class: className = '',
+    stopPropagation = false
+  }: Props = $props();
 
   let open = $state(false);
   let containerEl = $state<HTMLDivElement | null>(null);
@@ -69,7 +79,10 @@
 <div bind:this={containerEl} class="relative inline-block {className}">
   <button
     type="button"
-    onclick={toggle}
+    onclick={(e) => {
+      if (stopPropagation) e.stopPropagation();
+      toggle();
+    }}
     onkeydown={handleKeydown}
     {disabled}
     class="flex w-full min-w-32 items-center justify-between gap-2 rounded border border-border bg-background {sizeClasses} text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
@@ -86,7 +99,10 @@
           type="button"
           role="option"
           aria-selected={opt.value === value}
-          onclick={() => select(opt.value)}
+          onclick={(e) => {
+            if (stopPropagation) e.stopPropagation();
+            select(opt.value);
+          }}
           class="flex w-full items-center px-2 py-1.5 text-left {size === 'xs' ? 'text-[10px]' : 'text-xs'} hover:bg-accent {opt.value === value ? 'bg-accent/50 font-medium' : ''} {i === focusedIndex ? 'bg-accent' : ''}"
         >{opt.label}</button>
       {/each}

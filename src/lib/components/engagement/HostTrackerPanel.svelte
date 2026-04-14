@@ -492,23 +492,18 @@
                 <span class="text-[10px] text-muted-foreground">{host.ports.length}p</span>
               {/if}
               <div class="flex items-center gap-1">
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div onclick={(e) => e.stopPropagation()}>
-                  <Select
-                    size="xs"
-                    value={host.status}
-                    onchange={(v) => updateHostStatus(host, v)}
-                    options={[
-                      { value: 'unknown', label: '?' },
-                      { value: 'up', label: 'Up' },
-                      { value: 'down', label: 'Down' },
-                      { value: 'rooted', label: 'Root' }
-                    ]}
-                  />
-                </div>
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <Select
+                  size="xs"
+                  value={host.status}
+                  onchange={(v) => updateHostStatus(host, v)}
+                  stopPropagation={true}
+                  options={[
+                    { value: 'unknown', label: '?' },
+                    { value: 'up', label: 'Up' },
+                    { value: 'down', label: 'Down' },
+                    { value: 'rooted', label: 'Root' }
+                  ]}
+                />
                 <button
                   onclick={(e) => { e.stopPropagation(); confirmDelete = { id: host.id, label: host.ip, kind: 'host' }; }}
                   class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"

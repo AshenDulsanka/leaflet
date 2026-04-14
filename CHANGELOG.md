@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Note templates via Command Palette — five pentest-oriented templates (Recon, Vulnerability Finding, Exploit Log, Post-Exploitation Checklist, Active Directory) accessible from a new **Templates** tab in the Command Palette; inserting a template writes raw markdown directly into the editor (no bash code-block wrapper); template search filters by title and description; `NoteTemplate` type added to `src/lib/types.ts`; data module at `src/lib/data/templates.ts` with `searchTemplates` helper covered by unit tests ([#19](https://github.com/AshenDulsanka/leaflet/issues/19))
 - Copy-to-clipboard buttons on all engagement panel values (HostTracker IP/hostname/ports, CredentialVault username/secret, FlagTracker flag values) via shared `CopyButton` component with 1.5 s green-check confirmation state ([#18](https://github.com/AshenDulsanka/leaflet/issues/18))
 
+### Changed
+- Workspace creation now defaults to `pentest`, with `general` reserved for everyday note-taking
+- User templates are available from the Command Palette as global and workspace-scoped entries
+- Screenshot browsing is workspace-scoped when a workspace ID is supplied, and empty workspace IDs are rejected
+- Destructive panel actions now use confirmation dialogs, while primary panel actions remain visible in the panel chrome
+
 ### Removed
 - Markdown report generator panel (`ReportGeneratorPanel.svelte`), its API route (`/api/workspaces/[id]/report`), and all references (toolbar button, `reportOpen` state, mutual-exclusion effect). A standalone report service will be built separately and integrated via API in the future. ([#17](https://github.com/AshenDulsanka/leaflet/issues/17))
 
@@ -60,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Note Graph API (`/api/notes/graph`) now accepts optional `workspace` query parameter for workspace scoping, validated through `safePath()` with outer error boundary
 
 ### Fixed
+
+- Resolved lint/compile regressions in Note Graph, toolbar trusted SVG rendering, Host Tracker click handlers, Screenshot panel, Command Snippets variable cleanup, Findings Tracker imports, and route test import paths
 
 - Wiki-link `[[...]]` autocomplete, visual highlighting, and slash-command insertion all repaired: `flattenTree` was silently discarding all note paths (`.md` extension check on already-stripped names), CSS Highlight ranges were invalid due to `domAtPos` element–text-node ambiguity (replaced with DOM `TreeWalker`), and the slash command left `/w[[` instead of `[[` due to unreliable `setTimeout` (replaced with double `requestAnimationFrame` + remnant cleanup)
 - SQLite DB connection is now reloaded after `git pull` so the app reads updated data without a server restart ([#5](https://github.com/AshenDulsanka/leaflet/issues/5))

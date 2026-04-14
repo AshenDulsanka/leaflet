@@ -100,11 +100,6 @@
   function handleKeydown(e: KeyboardEvent): void {
     if (e.key === 'Escape') onClose();
   }
-
-  /** Programmatic focus action - avoids the a11y autofocus attribute warning. */
-  function focusOnMount(node: HTMLInputElement): void {
-    node.focus();
-  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />

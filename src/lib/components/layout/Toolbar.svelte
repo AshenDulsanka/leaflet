@@ -53,16 +53,19 @@
 
   // Strip fixed width/height so CSS controls sizing of the inline SVGs.
   // SECURITY: ?raw imports are bundled at build time from static assets only.
-  // NEVER use {@html} with runtime user content - use DOMPurify instead.
-  const logoSvg = logoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
-  const typoSvg = typoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
+  const logoSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(logoRaw.replace(/\s(?:width|height)="[^"]*"/g, ''))}`;
+  const typoSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(typoRaw.replace(/\s(?:width|height)="[^"]*"/g, ''))}`;
 </script>
 
 <header class="flex h-10 items-center gap-1 border-b border-border bg-card px-2">
   <!-- App logo -->
   <a href="/" class="mr-3 flex shrink-0 select-none items-center gap-1.5 text-foreground" aria-label="Leaflet">
-    <span class="flex h-6 w-[22px] items-center invert dark:invert-0 [&>svg]:h-full [&>svg]:w-full">{@html logoSvg}</span>
-    <span class="flex h-[13px] items-center invert dark:invert-0 [&>svg]:h-full [&>svg]:w-auto">{@html typoSvg}</span>
+    <span class="flex h-6 w-[22px] items-center invert dark:invert-0">
+      <img src={logoSrc} alt="" aria-hidden="true" class="h-full w-full" />
+    </span>
+    <span class="flex h-[13px] items-center invert dark:invert-0">
+      <img src={typoSrc} alt="" aria-hidden="true" class="h-full w-auto" />
+    </span>
   </a>
 
   <div class="flex flex-1 items-center gap-0.5">

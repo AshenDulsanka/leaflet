@@ -172,7 +172,6 @@
   }
 
   $effect(() => {
-    hoveredNodeId; searchQuery;
     if (!graphReady) return;
     applyColors();
     graph.refresh();

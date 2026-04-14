@@ -185,8 +185,9 @@
     await fetch(`/api/workspaces/${workspaceId}/variables/${id}`, { method: 'DELETE' });
     variables = variables.filter((v) => v.id !== id);
     if (toDelete) {
-      const { [toDelete.name]: _, ...rest } = editValues;
-      editValues = rest;
+      editValues = Object.fromEntries(
+        Object.entries(editValues).filter(([key]) => key !== toDelete.name)
+      );
     }
   }
 

@@ -10,9 +10,9 @@ const screenshotsDir = join(tempRoot, 'screenshots');
 process.env.NOTES_DATA_DIR = dataDir;
 process.env.SCREENSHOTS_DIR = screenshotsDir;
 
-const { getDb, reloadDb } = await import('$lib/server/database.js');
+const { getDb, reloadDb } = await import('$lib/server/database');
 const { GET } = await import('./+server.js');
-const { insertScreenshotMetadata } = await import('$lib/server/screenshots.js');
+const { insertScreenshotMetadata } = await import('$lib/server/screenshots');
 
 afterEach(() => {
   reloadDb();
