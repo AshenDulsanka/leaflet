@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Terminal, Plus, X, RefreshCw, Copy, ChevronDown, ChevronRight, Trash2 } from '@lucide/svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
   import { extractSnippetVarNames } from '$lib/data/commands.js';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -42,6 +43,7 @@
   let expandedCategories = $state<Set<string>>(new Set(['general', 'recon']));
   let addingSnippet = $state(false);
   let searchQuery = $state('');
+  let showClearVariablesConfirm = $state(false);
 
   // Add snippet form
   let newTitle = $state('');
@@ -193,10 +195,10 @@
 
   async function clearAllVariables() {
     if (!workspaceId) return;
-    if (!confirm('Clear all variables for this workspace? This cannot be undone.')) return;
     await fetch(`/api/workspaces/${workspaceId}/variables`, { method: 'DELETE' });
     variables = [];
     editValues = {};
+    showClearVariablesConfirm = false;
   }
 
   function toggleCategory(cat: string) {
@@ -410,7 +412,7 @@
                           <button
                             onclick={() => onInsert(resolveCommand(snippet.command))}
                             title="Insert into editor"
-                            class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-foreground"
+                            class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                           >
                             <Plus size={11} />
                           </button>
@@ -418,14 +420,14 @@
                         <button
                           onclick={() => copySnippet(snippet)}
                           title="Copy (with variable substitution)"
-                          class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-foreground"
+                          class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                         >
                           <Copy size={11} />
                         </button>
                         <button
                           onclick={() => deleteSnippet(snippet.id)}
                           title="Delete"
-                          class="flex h-5 w-5 items-center justify-center rounded text-destructive opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10"
+                          class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
                         >
                           <Trash2 size={11} />
                         </button>
@@ -455,7 +457,7 @@
           </p>
           {#if variables.length > 0}
             <button
-              onclick={clearAllVariables}
+              onclick={() => (showClearVariablesConfirm = true)}
               title="Clear all variables"
               class="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-destructive hover:bg-destructive/10"
             >
@@ -527,3 +529,13 @@
     {/if}
   {/if}
 </div>
+
+{#if showClearVariablesConfirm}
+  <ConfirmDialog
+    title="Clear All Variables"
+    message="Clear all variables for this workspace? This action cannot be undone."
+    confirmLabel="Clear all"
+    onConfirm={() => { void clearAllVariables(); }}
+    onCancel={() => (showClearVariablesConfirm = false)}
+  />
+{/if}

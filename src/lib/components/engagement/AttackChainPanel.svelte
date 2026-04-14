@@ -2,6 +2,7 @@
   import { Network, Plus, X, RefreshCw, Trash2, Save } from '@lucide/svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import Select from '$lib/components/ui/Select.svelte';
   import {
     SvelteFlow,
     Controls,
@@ -307,14 +308,12 @@
     <!-- Add node form (inline toolbar) -->
     {#if addingNode}
       <div class="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-4 py-2">
-        <select
-          bind:value={newType}
-          class="rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          {#each NODE_TYPE_LIST as t}
-            <option value={t}>{t}</option>
-          {/each}
-        </select>
+        <Select
+          size="sm"
+          value={newType}
+          onchange={(v) => (newType = v)}
+          options={NODE_TYPE_LIST.map((t) => ({ value: t, label: t }))}
+        />
         <input
           type="text"
           placeholder="Node label *"

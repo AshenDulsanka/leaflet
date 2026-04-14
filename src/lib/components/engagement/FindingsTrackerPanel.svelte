@@ -2,6 +2,7 @@
   import { Bug, X, Plus, RefreshCw, Pencil, Trash2, Check, Tag, BookOpen, ChevronDown, Upload } from '@lucide/svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import Select from '$lib/components/ui/Select.svelte';
   import { calculateCvss, METRIC_OPTIONS } from '$lib/data/cvss';
   import type { CvssMetrics } from '$lib/data/cvss';
   import { searchMitreTechniques } from '$lib/data/mitre-attack';
@@ -619,35 +620,39 @@
 
           <!-- Severity + Status row -->
           <div class="flex gap-2">
-            <select
-              bind:value={newSeverity}
-              onchange={() => { cvssAutoFilled = false; }}
-              class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-            >
-              {#each SEVERITIES as sev}
-                <option value={sev.value}>{sev.label}</option>
-              {/each}
-            </select>
-            <select
-              bind:value={newStatus}
-              class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-            >
-              {#each STATUSES as st}
-                <option value={st.value}>{st.label}</option>
-              {/each}
-            </select>
+            <Select
+              size="sm"
+              value={newSeverity}
+              onchange={(v) => {
+                newSeverity = v as FindingSeverity;
+                cvssAutoFilled = false;
+              }}
+              class="flex-1"
+              options={SEVERITIES.map((sev) => ({ value: sev.value, label: sev.label }))}
+            />
+            <Select
+              size="sm"
+              value={newStatus}
+              onchange={(v) => (newStatus = v as FindingStatus)}
+              class="flex-1"
+              options={STATUSES.map((st) => ({ value: st.value, label: st.label }))}
+            />
           </div>
 
           <!-- Host dropdown -->
-          <select
-            bind:value={newHostId}
-            class="w-full rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-          >
-            <option value="">No host</option>
-            {#each hosts as h}
-              <option value={h.id}>{h.ip}{h.hostname ? ` (${h.hostname})` : ''}</option>
-            {/each}
-          </select>
+          <Select
+            size="sm"
+            value={newHostId}
+            onchange={(v) => (newHostId = v)}
+            class="w-full"
+            options={[
+              { value: '', label: 'No host' },
+              ...hosts.map((h) => ({
+                value: h.id,
+                label: h.hostname ? `${h.ip} (${h.hostname})` : h.ip
+              }))
+            ]}
+          />
 
           <!-- Note path -->
           <input
@@ -790,33 +795,37 @@
                   </div>
 
                   <div class="flex gap-1.5">
-                    <select
-                      bind:value={editSeverity}
-                      onchange={() => { editCvssAutoFilled = false; }}
-                      class="flex-1 rounded border border-border bg-background px-1 py-0.5 text-xs focus:outline-none"
-                    >
-                      {#each SEVERITIES as sev}
-                        <option value={sev.value}>{sev.label}</option>
-                      {/each}
-                    </select>
-                    <select
-                      bind:value={editStatus}
-                      class="flex-1 rounded border border-border bg-background px-1 py-0.5 text-xs focus:outline-none"
-                    >
-                      {#each STATUSES as st}
-                        <option value={st.value}>{st.label}</option>
-                      {/each}
-                    </select>
+                    <Select
+                      size="xs"
+                      value={editSeverity}
+                      onchange={(v) => {
+                        editSeverity = v as FindingSeverity;
+                        editCvssAutoFilled = false;
+                      }}
+                      class="flex-1"
+                      options={SEVERITIES.map((sev) => ({ value: sev.value, label: sev.label }))}
+                    />
+                    <Select
+                      size="xs"
+                      value={editStatus}
+                      onchange={(v) => (editStatus = v as FindingStatus)}
+                      class="flex-1"
+                      options={STATUSES.map((st) => ({ value: st.value, label: st.label }))}
+                    />
                   </div>
-                  <select
-                    bind:value={editHostId}
-                    class="w-full rounded border border-border bg-background px-1 py-0.5 text-xs focus:outline-none"
-                  >
-                    <option value="">No host</option>
-                    {#each hosts as h}
-                      <option value={h.id}>{h.ip}{h.hostname ? ` (${h.hostname})` : ''}</option>
-                    {/each}
-                  </select>
+                  <Select
+                    size="xs"
+                    value={editHostId}
+                    onchange={(v) => (editHostId = v)}
+                    class="w-full"
+                    options={[
+                      { value: '', label: 'No host' },
+                      ...hosts.map((h) => ({
+                        value: h.id,
+                        label: h.hostname ? `${h.ip} (${h.hostname})` : h.ip
+                      }))
+                    ]}
+                  />
                   <input
                     type="text"
                     bind:value={editNotePath}
