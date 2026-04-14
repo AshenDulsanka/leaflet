@@ -48,9 +48,13 @@
     loading = true;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/flags`);
+      if (!res.ok) {
+        console.error('Failed to load flags:', { workspaceId, status: res.status });
+        return;
+      }
       flags = await res.json();
-    } catch {
-      console.error('Failed to load flags');
+    } catch (err) {
+      console.error('Failed to load flags:', { workspaceId, error: err });
     } finally {
       loading = false;
     }
@@ -69,7 +73,10 @@
           notes: newNotes.trim()
         })
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.error('Failed to add flag:', { workspaceId, status: res.status });
+        return;
+      }
       const flag: FlagEntry = await res.json();
       flags = [...flags, flag];
       newValue = '';
@@ -77,8 +84,8 @@
       newCaptureMethod = '';
       newNotes = '';
       addingFlag = false;
-    } catch {
-      console.error('Failed to add flag');
+    } catch (err) {
+      console.error('Failed to add flag:', { workspaceId, error: err });
     }
   }
 
@@ -90,14 +97,14 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ submitted })
     });
-    if (!res.ok) { console.error('Failed to update flag'); return; }
+    if (!res.ok) { console.error('Failed to update flag:', { workspaceId, flagId: flag.id, status: res.status }); return; }
     flags = flags.map((f) => f.id === flag.id ? { ...f, submitted } : f);
   }
 
   async function deleteFlag(id: string): Promise<void> {
     if (!workspaceId) return;
     const res = await fetch(`/api/workspaces/${workspaceId}/flags/${id}`, { method: 'DELETE' });
-    if (!res.ok) { console.error('Failed to delete flag'); return; }
+    if (!res.ok) { console.error('Failed to delete flag:', { workspaceId, flagId: id, status: res.status }); return; }
     flags = flags.filter((f) => f.id !== id);
   }
 

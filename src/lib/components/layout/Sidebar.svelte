@@ -63,7 +63,8 @@
     if (typeof localStorage === 'undefined') return [];
     try {
       return JSON.parse(localStorage.getItem(storageKey()) ?? '[]');
-    } catch {
+    } catch (err) {
+      console.error('Failed to parse pinned notes from localStorage:', { key: storageKey(), error: err });
       return [];
     }
   }

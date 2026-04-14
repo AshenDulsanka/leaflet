@@ -2,6 +2,9 @@ import { promises as fs } from 'fs';
 import { resolve, join } from 'path';
 import { getDb } from './database.js';
 
+const ALLOWED_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
+const SAFE_EXTENSION = /^[a-z0-9]+$/;
+
 export function getScreenshotsDir(): string {
   const dir = process.env.SCREENSHOTS_DIR;
   if (!dir) throw new Error('SCREENSHOTS_DIR environment variable is not set');
@@ -11,7 +14,19 @@ export function getScreenshotsDir(): string {
 export async function saveScreenshot(buffer: Buffer, extension: string): Promise<string> {
   const dir = getScreenshotsDir();
   await fs.mkdir(dir, { recursive: true });
-  const filename = `${Date.now()}.${extension}`;
+  const normalizedExtension = extension.trim().toLowerCase();
+  if (
+    normalizedExtension.length === 0 ||
+    normalizedExtension.includes('/') ||
+    normalizedExtension.includes('\\') ||
+    normalizedExtension.includes('..') ||
+    !SAFE_EXTENSION.test(normalizedExtension) ||
+    !ALLOWED_EXTENSIONS.has(normalizedExtension)
+  ) {
+    throw new Error('Invalid screenshot extension');
+  }
+
+  const filename = `${Date.now()}.${normalizedExtension}`;
   await fs.writeFile(join(dir, filename), buffer);
   return filename;
 }

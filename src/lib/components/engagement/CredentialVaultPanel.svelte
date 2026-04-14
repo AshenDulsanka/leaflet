@@ -49,9 +49,13 @@
     loading = true;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/credentials`);
+      if (!res.ok) {
+        console.error('Failed to load credentials:', { workspaceId, status: res.status });
+        return;
+      }
       credentials = await res.json();
-    } catch {
-      console.error('Failed to load credentials');
+    } catch (err) {
+      console.error('Failed to load credentials:', { workspaceId, error: err });
     } finally {
       loading = false;
     }
@@ -72,7 +76,10 @@
           status: newStatus
         })
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.error('Failed to add credential:', { workspaceId, status: res.status });
+        return;
+      }
       const cred: Credential = await res.json();
       credentials = [...credentials, cred];
       newUsername = '';
@@ -82,15 +89,15 @@
       newSource = '';
       newStatus = 'unknown';
       addingCred = false;
-    } catch {
-      console.error('Failed to add credential');
+    } catch (err) {
+      console.error('Failed to add credential:', { workspaceId, error: err });
     }
   }
 
   async function deleteCredential(id: string): Promise<void> {
     if (!workspaceId) return;
     const res = await fetch(`/api/workspaces/${workspaceId}/credentials/${id}`, { method: 'DELETE' });
-    if (!res.ok) { console.error('Failed to delete credential'); return; }
+    if (!res.ok) { console.error('Failed to delete credential:', { workspaceId, credentialId: id, status: res.status }); return; }
     credentials = credentials.filter((c) => c.id !== id);
   }
 
@@ -101,7 +108,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
     });
-    if (!res.ok) { console.error('Failed to update credential status'); return; }
+    if (!res.ok) { console.error('Failed to update credential status:', { workspaceId, credentialId: cred.id, status: res.status }); return; }
     credentials = credentials.map((c) => c.id === cred.id ? { ...c, status } : c);
   }
 

@@ -79,6 +79,10 @@
 
   const detectedFormat = $derived(detectNmapFormat(nmapRaw));
 
+  function getSortedPorts(ports: Port[]): Port[] {
+    return [...ports].sort((a, b) => a.number - b.number);
+  }
+
   $effect(() => {
     if (workspaceId) loadHosts();
   });
@@ -93,9 +97,13 @@
     loading = true;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/hosts`);
+      if (!res.ok) {
+        console.error('Failed to load hosts:', { workspaceId, status: res.status });
+        return;
+      }
       hosts = await res.json();
-    } catch {
-      console.error('Failed to load hosts');
+    } catch (err) {
+      console.error('Failed to load hosts:', { workspaceId, error: err });
     } finally {
       loading = false;
     }
@@ -109,7 +117,10 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ip: newIp.trim(), hostname: newHostname.trim(), os: newOs.trim(), status: newStatus, scope: newScope })
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.error('Failed to add host:', { workspaceId, status: res.status });
+        return;
+      }
       const host: Host = await res.json();
       hosts = [...hosts, host];
       newIp = '';
@@ -119,15 +130,15 @@
       newScope = 'unknown';
       addingHost = false;
       expandedHost = host.id;
-    } catch {
-      console.error('Failed to add host');
+    } catch (err) {
+      console.error('Failed to add host:', { workspaceId, error: err });
     }
   }
 
   async function deleteHost(id: string): Promise<void> {
     if (!workspaceId) return;
     const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${id}`, { method: 'DELETE' });
-    if (!res.ok) { console.error('Failed to delete host'); return; }
+    if (!res.ok) { console.error('Failed to delete host:', { workspaceId, hostId: id, status: res.status }); return; }
     hosts = hosts.filter((h) => h.id !== id);
     if (expandedHost === id) expandedHost = null;
   }
@@ -139,7 +150,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
     });
-    if (!res.ok) { console.error('Failed to update host status'); return; }
+    if (!res.ok) { console.error('Failed to update host status:', { workspaceId, hostId: host.id, status: res.status }); return; }
     hosts = hosts.map((h) => h.id === host.id ? { ...h, status } : h);
   }
 
@@ -150,7 +161,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scope })
     });
-    if (!res.ok) { console.error('Failed to update host scope'); return; }
+    if (!res.ok) { console.error('Failed to update host scope:', { workspaceId, hostId: host.id, status: res.status }); return; }
     hosts = hosts.map((h) => h.id === host.id ? { ...h, scope } : h);
   }
 
@@ -162,7 +173,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ screenshot_filename: filename })
     });
-    if (!res.ok) { console.error('Failed to save screenshot filename'); return; }
+    if (!res.ok) { console.error('Failed to save screenshot filename:', { workspaceId, hostId: host.id, status: res.status }); return; }
     hosts = hosts.map((h) => h.id === host.id ? { ...h, screenshot_filename: filename } : h);
     editingScreenshotFor = null;
   }
@@ -177,22 +188,25 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ number: num, protocol: newPortProto, service: newPortService.trim(), state: 'open' })
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.error('Failed to add port:', { workspaceId, hostId, status: res.status });
+        return;
+      }
       const port: Port = await res.json();
       hosts = hosts.map((h) => h.id === hostId ? { ...h, ports: [...h.ports, port] } : h);
       newPortNum = '';
       newPortService = '';
       newPortProto = 'tcp';
       addingPortFor = null;
-    } catch {
-      console.error('Failed to add port');
+    } catch (err) {
+      console.error('Failed to add port:', { workspaceId, hostId, error: err });
     }
   }
 
   async function deletePort(hostId: string, portId: string): Promise<void> {
     if (!workspaceId) return;
     const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${hostId}/ports/${portId}`, { method: 'DELETE' });
-    if (!res.ok) { console.error('Failed to delete port'); return; }
+    if (!res.ok) { console.error('Failed to delete port:', { workspaceId, hostId, portId, status: res.status }); return; }
     hosts = hosts.map((h) => h.id === hostId ? { ...h, ports: h.ports.filter((p) => p.id !== portId) } : h);
   }
 
@@ -220,18 +234,20 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ raw: nmapRaw }),
       });
-      const data = await res.json() as {
-        imported?: number;
-        updated?: number;
-        portCount?: number;
-        errors?: Array<{ line: number; message: string }>;
-        error?: string;
-      };
       if (!res.ok) {
+        const data = (await res.json()) as {
+          error?: string;
+        };
         nmapImportStatus = 'error';
         nmapErrors = [{ line: 0, message: data.error ?? 'Import failed' }];
         return;
       }
+      const data = (await res.json()) as {
+        imported?: number;
+        updated?: number;
+        portCount?: number;
+        errors?: Array<{ line: number; message: string }>;
+      };
       nmapErrors = data.errors ?? [];
       nmapSummary = `Imported ${data.imported ?? 0} new host(s), updated ${data.updated ?? 0}, ${data.portCount ?? 0} port(s).`;
       nmapImportStatus = 'done';
@@ -583,7 +599,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        {#each host.ports.sort((a, b) => a.number - b.number) as port (port.id)}
+                        {#each getSortedPorts(host.ports) as port (port.id)}
                           <tr class="group/port border-t border-border">
                             <td class="px-2 py-0.5 font-mono font-medium text-foreground">{port.number}</td>
                             <td class="px-2 py-0.5 text-muted-foreground">{port.protocol}</td>

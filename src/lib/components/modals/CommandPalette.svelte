@@ -26,21 +26,8 @@
   let userTemplates = $state<UserTemplate[]>([]);
 
   $effect(() => {
-    const url = workspaceId
-      ? `/api/templates?workspaceId=${encodeURIComponent(workspaceId)}`
-      : '/api/templates';
-    fetch(url)
-      .then(async (res) => {
-        if (!res.ok) return [];
-        const data: unknown = await res.json();
-        return Array.isArray(data) ? data : [];
-      })
-      .then((templates) => {
-        userTemplates = templates;
-      })
-      .catch((err) => {
-        console.error('Failed to load templates:', err);
-      });
+    const activeWorkspaceId = workspaceId;
+    void loadUserTemplates(activeWorkspaceId);
   });
 
   const CATEGORIES: { value: SnippetCategory | 'all'; label: string }[] = [
@@ -95,6 +82,28 @@
   }
 
   let newTemplateName = $state('');
+
+  async function loadUserTemplates(activeWorkspaceId: string | undefined): Promise<void> {
+    const url = activeWorkspaceId
+      ? `/api/templates?workspaceId=${encodeURIComponent(activeWorkspaceId)}`
+      : '/api/templates';
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error('Failed to load templates:', { status: res.status, workspaceId: activeWorkspaceId });
+        userTemplates = [];
+        return;
+      }
+
+      const data: unknown = await res.json();
+      userTemplates = Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Failed to load templates:', err);
+      userTemplates = [];
+    }
+  }
+
   async function saveTemplate(): Promise<void> {
     if (!newTemplateName.trim() || !currentContent) return;
     try {
@@ -103,16 +112,9 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newTemplateName.trim(), content: currentContent, workspaceId })
       });
-      if (!res.ok) { console.error('Failed to save template'); return; }
+      if (!res.ok) { console.error('Failed to save template:', { status: res.status, workspaceId }); return; }
       newTemplateName = '';
-      const url = workspaceId ? `/api/templates?workspaceId=${encodeURIComponent(workspaceId)}` : '/api/templates';
-      const refreshedRes = await fetch(url);
-      if (!refreshedRes.ok) {
-        console.error('Failed to refresh templates');
-        return;
-      }
-      const refreshed: unknown = await refreshedRes.json();
-      userTemplates = Array.isArray(refreshed) ? refreshed : [];
+      await loadUserTemplates(workspaceId);
     } catch (err) {
       console.error('Failed to save template:', err);
     }

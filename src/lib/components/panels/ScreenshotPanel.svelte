@@ -31,8 +31,15 @@
     try {
       const qs = workspaceId !== null ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';
       const res = await fetch(`/api/screenshots${qs}`);
-      screenshots = await res.json();
-    } catch {
+      if (!res.ok) {
+        console.error('Failed to load screenshots:', { workspaceId, status: res.status });
+        screenshots = [];
+        return;
+      }
+      const data: unknown = await res.json();
+      screenshots = Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Failed to load screenshots:', { workspaceId, error: err });
       screenshots = [];
     } finally {
       loading = false;
@@ -42,7 +49,7 @@
   async function deleteScreenshot(filename: string): Promise<void> {
     try {
       const res = await fetch(`/api/screenshots/${filename}`, { method: 'DELETE' });
-      if (!res.ok) { console.error('Failed to delete screenshot'); return; }
+      if (!res.ok) { console.error('Failed to delete screenshot:', { filename, status: res.status }); return; }
       screenshots = screenshots.filter((s) => s.filename !== filename);
     } catch (err) {
       console.error('Failed to delete screenshot:', err);
@@ -57,9 +64,13 @@
     if (workspaceId !== null) formData.append('workspace_id', workspaceId);
     try {
       const res = await fetch('/api/screenshots', { method: 'POST', body: formData });
-      if (res.ok) await loadScreenshots();
-    } catch {
-      console.error('Failed to upload screenshot');
+      if (!res.ok) {
+        console.error('Failed to upload screenshot:', { workspaceId, status: res.status });
+        return;
+      }
+      await loadScreenshots();
+    } catch (err) {
+      console.error('Failed to upload screenshot:', { workspaceId, error: err });
     } finally {
       uploading = false;
     }

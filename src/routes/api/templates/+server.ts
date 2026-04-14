@@ -33,26 +33,51 @@ export const GET: RequestHandler = ({ url, locals }) => {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   const { db } = locals;
-  const body = (await request.json()) as {
-    title: string;
-    description?: string;
-    content: string;
-    workspaceId?: string | null;
-  };
+  let body: unknown;
 
-  if (!body.title?.trim()) throw error(400, "title is required");
-  if (!body.content?.trim()) throw error(400, "content is required");
-  if (body.title.trim().length > 255)
+  try {
+    body = await request.json();
+  } catch (err) {
+    console.error("[templates] POST invalid JSON payload:", err);
+    throw error(400, "Invalid JSON payload");
+  }
+
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw error(400, "Invalid request body");
+  }
+
+  const bodyRecord = body as Record<string, unknown>;
+
+  const title = bodyRecord.title;
+  const description = bodyRecord.description;
+  const content = bodyRecord.content;
+  const workspaceId = bodyRecord.workspaceId;
+
+  if (typeof title !== "string" || !title.trim()) throw error(400, "title is required");
+  if (typeof content !== "string" || !content.trim()) throw error(400, "content is required");
+  if (description !== undefined && description !== null && typeof description !== "string") {
+    throw error(400, "description must be a string");
+  }
+  if (workspaceId !== undefined && workspaceId !== null && typeof workspaceId !== "string") {
+    throw error(400, "workspaceId must be a string or null");
+  }
+
+  const trimmedTitle = title.trim();
+  const trimmedContent = content.trim();
+  const trimmedDescription = typeof description === "string" ? description.trim() : "";
+  const trimmedWorkspaceId = typeof workspaceId === "string" ? workspaceId.trim() : workspaceId;
+
+  if (trimmedTitle.length > 255)
     throw error(400, "title too long (max 255)");
-  if ((body.description ?? "").length > 1000)
+  if (trimmedDescription.length > 1000)
     throw error(400, "description too long (max 1000)");
-  if (body.content.trim().length > 500_000)
+  if (trimmedContent.length > 500_000)
     throw error(400, "content too large (max 500,000 chars)");
 
-  if (body.workspaceId != null) {
+  if (trimmedWorkspaceId != null) {
     const wsExists = db
       .prepare("SELECT 1 FROM workspaces WHERE id = ?")
-      .get(body.workspaceId);
+      .get(trimmedWorkspaceId);
     if (!wsExists) {
       throw error(400, "workspaceId does not reference a known workspace");
     }
@@ -65,10 +90,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
        VALUES (?, ?, ?, ?, ?)`,
     ).run(
       id,
-      body.workspaceId ?? null,
-      body.title.trim(),
-      body.description?.trim() ?? "",
-      body.content.trim(),
+      trimmedWorkspaceId ?? null,
+      trimmedTitle,
+      trimmedDescription,
+      trimmedContent,
     );
   } catch (err) {
     console.error("[templates] POST failed:", err);

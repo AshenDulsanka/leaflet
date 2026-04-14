@@ -1,7 +1,6 @@
 import type Database from "better-sqlite3";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync } from "fs";
-import { join } from "path";
 import { safePath } from "./notes.js";
 
 const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
@@ -450,7 +449,7 @@ export function seedDefaultWorkspace(db: Database.Database): void {
   // Create notes subfolder if NOTES_DIR is set
   const notesDir = process.env.NOTES_DIR;
   if (notesDir) {
-    const dir = join(notesDir, "default-workspace");
+    const dir = safePath("default-workspace");
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   }
 
