@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { Monitor, Plus, X, ChevronDown, ChevronRight, Trash2, RefreshCw, Globe, Image, FileInput } from '@lucide/svelte';
+  import { Monitor, Plus, X, ChevronDown, ChevronRight, Trash2, RefreshCw, Globe, Image as ImageIcon, FileInput } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import Select from '$lib/components/ui/Select.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -40,6 +42,7 @@
   let loading = $state(false);
   let expandedHost = $state<string | null>(null);
   let scopeFilter = $state<'all' | Scope>('all');
+  let confirmDelete = $state<{ id: string; label: string; kind: 'host' | 'port'; parentId?: string } | null>(null);
 
   // Add-host form
   let addingHost = $state(false);
@@ -123,39 +126,43 @@
 
   async function deleteHost(id: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/hosts/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${id}`, { method: 'DELETE' });
+    if (!res.ok) { console.error('Failed to delete host'); return; }
     hosts = hosts.filter((h) => h.id !== id);
     if (expandedHost === id) expandedHost = null;
   }
 
   async function updateHostStatus(host: Host, status: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
+    const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
     });
+    if (!res.ok) { console.error('Failed to update host status'); return; }
     hosts = hosts.map((h) => h.id === host.id ? { ...h, status } : h);
   }
 
   async function updateHostScope(host: Host, scope: Scope): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
+    const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scope })
     });
+    if (!res.ok) { console.error('Failed to update host scope'); return; }
     hosts = hosts.map((h) => h.id === host.id ? { ...h, scope } : h);
   }
 
   async function saveScreenshotFilename(host: Host): Promise<void> {
     if (!workspaceId) return;
     const filename = newScreenshotFilename.trim();
-    await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
+    const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ screenshot_filename: filename })
     });
+    if (!res.ok) { console.error('Failed to save screenshot filename'); return; }
     hosts = hosts.map((h) => h.id === host.id ? { ...h, screenshot_filename: filename } : h);
     editingScreenshotFor = null;
   }
@@ -184,7 +191,8 @@
 
   async function deletePort(hostId: string, portId: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/hosts/${hostId}/ports/${portId}`, { method: 'DELETE' });
+    const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${hostId}/ports/${portId}`, { method: 'DELETE' });
+    if (!res.ok) { console.error('Failed to delete port'); return; }
     hosts = hosts.map((h) => h.id === hostId ? { ...h, ports: h.ports.filter((p) => p.id !== portId) } : h);
   }
 
@@ -313,23 +321,27 @@
             class="w-24 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
-        <select
-          bind:value={newStatus}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="unknown">Unknown</option>
-          <option value="up">Up</option>
-          <option value="down">Down</option>
-          <option value="rooted">Rooted</option>
-        </select>
-        <select
-          bind:value={newScope}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="unknown">Scope?</option>
-          <option value="in-scope">In-scope</option>
-          <option value="out-of-scope">Out-of-scope</option>
-        </select>
+        <Select
+          size="sm"
+          value={newStatus}
+          onchange={(v) => newStatus = v}
+          options={[
+            { value: 'unknown', label: 'Unknown' },
+            { value: 'up', label: 'Up' },
+            { value: 'down', label: 'Down' },
+            { value: 'rooted', label: 'Rooted' }
+          ]}
+        />
+        <Select
+          size="sm"
+          value={newScope}
+          onchange={(v) => newScope = v as Scope}
+          options={[
+            { value: 'unknown', label: 'Scope?' },
+            { value: 'in-scope', label: 'In-scope' },
+            { value: 'out-of-scope', label: 'Out-of-scope' }
+          ]}
+        />
         <div class="flex gap-2">
           <button
             onclick={addHost}
@@ -463,21 +475,26 @@
               {#if host.ports.length > 0}
                 <span class="text-[10px] text-muted-foreground">{host.ports.length}p</span>
               {/if}
-              <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                <select
-                  value={host.status}
-                  onchange={(e) => updateHostStatus(host, (e.currentTarget as HTMLSelectElement).value)}
-                  class="rounded border border-border bg-background px-1 py-0.5 text-[10px] focus:outline-none"
-                  onclick={(e) => e.stopPropagation()}
-                  title="Set status"
-                >
-                  <option value="unknown">?</option>
-                  <option value="up">Up</option>
-                  <option value="down">Down</option>
-                  <option value="rooted">Root</option>
-                </select>
+              <div class="flex items-center gap-1">
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div onclick={(e) => e.stopPropagation()}>
+                  <Select
+                    size="xs"
+                    value={host.status}
+                    onchange={(v) => updateHostStatus(host, v)}
+                    options={[
+                      { value: 'unknown', label: '?' },
+                      { value: 'up', label: 'Up' },
+                      { value: 'down', label: 'Down' },
+                      { value: 'rooted', label: 'Root' }
+                    ]}
+                  />
+                </div>
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <button
-                  onclick={() => deleteHost(host.id)}
+                  onclick={(e) => { e.stopPropagation(); confirmDelete = { id: host.id, label: host.ip, kind: 'host' }; }}
                   class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
                   title="Delete host"
                 >
@@ -498,20 +515,21 @@
                 <!-- Scope selector (in expanded view) -->
                 <div class="mb-2 flex items-center gap-2">
                   <span class="text-[10px] text-muted-foreground">Scope:</span>
-                  <select
+                  <Select
+                    size="xs"
                     value={host.scope}
-                    onchange={(e) => updateHostScope(host, (e.currentTarget as HTMLSelectElement).value as Scope)}
-                    class="rounded border border-border bg-background px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="unknown">Unknown</option>
-                    <option value="in-scope">In-scope</option>
-                    <option value="out-of-scope">Out-of-scope</option>
-                  </select>
+                    onchange={(v) => updateHostScope(host, v as Scope)}
+                    options={[
+                      { value: 'unknown', label: 'Unknown' },
+                      { value: 'in-scope', label: 'In-scope' },
+                      { value: 'out-of-scope', label: 'Out-of-scope' }
+                    ]}
+                  />
                 </div>
 
                 <!-- Screenshot filename -->
                 <div class="mb-2 flex items-center gap-1.5">
-                  <Image size={10} class="flex-shrink-0 text-muted-foreground" />
+                  <ImageIcon size={10} class="flex-shrink-0 text-muted-foreground" />
                   {#if editingScreenshotFor === host.id}
                     <input
                       type="text"
@@ -571,14 +589,14 @@
                             <td class="px-2 py-0.5 text-muted-foreground">{port.protocol}</td>
                             <td class="px-2 py-0.5 text-muted-foreground">{port.service || '-'}</td>
                             <td class="px-1 py-0.5">
-                              <div class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/port:opacity-100">
+                              <div class="flex items-center gap-0.5">
                                 <CopyButton
                                   text="{port.number}/{port.protocol}{port.service ? ` ${port.service}` : ''}"
                                   size={9}
                                   class="h-4 w-4"
                                 />
                                 <button
-                                  onclick={() => deletePort(host.id, port.id)}
+                                  onclick={() => confirmDelete = { id: port.id, label: `${port.number}/${port.protocol}`, kind: 'port', parentId: host.id }}
                                   class="flex h-4 w-4 items-center justify-center rounded text-destructive hover:bg-destructive/10"
                                 >
                                   <X size={9} />
@@ -604,13 +622,15 @@
                       class="w-16 rounded border border-border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
                       onkeydown={(e) => { if (e.key === 'Enter') addPort(host.id); if (e.key === 'Escape') addingPortFor = null; }}
                     />
-                    <select
-                      bind:value={newPortProto}
-                      class="rounded border border-border bg-background px-1 py-0.5 text-[10px] focus:outline-none"
-                    >
-                      <option value="tcp">TCP</option>
-                      <option value="udp">UDP</option>
-                    </select>
+                    <Select
+                      size="xs"
+                      value={newPortProto}
+                      onchange={(v) => newPortProto = v}
+                      options={[
+                        { value: 'tcp', label: 'TCP' },
+                        { value: 'udp', label: 'UDP' }
+                      ]}
+                    />
                     <input
                       type="text"
                       placeholder="Service"
@@ -647,3 +667,17 @@
     </div>
   {/if}
 </div>
+
+{#if confirmDelete !== null}
+  {@const pending = confirmDelete}
+  <ConfirmDialog
+    title={pending.kind === 'host' ? 'Delete Host' : 'Delete Port'}
+    message="Delete '{pending.label}'? This cannot be undone."
+    onConfirm={() => { 
+      if (pending.kind === 'host') deleteHost(pending.id); 
+      else if (pending.parentId) deletePort(pending.parentId, pending.id);
+      confirmDelete = null; 
+    }}
+    onCancel={() => confirmDelete = null}
+  />
+{/if}

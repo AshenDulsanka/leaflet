@@ -159,6 +159,8 @@
       }
       await invalidateAll();
       await loadWorkspaces();
+    } else {
+      console.error('Failed to delete workspace');
     }
   }
 
@@ -517,8 +519,8 @@
       onMoveItem={moveFile}
       onSelectWorkspace={selectWorkspace}
       onCreateWorkspace={() => (createWorkspaceOpen = true)}
-      ondeleteWorkspace={deleteWorkspace}
-      onrenameWorkspace={renameWorkspace}
+      onDeleteWorkspace={deleteWorkspace}
+      onRenameWorkspace={renameWorkspace}
       onPullSuccess={async () => {
         await loadWorkspaces();
         await loadTree(activeWorkspace?.notes_folder ?? '');

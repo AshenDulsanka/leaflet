@@ -21,11 +21,11 @@
     onSelectWorkspace?: (ws: Workspace) => void;
     onCreateWorkspace?: () => void;
     onPullSuccess?: () => void;
-    ondeleteWorkspace?: (id: string) => void;
-    onrenameWorkspace?: (id: string, newName: string) => void;
+    onDeleteWorkspace?: (id: string) => void;
+    onRenameWorkspace?: (id: string, newName: string) => void;
   }
 
-  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess, ondeleteWorkspace, onrenameWorkspace }: Props = $props();
+  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess, onDeleteWorkspace, onRenameWorkspace }: Props = $props();
 
   let wsDropdownOpen = $state(false);
 
@@ -212,14 +212,14 @@
                     class="min-w-0 flex-1 bg-transparent px-1 py-0.5 outline-none rounded border border-border"
                     onkeydown={(e) => {
                       if (e.key === 'Enter') {
-                        onrenameWorkspace?.(ws.id, editingWorkspaceName.trim());
+                        onRenameWorkspace?.(ws.id, editingWorkspaceName.trim());
                         editingWorkspaceId = null;
                       } else if (e.key === 'Escape') {
                         editingWorkspaceId = null;
                       }
                     }}
                     onblur={() => {
-                      onrenameWorkspace?.(ws.id, editingWorkspaceName.trim());
+                      onRenameWorkspace?.(ws.id, editingWorkspaceName.trim());
                       editingWorkspaceId = null;
                     }}
                     onclick={(e) => e.stopPropagation()}
@@ -428,7 +428,7 @@
     confirmLabel="Delete"
     destructive={true}
     onConfirm={() => {
-      ondeleteWorkspace?.(confirmDeleteWorkspace!.id);
+      onDeleteWorkspace?.(confirmDeleteWorkspace!.id);
       confirmDeleteWorkspace = null;
     }}
     onCancel={() => (confirmDeleteWorkspace = null)}

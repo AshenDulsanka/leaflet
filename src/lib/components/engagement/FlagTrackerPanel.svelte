@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Flag, Plus, X, RefreshCw, CheckCircle2, Circle, Trash2 } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import Select from '$lib/components/ui/Select.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -28,6 +30,7 @@
   let flags = $state<FlagEntry[]>([]);
   let loading = $state(false);
   let addingFlag = $state(false);
+  let confirmDelete = $state<{ id: string; label: string } | null>(null);
 
   // Add-flag form
   let newValue = $state('');
@@ -39,7 +42,7 @@
     if (workspaceId) loadFlags();
   });
 
-  async function loadFlags() {
+  async function loadFlags(): Promise<void> {
     if (!workspaceId) return;
     flags = [];
     loading = true;
@@ -53,7 +56,7 @@
     }
   }
 
-  async function addFlag() {
+  async function addFlag(): Promise<void> {
     if (!workspaceId) return;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/flags`, {
@@ -79,20 +82,22 @@
     }
   }
 
-  async function toggleSubmitted(flag: FlagEntry) {
+  async function toggleSubmitted(flag: FlagEntry): Promise<void> {
     if (!workspaceId) return;
     const submitted = flag.submitted ? 0 : 1;
-    await fetch(`/api/workspaces/${workspaceId}/flags/${flag.id}`, {
+    const res = await fetch(`/api/workspaces/${workspaceId}/flags/${flag.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ submitted })
     });
+    if (!res.ok) { console.error('Failed to update flag'); return; }
     flags = flags.map((f) => f.id === flag.id ? { ...f, submitted } : f);
   }
 
-  async function deleteFlag(id: string) {
+  async function deleteFlag(id: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/flags/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/workspaces/${workspaceId}/flags/${id}`, { method: 'DELETE' });
+    if (!res.ok) { console.error('Failed to delete flag'); return; }
     flags = flags.filter((f) => f.id !== id);
   }
 
@@ -192,14 +197,16 @@
           onkeydown={(e) => { if (e.key === 'Enter') addFlag(); if (e.key === 'Escape') addingFlag = false; }}
         />
         <div class="flex gap-2">
-          <select
-            bind:value={newFlagType}
-            class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-          >
-            <option value="user">User flag</option>
-            <option value="root">Root flag</option>
-            <option value="other">Other</option>
-          </select>
+          <Select
+            size="sm"
+            value={newFlagType}
+            onchange={(v) => newFlagType = v}
+            options={[
+              { value: 'user', label: 'User flag' },
+              { value: 'root', label: 'Root flag' },
+              { value: 'other', label: 'Other' }
+            ]}
+          />
           <input
             type="text"
             placeholder="Via (e.g. LPE, DC Sync)"
@@ -271,8 +278,8 @@
             </div>
 
             <button
-              onclick={() => deleteFlag(flag.id)}
-              class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-destructive opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10"
+              onclick={() => confirmDelete = { id: flag.id, label: flag.value || flag.flag_type }}
+              class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-destructive hover:bg-destructive/10"
               title="Delete flag"
             >
               <Trash2 size={10} />
@@ -283,3 +290,13 @@
     </div>
   {/if}
 </div>
+
+{#if confirmDelete !== null}
+  {@const pending = confirmDelete}
+  <ConfirmDialog
+    title="Delete Flag"
+    message="Delete '{pending.label}'? This cannot be undone."
+    onConfirm={() => { deleteFlag(pending.id); confirmDelete = null; }}
+    onCancel={() => confirmDelete = null}
+  />
+{/if}

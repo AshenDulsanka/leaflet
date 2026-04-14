@@ -41,10 +41,11 @@
 
   async function deleteScreenshot(filename: string): Promise<void> {
     try {
-      await fetch(`/api/screenshots/${filename}`, { method: 'DELETE' });
+      const res = await fetch(`/api/screenshots/${filename}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete screenshot'); return; }
       screenshots = screenshots.filter((s) => s.filename !== filename);
-    } catch {
-      console.error('Failed to delete screenshot');
+    } catch (err) {
+      console.error('Failed to delete screenshot:', err);
     }
   }
 

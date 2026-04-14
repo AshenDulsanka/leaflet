@@ -10,10 +10,10 @@
     id: string;
     username: string;
     secret: string;
-    credential_type: string;
+    credential_type: 'password' | 'hash' | 'key' | 'ticket' | 'token' | 'other';
     domain: string;
     source: string;
-    status: string;
+    status: 'unknown' | 'valid' | 'invalid' | 'expired';
     notes: string;
     valid_host_ids: string[];
   }
@@ -34,16 +34,16 @@
   // Add-cred form
   let newUsername = $state('');
   let newSecret = $state('');
-  let newCredType = $state('password');
+  let newCredType = $state<'password' | 'hash' | 'key' | 'ticket' | 'token' | 'other'>('password');
   let newDomain = $state('');
   let newSource = $state('');
-  let newStatus = $state('unknown');
+  let newStatus = $state<'unknown' | 'valid' | 'invalid' | 'expired'>('unknown');
 
   $effect(() => {
     if (workspaceId) loadCredentials();
   });
 
-  async function loadCredentials() {
+  async function loadCredentials(): Promise<void> {
     if (!workspaceId) return;
     credentials = [];
     loading = true;
@@ -57,7 +57,7 @@
     }
   }
 
-  async function addCredential() {
+  async function addCredential(): Promise<void> {
     if (!workspaceId) return;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/credentials`, {
@@ -87,20 +87,22 @@
     }
   }
 
-  async function deleteCredential(id: string) {
+  async function deleteCredential(id: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/credentials/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/workspaces/${workspaceId}/credentials/${id}`, { method: 'DELETE' });
+    if (!res.ok) { console.error('Failed to delete credential'); return; }
     credentials = credentials.filter((c) => c.id !== id);
   }
 
-  async function updateStatus(cred: Credential, status: string) {
+  async function updateStatus(cred: Credential, status: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/credentials/${cred.id}`, {
+    const res = await fetch(`/api/workspaces/${workspaceId}/credentials/${cred.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
     });
-    credentials = credentials.map((c) => c.id === cred.id ? { ...c, status } : c);
+    if (!res.ok) { console.error('Failed to update credential status'); return; }
+    credentials = credentials.map((c) => c.id === cred.id ? { ...c, status: status as Credential['status'] } : c);
   }
 
   function toggleReveal(id: string) {
@@ -202,7 +204,7 @@
           <Select
             size="sm"
             value={newCredType}
-            onchange={(v) => newCredType = v}
+            onchange={(v) => newCredType = v as Credential['credential_type']}
             options={[
               { value: 'password', label: 'Password' },
               { value: 'hash', label: 'Hash' },
@@ -215,7 +217,7 @@
           <Select
             size="sm"
             value={newStatus}
-            onchange={(v) => newStatus = v}
+            onchange={(v) => newStatus = v as Credential['status']}
             options={[
               { value: 'unknown', label: 'Unknown' },
               { value: 'valid', label: 'Valid' },

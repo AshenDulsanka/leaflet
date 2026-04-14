@@ -5,21 +5,35 @@
   import { X, Copy, CornerDownLeft, Terminal, FileText, ShieldAlert } from '@lucide/svelte';
   import { DEFAULT_COMMANDS, searchCommands } from '$lib/data/commands';
   import { NOTE_TEMPLATES, searchTemplates } from '$lib/data/templates';
-  import type { SnippetCategory } from '$lib/types';
+  import type { SnippetCategory, UserTemplate } from '$lib/types';
 
   interface Props {
     onClose: () => void;
     onInsert: (text: string) => void;
     onOpenCvss?: () => void;
+    workspaceId?: string;
+    currentContent?: string;
   }
 
-  let { onClose, onInsert, onOpenCvss }: Props = $props();
+  let { onClose, onInsert, onOpenCvss, workspaceId = $bindable<string | undefined>(undefined), currentContent = $bindable<string | undefined>(undefined) }: Props = $props();
 
   let query = $state('');
   let mode = $state<'commands' | 'templates'>('commands');
   let selectedCategory = $state<SnippetCategory | 'all'>('all');
   let inputEl = $state<HTMLInputElement | null>(null);
   let copied = $state<string | null>(null);
+
+  let userTemplates = $state<UserTemplate[]>([]);
+
+  $effect(() => {
+    const url = workspaceId
+      ? `/api/templates?workspaceId=${encodeURIComponent(workspaceId)}`
+      : '/api/templates';
+    fetch(url)
+      .then(r => r.json())
+      .then((data: UserTemplate[]) => { userTemplates = Array.isArray(data) ? data : []; })
+      .catch(() => {});
+  });
 
   const CATEGORIES: { value: SnippetCategory | 'all'; label: string }[] = [
     { value: 'all', label: 'All' },
@@ -42,6 +56,9 @@
   });
 
   const filteredTemplates = $derived(searchTemplates(query));
+  const filteredUserTemplates = $derived(
+    userTemplates.filter(t => t.title.toLowerCase().includes(query.toLowerCase()) || (t.description && t.description.toLowerCase().includes(query.toLowerCase())))
+  );
 
   function switchMode(next: 'commands' | 'templates') {
     mode = next;
@@ -67,6 +84,25 @@
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') onClose();
+  }
+
+  let newTemplateName = $state('');
+  async function saveTemplate(): Promise<void> {
+    if (!newTemplateName.trim() || !currentContent) return;
+    try {
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTemplateName.trim(), content: currentContent, workspaceId })
+      });
+      if (!res.ok) { console.error('Failed to save template'); return; }
+      newTemplateName = '';
+      const url = workspaceId ? `/api/templates?workspaceId=${encodeURIComponent(workspaceId)}` : '/api/templates';
+      const refreshed: UserTemplate[] = await fetch(url).then(r => r.json());
+      userTemplates = Array.isArray(refreshed) ? refreshed : [];
+    } catch (err) {
+      console.error('Failed to save template:', err);
+    }
   }
 
   onMount(() => inputEl?.focus());
@@ -233,42 +269,108 @@
     {:else}
       <!-- Templates list -->
       <div class="max-h-96 overflow-y-auto">
-        {#if filteredTemplates.length === 0}
+        {#if filteredUserTemplates.length > 0}
+          <div class="border-b border-border/50">
+            <p class="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 py-2 bg-muted/30">My Templates</p>
+            {#each filteredUserTemplates as tmpl}
+              <div
+                class="group flex cursor-pointer items-start gap-3 border-b border-border/50 bg-primary/5 px-4 py-3 hover:bg-accent"
+              >
+                <button
+                  class="flex-1 text-left"
+                  onclick={() => insertTemplate(tmpl.content)}
+                  title="Insert template into editor"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-primary">{tmpl.title}</span>
+                    <span class="rounded bg-primary/10 text-primary px-1.5 py-0.5 text-[10px]">
+                      custom
+                    </span>
+                  </div>
+                  {#if tmpl.description}
+                    <p class="mt-0.5 text-xs text-muted-foreground">{tmpl.description}</p>
+                  {/if}
+                </button>
+
+                <div class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                    title="Insert template into editor"
+                    onclick={() => insertTemplate(tmpl.content)}
+                  >
+                    <CornerDownLeft size={13} />
+                  </button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        {#if filteredTemplates.length > 0}
+          <div class="border-b border-border/50">
+            {#if userTemplates.length > 0}
+               <p class="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 py-2 bg-muted/30">Built-in</p>
+            {/if}
+            {#each filteredTemplates as tmpl (tmpl.id)}
+              <div
+                class="group flex cursor-pointer items-start gap-3 border-b border-border/50 px-4 py-3 hover:bg-accent"
+              >
+                <button
+                  class="flex-1 text-left"
+                  onclick={() => insertTemplate(tmpl.content)}
+                  title="Insert template into editor"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-foreground">{tmpl.title}</span>
+                    <span class="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      builtin
+                    </span>
+                  </div>
+                  <p class="mt-0.5 text-xs text-muted-foreground">{tmpl.description}</p>
+                </button>
+
+                <div class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                    title="Insert template into editor"
+                    onclick={() => insertTemplate(tmpl.content)}
+                  >
+                    <CornerDownLeft size={13} />
+                  </button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+        
+        {#if filteredTemplates.length === 0 && filteredUserTemplates.length === 0}
           <div class="py-10 text-center text-sm text-muted-foreground">
             No templates match "{query}"
           </div>
-        {:else}
-          {#each filteredTemplates as tmpl (tmpl.id)}
-            <div
-              class="group flex cursor-pointer items-start gap-3 border-b border-border/50 px-4 py-3 hover:bg-accent"
-            >
-              <button
-                class="flex-1 text-left"
-                onclick={() => insertTemplate(tmpl.content)}
-                title="Insert template into editor"
-              >
-                <div class="flex items-center gap-2">
-                  <span class="text-sm font-medium text-foreground">{tmpl.title}</span>
-                  <span class="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                    template
-                  </span>
-                </div>
-                <p class="mt-0.5 text-xs text-muted-foreground">{tmpl.description}</p>
-              </button>
-
-              <div class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                <button
-                  class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                  title="Insert template into editor"
-                  onclick={() => insertTemplate(tmpl.content)}
-                >
-                  <CornerDownLeft size={13} />
-                </button>
-              </div>
-            </div>
-          {/each}
         {/if}
       </div>
+
+      {#if currentContent}
+        <div class="border-t border-border bg-card/50 px-4 py-3 pb-3">
+          <p class="text-xs font-medium text-foreground mb-2">Save current note as template</p>
+          <div class="flex items-center gap-2">
+            <input
+              type="text"
+              bind:value={newTemplateName}
+              placeholder="Template name..."
+              class="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              onkeydown={(e) => { if (e.key === 'Enter') saveTemplate(); }}
+            />
+            <button
+              class="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              onclick={saveTemplate}
+              disabled={!newTemplateName.trim()}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      {/if}
 
       <!-- Footer hint (templates) -->
       <div class="flex items-center gap-3 border-t border-border px-4 py-2 text-xs text-muted-foreground">
