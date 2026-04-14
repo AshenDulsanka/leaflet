@@ -181,62 +181,52 @@
             <!-- Thumbnail clickable area -->
             <div
               class="group relative cursor-pointer overflow-hidden transition-colors hover:border-primary/50"
-              onclick={() => onInsert(`![${ss.caption || ss.filename}](${ss.url})`)}
+              onclick={() => onInsert(`![${ss.filename}](${ss.url})`)}
               role="button"
               tabindex="0"
               onkeydown={(e) => {
-                if (e.key === 'Enter') onInsert(`![${ss.caption || ss.filename}](${ss.url})`);
+                if (e.key === 'Enter') onInsert(`![${ss.filename}](${ss.url})`);
               }}
               aria-label="Insert {ss.filename}"
             >
               <img
                 src={ss.url}
-                alt={ss.caption || ss.filename}
+                alt={ss.filename}
                 class="aspect-video w-full object-cover"
                 loading="lazy"
               />
-              <!-- Hover overlay -->
-              <div
-                class="absolute inset-0 flex items-center justify-center gap-2 bg-background/70 opacity-0 transition-opacity group-hover:opacity-100"
-              >
-                <span
-                  class="rounded bg-primary/90 px-2 py-0.5 text-[10px] font-medium text-primary-foreground"
-                >
-                  Insert
-                </span>
+              <!-- Persistent top-right controls -->
+              <div class="absolute right-1 top-1 flex flex-col gap-1">
                 <button
-                  class="flex h-6 w-6 items-center justify-center rounded-full bg-background text-foreground shadow hover:bg-muted"
+                  class="flex h-6 w-6 items-center justify-center rounded-full bg-background/90 text-foreground shadow hover:bg-muted"
                   onclick={(e) => { e.stopPropagation(); lightboxImage = ss.url; }}
                   title="View full image"
                   aria-label="View {ss.filename}"
                 >
                   <Eye size={12} />
                 </button>
-              </div>
-              <!-- Delete button -->
-              <button
-                class="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded bg-destructive/90 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive"
-                onclick={(e) => { e.stopPropagation(); confirmDelete = { id: ss.filename, label: ss.filename }; }}
-                title="Delete screenshot"
-              >
-                <Trash2 size={10} />
-              </button>
-              <!-- File size label -->
-              <span class="absolute bottom-1 right-1.5 text-[9px] text-white drop-shadow">
-                {formatSize(ss.sizeBytes)}
-              </span>
-            </div>
-
-            <!-- Caption row -->
-            <div class="px-1.5 pb-0.5 pt-0.5">
-                <p
-                  class="cursor-default px-1 py-0.5 text-[11px] text-muted-foreground"
-                  style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"
-                  title={ss.caption || ss.filename}
+                <button
+                  class="flex h-6 w-6 items-center justify-center rounded-full bg-destructive/90 text-white shadow hover:bg-destructive"
+                  onclick={(e) => { e.stopPropagation(); confirmDelete = { id: ss.filename, label: ss.filename }; }}
+                  title="Delete screenshot"
                 >
-                  {ss.caption || ss.filename}
-                </p>
+                  <Trash2 size={12} />
+                </button>
+              </div>
+              
+              <!-- File size and insert hint at bottom -->
+              <div class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent p-1.5 pt-4">
+                <span class="text-[9px] text-white/90 drop-shadow-sm">
+                  {formatSize(ss.sizeBytes)}
+                </span>
+                <span class="rounded border border-white/20 bg-black/40 px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm backdrop-blur-md">
+                  Click to Insert
+                </span>
+              </div>
             </div>
+            <p class="truncate px-1.5 pb-1.5 text-[10px] leading-4 text-muted-foreground" title={ss.filename}>
+              {ss.filename}
+            </p>
           </div>
         {/each}
       </div>
