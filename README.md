@@ -32,8 +32,15 @@ This project also serves as a reference for **agent orchestration** and open-sou
 
 **Workspaces**
 - Isolated workspaces — each with its own note tree
-- General workspaces for everyday notes
-- CTF workspaces unlock engagement tools
+- Pentest workspaces are the default creation type
+- General workspaces remain available for everyday notes
+- Pentest workspaces unlock the methodology checklist and engagement tools
+
+**Templates and Workflow**
+- Command Palette templates insert raw Markdown snippets into the current note
+- Global templates are always available; workspace templates appear when that workspace is active
+- Methodology checklist is available only in pentest workspaces
+- Destructive panel actions use confirmation dialogs
 
 **CTF and Pentest Tools** (CTF workspaces only)
 - Host tracker with port management
@@ -41,6 +48,7 @@ This project also serves as a reference for **agent orchestration** and open-sou
 - Flag tracker
 - Attack chain visualizer
 - Command snippets with variable substitution
+- Operation log, findings tracker, network topology, and CVSS calculator
 
 **AI Integration** (optional)
 - AI chat assistant with current note as context
@@ -142,6 +150,12 @@ git pull
 | File | Contents |
 |------|----------|
 | `AGENTS.md` | 8-agent orchestration pipeline and AI coding agent guidelines |
+| `docs/ARCHITECTURE.md` | Workspace model, runtime data flow, storage layout, sync design |
+| `docs/API.md` | API route contracts, validation rules, templates, screenshots |
+| `docs/COMPONENTS.md` | Component inventory and visible UI surfaces |
+| `docs/ENGAGEMENT_TOOLS.md` | Host tracker, credential vault, flag tracker, findings, topology |
+| `docs/FEATURES.md` | End-user feature guide and UX conventions |
+| `docs/SECURITY.md` | Path traversal, validation, and secret-handling rules |
 | `.github/skills/architecture/SKILL.md` | Data flow, folder structure, design decisions |
 | `.github/skills/coding-standards/SKILL.md` | Code conventions for contributors and AI agents |
 | `.github/skills/commit-conventions/SKILL.md` | Commit message format and examples |
@@ -153,6 +167,7 @@ git pull
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 
 ## License
 

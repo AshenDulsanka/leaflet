@@ -381,18 +381,18 @@
                       <span class="text-[10px] font-medium uppercase tracking-wide {categoryColorMap[entry.category] ?? 'text-muted-foreground'}">
                         {CATEGORIES.find((c) => c.value === entry.category)?.label ?? entry.category}
                       </span>
-                      <div class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <div class="flex items-center gap-0.5">
                         <button
                           onclick={() => startEdit(entry)}
                           title="Edit"
-                          class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                          class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                         >
                           <Pencil size={10} />
                         </button>
                         <button
                           onclick={() => confirmDelete = { id: entry.id, label: entry.description }}
                           title="Delete"
-                          class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
+                          class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-colors"
                         >
                           <Trash2 size={10} />
                         </button>

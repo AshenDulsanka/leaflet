@@ -4,7 +4,7 @@
   import { cubicOut } from 'svelte/easing';
   import { X, Copy, CornerDownLeft, Terminal, FileText, ShieldAlert } from '@lucide/svelte';
   import { DEFAULT_COMMANDS, searchCommands } from '$lib/data/commands';
-  import { NOTE_TEMPLATES, searchTemplates } from '$lib/data/templates';
+  import { searchTemplates } from '$lib/data/templates';
   import type { SnippetCategory, UserTemplate } from '$lib/types';
 
   interface Props {
@@ -249,9 +249,9 @@
               </button>
 
               <!-- Action buttons -->
-              <div class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <div class="flex shrink-0 items-center gap-1">
                 <button
-                  class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                  class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                   title="Copy command to clipboard"
                   onclick={() => copyCommand(cmd.command, cmd.id)}
                 >
@@ -262,7 +262,7 @@
                   {/if}
                 </button>
                 <button
-                  class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                  class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                   title="Insert into editor"
                   onclick={() => insertCommand(cmd.command)}
                 >
@@ -307,9 +307,9 @@
                   {/if}
                 </button>
 
-                <div class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div class="flex shrink-0 items-center gap-1">
                   <button
-                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                     title="Insert template into editor"
                     onclick={() => insertTemplate(tmpl.content)}
                   >
@@ -344,9 +344,9 @@
                   <p class="mt-0.5 text-xs text-muted-foreground">{tmpl.description}</p>
                 </button>
 
-                <div class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div class="flex shrink-0 items-center gap-1">
                   <button
-                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                    class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                     title="Insert template into editor"
                     onclick={() => insertTemplate(tmpl.content)}
                   >

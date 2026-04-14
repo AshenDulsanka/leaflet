@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Test coverage for templates API validation/list/delete flows plus screenshot workspace scoping and helper hardening
+- Test coverage for templates API validation/list/delete flows, screenshot upload and filename metadata routes, workspace-scoped screenshot behaviors, and command search helper matching
 - Nessus and Burp Suite XML import for vulnerability findings — upload scanner exports via the Import button in the Findings Tracker panel; auto-deduplicates by title, maps scanner severity to FindingSeverity, and links findings to tracked hosts by IP (Issue #32)
 - Network Topology Diagram panel for pentest workspaces — interactive canvas with host nodes (colour-coded by status: up/down/rooted/unknown), drag-to-connect edges, position persistence, and Ctrl+Shift+T shortcut (Issue #31, migration v10)
 - DB migration v10: `topo_x`/`topo_y` REAL columns on `hosts` table; `topology_edges` table with `id`, `workspace_id` (FK cascade), `source_host_id`/`target_host_id` (FK cascade), `label`, `created_at`, UNIQUE on `(workspace_id, source_host_id, target_host_id)`; indexes on `workspace_id`, `source_host_id`, `target_host_id`; `TopologyEdge` and `TopologyHost` interfaces added to `src/lib/types.ts`
@@ -27,14 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Built-in AI prompt templates: 12 pentest-oriented prompt presets (recon, exploitation, privesc, post-exploitation, ad-attacks, reporting, general) with `[PLACEHOLDER]` tokens; empty chat state shows categorised template cards that insert the prompt into the composer without auto-sending; active-conversation compact picker accessible via a "Prompts" toggle button above the composer; `AiPromptTemplate` interface and `AiPromptCategory` union added to `src/lib/types.ts`; data module at `src/lib/data/ai-prompts.ts` with `searchAiPrompts` helper covered by unit tests ([#24](https://github.com/AshenDulsanka/leaflet/issues/24))
 - Snippet variable UX: auto-extract `{VAR_NAME}` placeholders from all snippet commands and merge with persisted workspace variables so unset vars appear immediately; debounced autosave (500 ms) on value input; per-variable delete button; bulk "Clear all" button with confirmation; bulk `DELETE /api/workspaces/[id]/variables` endpoint; single-variable `DELETE /api/workspaces/[id]/variables/[varId]` endpoint (workspace-scoped); `extractSnippetVarNames` pure helper in `src/lib/data/commands.ts` with unit tests ([#23](https://github.com/AshenDulsanka/leaflet/issues/23))
 - MITRE ATT&CK technique tagging on attack-chain nodes: migration v6 adds `timestamp`, `mitre_technique_id`, and `mitre_technique_name` columns to `attack_chain_nodes`; MITRE data module (`src/lib/data/mitre-attack.ts`) exposes 130+ techniques with `getMitreTechnique` (exact lookup) and `searchMitreTechniques` (prefix/substring, max 8 results); node PATCH endpoint validates ID format (`T\d{4}(\.\d{3})?`); custom `AttackChainNode` component renders coloured node with linked badge and date; detail drawer in `AttackChainPanel` provides date picker, live MITRE ID search with autocomplete suggestions, and Save (PATCH) action ([#22](https://github.com/AshenDulsanka/leaflet/issues/22))
-- Screenshot captions: inline editable caption field on each screenshot tile in the Screenshots panel; click to edit, saved on blur or Enter via PATCH endpoint ([#21](https://github.com/AshenDulsanka/leaflet/issues/21))
-- Screenshot note linking: link any screenshot to a note via a searchable picker in the Screenshots panel; linked note name displayed with an unlink button ([#21](https://github.com/AshenDulsanka/leaflet/issues/21))
+- Screenshot manager now uses filename labels with inline preview and insert actions; deleting a screenshot requires `ConfirmDialog` confirmation ([#21](https://github.com/AshenDulsanka/leaflet/issues/21))
 - Workspace-scoped screenshot metadata stored in DB (migration v5): `linked_note_path` column added to `screenshot_metadata`, unique index on `(workspace_id, filename)` ([#21](https://github.com/AshenDulsanka/leaflet/issues/21))
 - `ScreenshotMeta` interface added to `src/lib/types.ts` with `caption` and `linked_note_path` fields
 - `PATCH /api/screenshots/[filename]` endpoint for updating caption and linked note path
 - `GET /api/screenshots` extended with optional `?workspaceId=` query parameter to merge DB metadata into response
 - `POST /api/screenshots` extended: saves metadata row when `workspace_id` is provided in formData
-- Insert screenshot into editor now uses caption as markdown alt text (`![caption](url)`)
+- Insert screenshot into editor now uses filename labels in markdown (`![filename](url)`)
 - Host scope status field (`in-scope` / `out-of-scope` / `unknown`) with filter toggle bar and color-coded badges on Host Tracker panel; scope selectable per host in expanded view ([#20](https://github.com/AshenDulsanka/leaflet/issues/20))
 - Screenshot filename link on host entries in Host Tracker — enter a screenshot filename to get a direct link to `/api/screenshots/{filename}` in the expanded host details ([#20](https://github.com/AshenDulsanka/leaflet/issues/20))
 - Note templates via Command Palette — five pentest-oriented templates (Recon, Vulnerability Finding, Exploit Log, Post-Exploitation Checklist, Active Directory) accessible from a new **Templates** tab in the Command Palette; inserting a template writes raw markdown directly into the editor (no bash code-block wrapper); template search filters by title and description; `NoteTemplate` type added to `src/lib/types.ts`; data module at `src/lib/data/templates.ts` with `searchTemplates` helper covered by unit tests ([#19](https://github.com/AshenDulsanka/leaflet/issues/19))
@@ -44,7 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Workspace creation now defaults to `pentest`, with `general` reserved for everyday note-taking
 - User templates are available from the Command Palette as global and workspace-scoped entries
 - Screenshot browsing is workspace-scoped when a workspace ID is supplied, and empty workspace IDs are rejected
-- Destructive panel actions now use confirmation dialogs, while primary panel actions remain visible in the panel chrome
+- Destructive panel actions now use `ConfirmDialog` (including Command Snippets clear-all), while primary panel actions remain visible in the panel chrome
+- Engagement tool action icons are always visible and no longer depend on hover-only affordances
+- Engagement and panel dropdowns now consistently use the shared `Select` component
+- Date/time entry now uses `DateTimePicker`, which wraps native `datetime-local` for a consistent UI
+- Methodology remains pentest-gated and continues to ship with the CPTS preset
 
 ### Removed
 - Markdown report generator panel (`ReportGeneratorPanel.svelte`), its API route (`/api/workspaces/[id]/report`), and all references (toolbar button, `reportOpen` state, mutual-exclusion effect). A standalone report service will be built separately and integrated via API in the future. ([#17](https://github.com/AshenDulsanka/leaflet/issues/17))

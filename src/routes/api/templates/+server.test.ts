@@ -145,6 +145,24 @@ describe('templates POST validation', () => {
     );
   });
 
+  it('rejects a whitespace-only workspaceId with 400', async () => {
+    const db = getDb();
+
+    await expectHttpStatus(
+      () =>
+        POST({
+          request: jsonRequest({
+            title: 'Title',
+            description: 'Description',
+            content: 'Content',
+            workspaceId: '   ',
+          }),
+          locals: { db },
+        } as Parameters<typeof POST>[0]),
+      400
+    );
+  });
+
   it('accepts a valid payload and returns the created row', async () => {
     const workspaceId = randomUUID();
     seedWorkspace(workspaceId);
@@ -175,6 +193,30 @@ describe('templates POST validation', () => {
     expect(created.title).toBe('Incident response checklist');
     expect(created.description).toBe('Pre-filled template for triage');
     expect(created.content).toBe('# Checklist\n- isolate\n- collect evidence');
+  });
+
+  it('accepts a payload without workspaceId and creates a global template', async () => {
+    const db = getDb();
+    const response = await POST({
+      request: jsonRequest({
+        title: 'Global template',
+        description: 'Used when no workspace is selected',
+        content: '# Global\n- item',
+      }),
+      locals: { db },
+    } as Parameters<typeof POST>[0]);
+
+    expect(response.status).toBe(201);
+
+    const created = (await response.json()) as {
+      workspace_id: string | null;
+      title: string;
+      content: string;
+    };
+
+    expect(created.workspace_id).toBeNull();
+    expect(created.title).toBe('Global template');
+    expect(created.content).toBe('# Global\n- item');
   });
 });
 

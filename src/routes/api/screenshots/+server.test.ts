@@ -11,7 +11,7 @@ process.env.NOTES_DATA_DIR = dataDir;
 process.env.SCREENSHOTS_DIR = screenshotsDir;
 
 const { getDb, reloadDb } = await import('$lib/server/database');
-const { GET } = await import('./+server.js');
+const { GET, POST } = await import('./+server.js');
 const { insertScreenshotMetadata } = await import('$lib/server/screenshots');
 
 afterEach(() => {
@@ -100,5 +100,68 @@ describe('screenshots GET workspace scoping', () => {
     const screenshots = (await response.json()) as Array<{ filename: string; sizeBytes: number }>;
     expect(screenshots.map((shot) => shot.filename)).toEqual(['5555555555.webp', '4444444444.png']);
     expect(screenshots.map((shot) => shot.sizeBytes)).toEqual([5, 4]);
+  });
+});
+
+describe('screenshots POST upload', () => {
+  it('stores metadata when workspace_id is provided', async () => {
+    const workspaceId = randomUUID();
+    seedWorkspace(workspaceId);
+
+    const form = new FormData();
+    form.append('image', new File([Buffer.from('png-data')], 'shot.png', { type: 'image/png' }));
+    form.append('workspace_id', workspaceId);
+
+    const response = await POST({
+      request: new Request('http://localhost/api/screenshots', { method: 'POST', body: form }),
+    } as Parameters<typeof POST>[0]);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { url: string };
+    const filename = body.url.split('/').pop();
+
+    expect(filename).toMatch(/^[0-9]+\.(png|jpg|jpeg|gif|webp)$/);
+    await fs.access(join(screenshotsDir, filename!));
+
+    const db = getDb();
+    const row = db
+      .prepare('SELECT workspace_id, filename FROM screenshot_metadata WHERE workspace_id = ? AND filename = ?')
+      .get(workspaceId, filename) as { workspace_id: string; filename: string } | undefined;
+
+    expect(row?.workspace_id).toBe(workspaceId);
+    expect(row?.filename).toBe(filename);
+  });
+
+  it('does not create metadata when workspace_id is omitted', async () => {
+    const form = new FormData();
+    form.append('image', new File([Buffer.from('image')], 'shot.png', { type: 'image/png' }));
+
+    const response = await POST({
+      request: new Request('http://localhost/api/screenshots', { method: 'POST', body: form }),
+    } as Parameters<typeof POST>[0]);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { url: string };
+    const filename = body.url.split('/').pop();
+
+    const db = getDb();
+    const countRow = db
+      .prepare('SELECT COUNT(*) as count FROM screenshot_metadata WHERE filename = ?')
+      .get(filename) as { count: number };
+
+    expect(countRow.count).toBe(0);
+  });
+
+  it('rejects unsupported image types with 400', async () => {
+    const form = new FormData();
+    form.append('image', new File([Buffer.from('gif')], 'not-image.txt', { type: 'text/plain' }));
+
+    await expectHttpStatus(
+      () =>
+        POST({
+          request: new Request('http://localhost/api/screenshots', { method: 'POST', body: form }),
+        } as Parameters<typeof POST>[0]),
+      400
+    );
   });
 });

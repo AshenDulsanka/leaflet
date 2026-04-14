@@ -13,5 +13,5 @@
   {value}
   oninput={(e) => onchange(e.currentTarget.value)}
   {placeholder}
-  class="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary [color-scheme:dark] {className}"
+  class="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px] text-foreground shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-primary hover:border-border/80 [color-scheme:dark] {className}"
 />

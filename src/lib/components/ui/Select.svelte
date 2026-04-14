@@ -85,7 +85,7 @@
     }}
     onkeydown={handleKeydown}
     {disabled}
-    class="flex w-full min-w-32 items-center justify-between gap-2 rounded border border-border bg-background {sizeClasses} text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+    class="flex w-full min-w-32 items-center justify-between gap-2 rounded-md border border-border bg-background shadow-sm {sizeClasses} text-foreground hover:bg-accent focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
     aria-haspopup="listbox"
     aria-expanded={open}
   >
