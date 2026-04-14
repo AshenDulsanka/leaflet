@@ -7,7 +7,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 const tempRoot = join(tmpdir(), `leaflet-templates-test-${randomUUID()}`);
 process.env.NOTES_DATA_DIR = join(tempRoot, 'data');
 
-const { getDb, reloadDb } = await import('$lib/server/database');
+const { getDb, reloadDb } = await import('$lib/server/database.js');
 const { GET, POST } = await import('./+server.js');
 const { DELETE } = await import('./[id]/+server.js');
 
