@@ -265,7 +265,7 @@ describe('templates DELETE by id', () => {
     );
   });
 
-  it('removes the template row on success', () => {
+  it('removes the template row on success', async () => {
     const db = getDb();
     const id = randomUUID();
     seedTemplate({
@@ -277,7 +277,7 @@ describe('templates DELETE by id', () => {
       createdAt: '2026-04-14T00:00:00.000Z',
     });
 
-    const response = DELETE({ params: { id }, locals: { db } } as Parameters<typeof DELETE>[0]);
+    const response = await DELETE({ params: { id }, locals: { db } } as Parameters<typeof DELETE>[0]);
 
     expect(response.status).toBe(204);
 
