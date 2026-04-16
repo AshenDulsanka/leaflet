@@ -36,9 +36,10 @@
     onOpenTopology?: () => void;
     hasWorkspace?: boolean;
     isPentest?: boolean;
+    isCpts?: boolean;
   }
 
-  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenOperationLog, onOpenCvssCalculator, onOpenFindingsTracker, onOpenTopology, hasWorkspace = false, isPentest = false }: Props =
+  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenOperationLog, onOpenCvssCalculator, onOpenFindingsTracker, onOpenTopology, hasWorkspace = false, isPentest = false, isCpts = false }: Props =
     $props();
 
   let activeDialog: 'note' | 'folder' | null = $state(null);
@@ -109,7 +110,7 @@
   </div>
 
   <div class="flex items-center gap-0.5">
-    {#if isPentest}
+    {#if isCpts}
       <!-- Methodology checklist -->
       <button
         title="Methodology checklist (Ctrl+.)"

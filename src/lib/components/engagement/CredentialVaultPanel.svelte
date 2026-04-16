@@ -21,9 +21,10 @@
   interface Props {
     workspaceId: string | null;
     onClose: () => void;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { workspaceId, onClose }: Props = $props();
+  let { workspaceId, onClose, uiMode = 'modal' }: Props = $props();
 
   let credentials = $state<Credential[]>([]);
   let loading = $state(false);
@@ -184,7 +185,7 @@
     </div>
   {:else}
     <!-- Add-credential form -->
-    {#if addingCred}
+    {#if addingCred && uiMode === 'inline'}
       <div class="border-b border-border bg-muted/40 p-3 space-y-2">
         <div class="flex gap-2">
           <input
@@ -275,8 +276,11 @@
               <span class="rounded border px-1 py-0.5 text-[9px] font-medium uppercase {statusColors[cred.status] ?? statusColors.unknown}">
                 {typeLabels[cred.credential_type] ?? cred.credential_type}
               </span>
-              <span class="flex-1 truncate text-xs font-medium">
-                {cred.domain ? `${cred.domain}\\` : ''}{cred.username || '(no username)'}
+              <span class="min-w-0 flex-1 text-xs">
+                {#if cred.domain}
+                  <span class="font-medium text-muted-foreground">{cred.domain}\</span>
+                {/if}
+                <span class="font-medium">{cred.username || '(no username)'}</span>
               </span>
               <div class="flex items-center gap-0.5">
                 {#if cred.username}
@@ -322,12 +326,99 @@
                 {/if}
               </button>
             </div>
+            {#if cred.source}
+              <p class="mt-0.5 text-[10px] text-muted-foreground">via {cred.source}</p>
+            {/if}
           </div>
         {/each}
       {/if}
     </div>
   {/if}
 </div>
+
+{#if addingCred && uiMode === 'modal'}
+  <!-- Backdrop -->
+  <div
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    role="button"
+    tabindex="-1"
+    onclick={() => (addingCred = false)}
+    onkeydown={(e) => { if (e.key === 'Escape') addingCred = false; }}
+    aria-label="Close form"
+  ></div>
+  <!-- Modal -->
+  <div
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Add Credential"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <KeyRound size={14} class="text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Add Credential</h2>
+      <button onclick={() => (addingCred = false)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+    </div>
+    <div class="space-y-3 px-5 py-4">
+      <div class="flex gap-2">
+        <input
+          type="text"
+          placeholder="Username"
+          bind:value={newUsername}
+          class="flex-1 rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <input
+          type="text"
+          placeholder="Domain"
+          bind:value={newDomain}
+          class="w-24 rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+      <input
+        type="text"
+        placeholder="Secret (password / hash / key)"
+        bind:value={newSecret}
+        class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        onkeydown={(e) => { if (e.key === 'Enter') addCredential(); if (e.key === 'Escape') addingCred = false; }}
+      />
+      <div class="flex gap-2">
+        <Select
+          size="sm"
+          value={newCredType}
+          onchange={(v) => newCredType = v as Credential['credential_type']}
+          options={[
+            { value: 'password', label: 'Password' },
+            { value: 'hash', label: 'Hash' },
+            { value: 'key', label: 'SSH Key' },
+            { value: 'ticket', label: 'Kerberos Ticket' },
+            { value: 'token', label: 'Token' },
+            { value: 'other', label: 'Other' }
+          ]}
+        />
+        <Select
+          size="sm"
+          value={newStatus}
+          onchange={(v) => newStatus = v as Credential['status']}
+          options={[
+            { value: 'unknown', label: 'Unknown' },
+            { value: 'valid', label: 'Valid' },
+            { value: 'invalid', label: 'Invalid' },
+            { value: 'expired', label: 'Expired' }
+          ]}
+        />
+      </div>
+      <input
+        type="text"
+        placeholder="Source (e.g. SMB share, /etc/passwd)"
+        bind:value={newSource}
+        class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </div>
+    <div class="flex gap-2 border-t border-border px-5 py-3">
+      <button onclick={addCredential} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Credential</button>
+      <button onclick={() => (addingCred = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
+    </div>
+  </div>
+{/if}
 
 {#if confirmDelete !== null}
   {@const pending = confirmDelete}

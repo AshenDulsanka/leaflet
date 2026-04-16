@@ -260,8 +260,8 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div
-  class="flex h-full w-96 flex-shrink-0 flex-col border-l border-border bg-card"
-  transition:fly={{ x: 384, duration: 200, easing: cubicOut }}
+  class="absolute right-0 top-0 flex h-full w-80 flex-shrink-0 flex-col border-l border-border bg-card"
+  transition:fly={{ x: 320, duration: 200, easing: cubicOut }}
 >
   <!-- Header -->
   <div class="flex h-9 items-center justify-between border-b border-border px-3">

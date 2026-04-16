@@ -8,6 +8,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `WorkspaceCreateModal` CPTS preset toggle — when creating a pentest workspace a checkbox enables the `cpts` preset; the selected preset is stored as `preset = 'cpts'` in the DB and returned on workspace load
+- Methodology toolbar button (`ListChecks`) is now gated to `activeWorkspace.preset === 'cpts'`; pentest workspaces without the CPTS preset no longer show the methodology checklist button
+- Workspace drag-to-reorder in Sidebar — drag a workspace tab to reorder; new position is persisted immediately via `PATCH /api/workspaces/reorder`
+- Workspace right-click context menu in Sidebar — right-clicking a workspace name shows Rename and Delete options as a floating context menu
+- File tree root drop zone — files dragged above the `FileTree` component can be dropped to move them to the workspace root folder
+- Right panel drag-resize — dragging the left edge of the right panel resizes it between 240–600 px; width resets on panel close
+- Host Tracker add-host form: initial port entry field and screenshot association (dropdown of existing workspace screenshots with upload fallback)
+- Engagement panel modal mode: all 6 engagement panels (`HostTracker`, `CredVault`, `FlagTracker`, `OperationLog`, `FindingsTracker`, `AttackChain`) accept a `uiMode: 'modal' | 'inline'` prop (default `'modal'`); in modal mode, add forms open as centered overlay dialogs instead of inline expanding sections
+- Interaction mode setting in Settings modal — new "Interaction" section toggles between `modal` (default) and `inline` form mode for all engagement panels; preference persisted in `localStorage`
+
+### Fixed
+- Screenshot panel "Click to Insert" overlay is now hover-only (was always visible)
+- Screenshot panel delete `ConfirmDialog` moved outside the `overflow-hidden` aside element so it renders without clipping
+- Dialog button order: confirm/action button is now on the LEFT, cancel on the RIGHT (platform convention)
+- Right panel width no longer flashes when toggling between panels — controlled-width wrapper maintains stable layout
+- Credential Vault: domain and username are now fully visible; source field is shown under the credential row
+- Flag Tracker: delete button is now in the same flex row as the copy button
+
+### Security
+- Workspace folder creation now routes through `safePath()` instead of direct `path.join` (path traversal prevention)
+- Workspace type field validated against `['cpts']` allowlist in `POST /api/workspaces`; numeric fields validated as integers in `PATCH` handler
+- `PATCH /api/workspaces/reorder` hardened: array length capped at 200, IDs deduplicated before processing, workspace-not-found error no longer echoes the supplied ID
+- `GET /api/mitre` error response returns a generic message instead of the upstream HTTP status code
+
+### Added
+- DB migration v12: `preset TEXT` and `sort_order INTEGER NOT NULL DEFAULT 0` columns on `workspaces` table; default seeded workspace now sets `preset = 'cpts'`; `preset` and `sort_order` fields added to the `Workspace` interface in `src/lib/types.ts`
+- `PATCH /api/workspaces/reorder` — accepts `{ order: string[] }` (workspace IDs in desired display order) and updates each workspace's `sort_order` in a single transaction; validates all IDs exist before committing
+- `GET /api/mitre` — proxies the MITRE Enterprise ATT&CK STIX bundle from GitHub raw, extracts `attack-pattern` objects into a typed `MitreTechnique` array (external_id, name, tactic, description, url), caches in-memory for 24 hours, returns 503 on upstream failure
+- `workspaceId` prop on `Editor` component; when set, screenshot uploads via paste/drag-drop include `workspace_id` in the FormData so screenshots are workspace-scoped in the DB
+
+### Changed
+- `GET /api/workspaces` now orders results by `sort_order ASC, created_at ASC` (previously `created_at DESC`)
+- `POST /api/workspaces` accepts optional `preset` field; validated against `['cpts']` allowlist (400 on invalid value)
+- `PATCH /api/workspaces/[id]` allows `sort_order` as an updatable field
+
+### Added
 - Test coverage for templates API validation/list/delete flows, screenshot upload and filename metadata routes, workspace-scoped screenshot behaviors, and command search helper matching
 - Nessus and Burp Suite XML import for vulnerability findings — upload scanner exports via the Import button in the Findings Tracker panel; auto-deduplicates by title, maps scanner severity to FindingSeverity, and links findings to tracked hosts by IP (Issue #32)
 - Network Topology Diagram panel for pentest workspaces — interactive canvas with host nodes (colour-coded by status: up/down/rooted/unknown), drag-to-connect edges, position persistence, and Ctrl+Shift+T shortcut (Issue #31, migration v10)
@@ -40,14 +76,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Copy-to-clipboard buttons on all engagement panel values (HostTracker IP/hostname/ports, CredentialVault username/secret, FlagTracker flag values) via shared `CopyButton` component with 1.5 s green-check confirmation state ([#18](https://github.com/AshenDulsanka/leaflet/issues/18))
 
 ### Changed
-- Workspace creation now defaults to `pentest`, with `general` reserved for everyday note-taking
-- User templates are available from the Command Palette as global and workspace-scoped entries
-- Screenshot browsing is workspace-scoped when a workspace ID is supplied, and empty workspace IDs are rejected
-- Destructive panel actions now use `ConfirmDialog` (including Command Snippets clear-all), while primary panel actions remain visible in the panel chrome
-- Engagement tool action icons are always visible and no longer depend on hover-only affordances
-- Engagement and panel dropdowns now consistently use the shared `Select` component
-- Date/time entry now uses `DateTimePicker`, which wraps native `datetime-local` for a consistent UI
+- Screenshot listing is workspace-scoped when `workspaceId` is supplied, and empty workspace IDs are rejected
+- Screenshot manager cards now use filename labels with preview/insert/delete actions; caption and linked-note controls are no longer exposed in that UI
+- Destructive actions now use `ConfirmDialog` instead of native `confirm()` dialogs
+- Sidebar workspace controls now support workspace rename and delete actions
+- The first-run seeded default workspace is now `pentest`
+- User templates in Command Palette include both global templates and workspace-scoped templates
 - Methodology remains pentest-gated and continues to ship with the CPTS preset
+- Methodology, AI chat, and engagement panels now follow mutual-exclusion behavior
+- Engagement and panel dropdowns now consistently use the shared `Select` component
+- Date/time fields now use `DateTimePicker`, a wrapper around native `datetime-local`
+- Engagement tool action icons are always visible instead of hover-only
 
 ### Removed
 - Markdown report generator panel (`ReportGeneratorPanel.svelte`), its API route (`/api/workspaces/[id]/report`), and all references (toolbar button, `reportOpen` state, mutual-exclusion effect). A standalone report service will be built separately and integrated via API in the future. ([#17](https://github.com/AshenDulsanka/leaflet/issues/17))

@@ -5,7 +5,6 @@
   import Select from '$lib/components/ui/Select.svelte';
   import { calculateCvss, METRIC_OPTIONS } from '$lib/data/cvss';
   import type { CvssMetrics } from '$lib/data/cvss';
-  import { searchMitreTechniques } from '$lib/data/mitre-attack';
   import { FINDING_TEMPLATES, searchFindingTemplates } from '$lib/data/finding-templates';
   import type { Finding, FindingSeverity, FindingStatus, FindingTemplate, FindingTemplateCategory } from '$lib/types';
 
@@ -15,12 +14,21 @@
     hostname: string;
   }
 
+  interface MitreTechnique {
+    external_id: string;
+    name: string;
+    tactic: string;
+    description: string;
+    url: string;
+  }
+
   interface Props {
     workspaceId: string | null;
     onClose: () => void;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { workspaceId, onClose }: Props = $props();
+  let { workspaceId, onClose, uiMode = 'modal' }: Props = $props();
 
   let findings = $state<Finding[]>([]);
   let hosts = $state<HostOption[]>([]);
@@ -29,6 +37,8 @@
   let importStatus = $state<{ imported: number; skipped: number } | null>(null);
   let importing = $state(false);
   let fileInputEl = $state<HTMLInputElement | null>(null);
+  let mitreData = $state<MitreTechnique[]>([]);
+  let mitreLoading = $state(false);
 
   // ─── Add form state ────────────────────────────────────────────────────────
   let newTitle = $state('');
@@ -127,9 +137,35 @@
   const newCvssResult  = $derived(calculateCvss(newMetrics));
   const editCvssResult = $derived(calculateCvss(editMetrics));
 
-  // Suppress suggestions once a technique is selected (newMitreTechId non-empty)
-  const newMitreSuggestions  = $derived(newMitreTechId  ? [] : searchMitreTechniques(newMitreQuery));
-  const editMitreSuggestions = $derived(editMitreTechId ? [] : searchMitreTechniques(editMitreQuery));
+  // Suppress suggestions once a technique is selected; filter live MITRE data client-side
+  const newMitreSuggestions = $derived(
+    newMitreTechId || !newMitreQuery.trim()
+      ? []
+      : mitreData
+          .filter((t) => {
+            const q = newMitreQuery.toLowerCase();
+            return (
+              t.external_id.toLowerCase().includes(q) ||
+              t.name.toLowerCase().includes(q) ||
+              t.tactic.toLowerCase().includes(q)
+            );
+          })
+          .slice(0, 10)
+  );
+  const editMitreSuggestions = $derived(
+    editMitreTechId || !editMitreQuery.trim()
+      ? []
+      : mitreData
+          .filter((t) => {
+            const q = editMitreQuery.toLowerCase();
+            return (
+              t.external_id.toLowerCase().includes(q) ||
+              t.name.toLowerCase().includes(q) ||
+              t.tactic.toLowerCase().includes(q)
+            );
+          })
+          .slice(0, 10)
+  );
 
   const filteredFindings = $derived(
     findings.filter(
@@ -176,6 +212,11 @@
       loadFindings();
       loadHosts();
     }
+  });
+
+  // ─── Load MITRE data once on mount ─────────────────────────────────────────
+  $effect(() => {
+    loadMitreData();
   });
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -231,6 +272,8 @@
         const data = (await res.json()) as { imported: number; skipped: number };
         importStatus = data;
         if (data.imported > 0) await loadFindings();
+      } else {
+        console.error('Failed to import findings:', { workspaceId, status: res.status });
       }
     } finally {
       importing = false;
@@ -245,6 +288,10 @@
     loading = true;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/findings`);
+      if (!res.ok) {
+        console.error('Failed to load findings:', { workspaceId, status: res.status });
+        return;
+      }
       findings = await res.json();
     } catch {
       console.error('Failed to load findings');
@@ -257,6 +304,10 @@
     if (!workspaceId) return;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/hosts`);
+      if (!res.ok) {
+        console.error('Failed to load hosts:', { workspaceId, status: res.status });
+        return;
+      }
       const data = await res.json();
       hosts = (data as Array<{ id: string; ip: string; hostname: string }>).map((h) => ({
         id: h.id,
@@ -265,6 +316,23 @@
       }));
     } catch {
       console.error('Failed to load hosts');
+    }
+  }
+
+  async function loadMitreData(): Promise<void> {
+    if (mitreData.length > 0) return; // already loaded
+    mitreLoading = true;
+    try {
+      const res = await fetch('/api/mitre');
+      if (!res.ok) {
+        console.error('Failed to fetch MITRE data:', res.status);
+        return;
+      }
+      mitreData = await res.json();
+    } catch (err) {
+      console.error('Failed to fetch MITRE data:', err);
+    } finally {
+      mitreLoading = false;
     }
   }
 
@@ -502,7 +570,7 @@
     <div class="flex-1 overflow-y-auto">
 
       <!-- Add-finding form -->
-      {#if addingFinding}
+      {#if addingFinding && uiMode === 'inline'}
         <div class="space-y-2 border-b border-border bg-muted/40 p-3">
           <!-- Template picker (collapsible) -->
           <div class="rounded border border-border bg-background">
@@ -682,20 +750,21 @@
             {:else}
               <input
                 type="text"
-                placeholder="Search MITRE ATT&CK technique..."
+                placeholder={mitreLoading ? 'Loading MITRE data...' : mitreData.length === 0 ? 'No MITRE data' : 'Search MITRE ATT&CK technique...'}
                 bind:value={newMitreQuery}
-                class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                disabled={mitreLoading}
+                class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
               />
               {#if newMitreSuggestions.length > 0}
                 <ul class="absolute left-0 right-0 top-full z-10 mt-0.5 max-h-40 overflow-y-auto rounded border border-border bg-popover shadow-md">
-                  {#each newMitreSuggestions as technique (technique.id)}
+                  {#each newMitreSuggestions as technique (technique.external_id)}
                     <li>
                       <button
                         type="button"
-                        onclick={() => { newMitreTechId = technique.id; newMitreTechName = technique.name; newMitreQuery = ''; }}
+                        onclick={() => { newMitreTechId = technique.external_id; newMitreTechName = technique.name; newMitreQuery = ''; }}
                         class="flex w-full flex-col px-2 py-1.5 text-left hover:bg-accent"
                       >
-                        <span class="font-mono text-[10px] font-semibold text-primary">{technique.id}</span>
+                        <span class="font-mono text-[10px] font-semibold text-primary">{technique.external_id}</span>
                         <span class="text-[10px] text-foreground">{technique.name}</span>
                         <span class="text-[10px] text-muted-foreground">{technique.tactic}</span>
                       </button>
@@ -853,20 +922,21 @@
                     {:else}
                       <input
                         type="text"
-                        placeholder="Search MITRE ATT&CK technique..."
+                        placeholder={mitreLoading ? 'Loading MITRE data...' : mitreData.length === 0 ? 'No MITRE data' : 'Search MITRE ATT&CK technique...'}
                         bind:value={editMitreQuery}
-                        class="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                        disabled={mitreLoading}
+                        class="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
                       />
                       {#if editMitreSuggestions.length > 0}
                         <ul class="absolute left-0 right-0 top-full z-10 mt-0.5 max-h-40 overflow-y-auto rounded border border-border bg-popover shadow-md">
-                          {#each editMitreSuggestions as technique (technique.id)}
+                          {#each editMitreSuggestions as technique (technique.external_id)}
                             <li>
                               <button
                                 type="button"
-                                onclick={() => { editMitreTechId = technique.id; editMitreTechName = technique.name; editMitreQuery = ''; }}
+                                onclick={() => { editMitreTechId = technique.external_id; editMitreTechName = technique.name; editMitreQuery = ''; }}
                                 class="flex w-full flex-col px-2 py-1.5 text-left hover:bg-accent"
                               >
-                                <span class="font-mono text-[10px] font-semibold text-primary">{technique.id}</span>
+                                <span class="font-mono text-[10px] font-semibold text-primary">{technique.external_id}</span>
                                 <span class="text-[10px] text-foreground">{technique.name}</span>
                                 <span class="text-[10px] text-muted-foreground">{technique.tactic}</span>
                               </button>
@@ -959,3 +1029,237 @@
     </div>
   {/if}
 </div>
+
+{#if addingFinding && uiMode === 'modal'}
+  <!-- Backdrop -->
+  <div
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    role="button"
+    tabindex="-1"
+    onclick={resetAddForm}
+    onkeydown={(e) => { if (e.key === 'Escape') resetAddForm(); }}
+    aria-label="Close form"
+  ></div>
+  <!-- Modal -->
+  <div
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Add Finding"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <Bug size={16} class="shrink-0 text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Add Finding</h2>
+      <button onclick={resetAddForm} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+    </div>
+    <div class="space-y-3 px-5 py-4 max-h-[60vh] overflow-y-auto">
+      <!-- Template picker (collapsible) -->
+      <div class="rounded border border-border bg-background">
+        <button
+          type="button"
+          onclick={() => { showTemplates = !showTemplates; templateQuery = ''; templateCategory = 'all'; }}
+          class="flex w-full items-center justify-between px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <span class="flex items-center gap-1.5">
+            <BookOpen size={11} />
+            Use Template
+          </span>
+          <ChevronDown
+            size={11}
+            class="transition-transform duration-150 {showTemplates ? 'rotate-180' : ''}"
+          />
+        </button>
+
+        {#if showTemplates}
+          <div class="border-t border-border px-2 py-1.5">
+            <input
+              type="text"
+              placeholder="Search templates..."
+              bind:value={templateQuery}
+              class="w-full rounded border border-border bg-muted px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+          <div class="flex gap-1 overflow-x-auto px-2 pb-1.5">
+            {#each TEMPLATE_CATEGORIES as cat (cat.value)}
+              <button
+                type="button"
+                onclick={() => (templateCategory = cat.value)}
+                class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors {templateCategory === cat.value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'}"
+              >
+                {cat.label}
+              </button>
+            {/each}
+          </div>
+          <ul class="max-h-44 overflow-y-auto border-t border-border">
+            {#if filteredTemplates.length === 0}
+              <li class="px-2 py-3 text-center text-[10px] text-muted-foreground">No templates match</li>
+            {:else}
+              {#each filteredTemplates as tpl (tpl.id)}
+                <li>
+                  <button
+                    type="button"
+                    onclick={() => applyTemplate(tpl)}
+                    class="flex w-full flex-col gap-0.5 px-2 py-1.5 text-left hover:bg-accent"
+                  >
+                    <span class="text-xs font-medium text-foreground">{tpl.title}</span>
+                    <span class="line-clamp-1 text-[10px] text-muted-foreground">{tpl.description}</span>
+                  </button>
+                </li>
+              {/each}
+            {/if}
+          </ul>
+        {/if}
+      </div>
+
+      <!-- Title -->
+      <input
+        type="text"
+        placeholder="Finding title (required)"
+        bind:value={newTitle}
+        class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+      <!-- Description -->
+      <textarea
+        placeholder="Description (optional)"
+        bind:value={newDescription}
+        rows={2}
+        class="w-full resize-none rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+      ></textarea>
+
+      <!-- CVSS Metric Pickers -->
+      <div class="space-y-1.5 rounded border border-border bg-background p-2">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          CVSS 3.1 Metrics
+        </p>
+        {#each METRIC_OPTIONS as metric (metric.key)}
+          <div>
+            <p class="mb-1 text-[10px] text-muted-foreground">{metric.label}</p>
+            <div class="flex flex-wrap gap-1">
+              {#each metric.options as opt (opt.value)}
+                <button
+                  type="button"
+                  onclick={() => { newMetrics = { ...newMetrics, [metric.key]: opt.value }; }}
+                  class="rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors {newMetrics[metric.key] === opt.value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-accent'}"
+                >
+                  {opt.abbr} – {opt.label}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/each}
+        <!-- Live score display -->
+        {#if newCvssResult}
+          <div class="mt-1 flex items-center gap-2">
+            <span class="text-sm font-bold tabular-nums">{newCvssResult.score.toFixed(1)}</span>
+            <span class="text-[10px] text-muted-foreground">/ 10.0 · {newCvssResult.severity}</span>
+          </div>
+        {:else if newCvssScore > 0}
+          <div class="mt-1 flex items-center gap-2">
+            <span class="text-sm font-bold tabular-nums">{newCvssScore.toFixed(1)}</span>
+            <span class="text-[10px] text-muted-foreground">/ 10.0</span>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Severity + Status row -->
+      <div class="flex gap-2">
+        <Select
+          size="sm"
+          value={newSeverity}
+          onchange={(v) => {
+            newSeverity = v as FindingSeverity;
+            cvssAutoFilled = false;
+          }}
+          class="flex-1"
+          options={SEVERITIES.map((sev) => ({ value: sev.value, label: sev.label }))}
+        />
+        <Select
+          size="sm"
+          value={newStatus}
+          onchange={(v) => (newStatus = v as FindingStatus)}
+          class="flex-1"
+          options={STATUSES.map((st) => ({ value: st.value, label: st.label }))}
+        />
+      </div>
+
+      <!-- Host dropdown -->
+      <Select
+        size="sm"
+        value={newHostId}
+        onchange={(v) => (newHostId = v)}
+        class="w-full"
+        options={[
+          { value: '', label: 'No host' },
+          ...hosts.map((h) => ({
+            value: h.id,
+            label: h.hostname ? `${h.ip} (${h.hostname})` : h.ip
+          }))
+        ]}
+      />
+
+      <!-- Note path -->
+      <input
+        type="text"
+        placeholder="Note path (optional)"
+        bind:value={newNotePath}
+        class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+
+      <!-- MITRE ATT&CK technique -->
+      <div class="relative">
+        {#if newMitreTechId}
+          <div class="flex items-center justify-between rounded border border-border bg-background px-2 py-1">
+            <div class="flex min-w-0 flex-col">
+              <span class="font-mono text-[10px] font-semibold text-primary">{newMitreTechId}</span>
+              <span class="truncate text-[10px] text-muted-foreground">{newMitreTechName}</span>
+            </div>
+            <button
+              type="button"
+              onclick={() => { newMitreTechId = ''; newMitreTechName = ''; newMitreQuery = ''; }}
+              class="ml-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Remove MITRE tag"
+            >
+              <X size={10} />
+            </button>
+          </div>
+        {:else}
+          <input
+            type="text"
+            placeholder={mitreLoading ? 'Loading MITRE data...' : mitreData.length === 0 ? 'No MITRE data' : 'Search MITRE ATT&CK technique...'}
+            bind:value={newMitreQuery}
+            disabled={mitreLoading}
+            class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
+          />
+          {#if newMitreSuggestions.length > 0}
+            <ul class="absolute left-0 right-0 top-full z-10 mt-0.5 max-h-40 overflow-y-auto rounded border border-border bg-popover shadow-md">
+              {#each newMitreSuggestions as technique (technique.external_id)}
+                <li>
+                  <button
+                    type="button"
+                    onclick={() => { newMitreTechId = technique.external_id; newMitreTechName = technique.name; newMitreQuery = ''; }}
+                    class="flex w-full flex-col px-2 py-1.5 text-left hover:bg-accent"
+                  >
+                    <span class="font-mono text-[10px] font-semibold text-primary">{technique.external_id}</span>
+                    <span class="text-[10px] text-foreground">{technique.name}</span>
+                    <span class="text-[10px] text-muted-foreground">{technique.tactic}</span>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        {/if}
+      </div>
+    </div>
+    <div class="flex gap-2 border-t border-border px-5 py-3">
+      <button onclick={addFinding} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Finding</button>
+      <button onclick={resetAddForm} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
+    </div>
+  </div>
+{/if}
+

@@ -29,10 +29,23 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
   const { db } = locals;
   const body = await request.json() as Record<string, unknown>;
 
-  const allowed = ['name', 'type', 'icon_color', 'exam_start_date', 'exam_duration_days', 'total_flags', 'passing_flags'];
+  const allowed = ['name', 'type', 'icon_color', 'exam_start_date', 'exam_duration_days', 'total_flags', 'passing_flags', 'sort_order'];
   const updates: string[] = [];
   const values: unknown[] = [];
 
+  const TYPE_ALLOWLIST = new Set(['general', 'ctf', 'pentest']);
+  if ('type' in body && typeof body.type === 'string' && !TYPE_ALLOWLIST.has(body.type)) {
+    return json({ error: 'Invalid workspace type' }, { status: 400 });
+  }
+
+  const numericFields = new Set(['exam_duration_days', 'total_flags', 'passing_flags', 'sort_order']);
+  for (const key of allowed) {
+    if (key in body && numericFields.has(key) && !Number.isInteger(body[key as keyof typeof body])) {
+      return json({ error: `${key} must be an integer` }, { status: 400 });
+    }
+  }
+
+  // Column names are safe: allowed is a hardcoded Set; values are parameterised with ?
   for (const key of allowed) {
     if (key in body) {
       updates.push(`${key} = ?`);

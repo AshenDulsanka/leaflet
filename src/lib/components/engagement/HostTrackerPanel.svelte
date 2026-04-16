@@ -34,9 +34,10 @@
   interface Props {
     workspaceId: string | null;
     onClose: () => void;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { workspaceId, onClose }: Props = $props();
+  let { workspaceId, onClose, uiMode = 'modal' }: Props = $props();
 
   let hosts = $state<Host[]>([]);
   let loading = $state(false);
@@ -51,6 +52,15 @@
   let newOs = $state('');
   let newStatus = $state('unknown');
   let newScope = $state<Scope>('unknown');
+
+  // Add-host: initial port
+  let newPortsOnCreate = $state<Array<{ number: string; protocol: string; service: string }>>([]);
+
+  // Add-host: screenshot
+  let availableScreenshots = $state<Array<{ filename: string; url: string }>>([]);
+  let screenshotsLoading = $state(false);
+  let newScreenshotChoice = $state<string>(''); // selected filename from dropdown, or '' for none, or 'upload' for file upload
+  let screenshotUploadFile = $state<File | null>(null);
 
   // Add-port form
   let addingPortFor = $state<string | null>(null);
@@ -109,6 +119,29 @@
     }
   }
 
+  async function loadScreenshots(): Promise<void> {
+    if (!workspaceId) return;
+    screenshotsLoading = true;
+    try {
+      const res = await fetch(`/api/screenshots?workspaceId=${encodeURIComponent(workspaceId)}`);
+      if (res.ok) availableScreenshots = await res.json();
+    } catch (err) {
+      console.error('[HostTracker] Failed to load screenshots:', err);
+    } finally {
+      screenshotsLoading = false;
+    }
+  }
+
+  function openAddForm(): void {
+    addingHost = !addingHost;
+    if (addingHost) {
+      newPortsOnCreate = [];
+      newScreenshotChoice = '';
+      screenshotUploadFile = null;
+      loadScreenshots();
+    }
+  }
+
   async function addHost(): Promise<void> {
     if (!workspaceId || !newIp.trim()) return;
     try {
@@ -123,11 +156,56 @@
       }
       const host: Host = await res.json();
       hosts = [...hosts, host];
+
+      // Add initial ports
+      for (const p of newPortsOnCreate) {
+        const num = parseInt(p.number);
+        if (isNaN(num) || num < 1 || num > 65535) continue;
+        const pRes = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: num, protocol: p.protocol, service: p.service.trim(), state: 'open' })
+        });
+        if (pRes.ok) {
+          const port: Port = await pRes.json();
+          hosts = hosts.map((h) => h.id === host.id ? { ...h, ports: [...h.ports, port] } : h);
+        }
+      }
+
+      // Handle screenshot
+      let screenshotFilename = '';
+      if (newScreenshotChoice && newScreenshotChoice !== 'upload') {
+        screenshotFilename = newScreenshotChoice;
+      } else if (newScreenshotChoice === 'upload' && screenshotUploadFile) {
+        const fd = new FormData();
+        fd.append('image', screenshotUploadFile);
+        fd.append('workspace_id', workspaceId);
+        const upRes = await fetch('/api/screenshots', { method: 'POST', body: fd });
+        if (upRes.ok) {
+          const data = await upRes.json() as { url: string };
+          screenshotFilename = data.url.replace('/api/screenshots/', '');
+        }
+      }
+      if (screenshotFilename) {
+        const patchRes = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ screenshot_filename: screenshotFilename })
+        });
+        if (patchRes.ok) {
+          hosts = hosts.map((h) => h.id === host.id ? { ...h, screenshot_filename: screenshotFilename } : h);
+        }
+      }
+
+      // Reset form
       newIp = '';
       newHostname = '';
       newOs = '';
       newStatus = 'unknown';
       newScope = 'unknown';
+      newPortsOnCreate = [];
+      newScreenshotChoice = '';
+      screenshotUploadFile = null;
       addingHost = false;
       expandedHost = host.id;
     } catch (err) {
@@ -266,7 +344,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div
-  class="flex h-full w-80 flex-shrink-0 flex-col border-l border-border bg-card"
+  class="absolute right-0 top-0 flex h-full w-80 flex-shrink-0 flex-col border-l border-border bg-card"
   transition:fly={{ x: 320, duration: 200, easing: cubicOut }}
 >
   <!-- Header -->
@@ -291,7 +369,7 @@
         <FileInput size={12} />
       </button>
       <button
-        onclick={() => (addingHost = !addingHost)}
+        onclick={openAddForm}
         title="Add host"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
@@ -313,8 +391,8 @@
       <p class="text-center text-xs text-muted-foreground">Select a workspace to track hosts</p>
     </div>
   {:else}
-    <!-- Add-host form -->
-    {#if addingHost}
+    <!-- Add-host form (Inline) -->
+    {#if addingHost && uiMode === 'inline'}
       <div class="border-b border-border bg-muted/40 p-3 space-y-2">
         <input
           type="text"
@@ -358,6 +436,65 @@
             { value: 'out-of-scope', label: 'Out-of-scope' }
           ]}
         />
+
+        <!-- Initial ports -->
+        <div class="space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] text-muted-foreground">Initial ports</span>
+            <button
+              onclick={() => (newPortsOnCreate = [...newPortsOnCreate, { number: '', protocol: 'tcp', service: '' }])}
+              class="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              type="button"
+            >
+              <Plus size={9} /> Add
+            </button>
+          </div>
+          {#each newPortsOnCreate as portEntry, i}
+            <div class="flex items-center gap-1">
+              <input
+                type="number" placeholder="Port" min="1" max="65535"
+                bind:value={portEntry.number}
+                class="w-14 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <Select size="xs" value={portEntry.protocol} onchange={(v) => (newPortsOnCreate[i] = { ...portEntry, protocol: v })} options={[{ value: 'tcp', label: 'TCP' }, { value: 'udp', label: 'UDP' }]} />
+              <input
+                type="text" placeholder="Service"
+                bind:value={portEntry.service}
+                class="flex-1 min-w-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <button onclick={() => (newPortsOnCreate = newPortsOnCreate.filter((_, idx) => idx !== i))} class="text-destructive hover:text-destructive/80" type="button"><X size={10} /></button>
+            </div>
+          {/each}
+        </div>
+
+        <!-- Screenshot -->
+        <div class="space-y-1">
+          <span class="text-[10px] text-muted-foreground">Screenshot</span>
+          {#if screenshotsLoading}
+            <p class="text-[10px] text-muted-foreground">Loading…</p>
+          {:else}
+            <select
+              bind:value={newScreenshotChoice}
+              class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              aria-label="Select screenshot"
+            >
+              <option value="">None</option>
+              {#each availableScreenshots as s}
+                <option value={s.filename}>{s.filename}</option>
+              {/each}
+              <option value="upload">Upload new…</option>
+            </select>
+            {#if newScreenshotChoice === 'upload'}
+              <input
+                type="file" accept="image/*"
+                onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; screenshotUploadFile = f ?? null; }}
+                class="w-full text-[10px] text-muted-foreground"
+                aria-label="Upload screenshot"
+              />
+            {/if}
+          {/if}
+        </div>
+
         <div class="flex gap-2">
           <button
             onclick={addHost}
@@ -678,6 +815,137 @@
     </div>
   {/if}
 </div>
+
+{#if addingHost && uiMode === 'modal'}
+  <!-- Backdrop -->
+  <div
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    role="button"
+    tabindex="-1"
+    onclick={() => (addingHost = false)}
+    onkeydown={(e) => { if (e.key === 'Escape') addingHost = false; }}
+    aria-label="Close form"
+  ></div>
+  <!-- Modal -->
+  <div
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Add Host"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <Monitor size={16} class="shrink-0 text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Add Host</h2>
+      <button onclick={() => (addingHost = false)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Close modal"><X size={14} /></button>
+    </div>
+    <div class="space-y-3 px-5 py-4">
+      <input
+        type="text"
+        placeholder="IP address *"
+        bind:value={newIp}
+        class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        onkeydown={(e) => { if (e.key === 'Enter') addHost(); if (e.key === 'Escape') addingHost = false; }}
+      />
+      <div class="flex gap-2">
+        <input
+          type="text"
+          placeholder="Hostname"
+          bind:value={newHostname}
+          class="flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <input
+          type="text"
+          placeholder="OS"
+          bind:value={newOs}
+          class="w-24 rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+      <Select
+        size="sm"
+        value={newStatus}
+        onchange={(v) => newStatus = v}
+        options={[
+          { value: 'unknown', label: 'Unknown' },
+          { value: 'up', label: 'Up' },
+          { value: 'down', label: 'Down' },
+          { value: 'rooted', label: 'Rooted' }
+        ]}
+      />
+      <Select
+        size="sm"
+        value={newScope}
+        onchange={(v) => newScope = v as Scope}
+        options={[
+          { value: 'unknown', label: 'Scope?' },
+          { value: 'in-scope', label: 'In-scope' },
+          { value: 'out-of-scope', label: 'Out-of-scope' }
+        ]}
+      />
+
+      <!-- Initial ports -->
+      <div class="space-y-1 mt-2 border-t border-border pt-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-foreground">Initial ports</span>
+          <button
+            onclick={() => (newPortsOnCreate = [...newPortsOnCreate, { number: '', protocol: 'tcp', service: '' }])}
+            class="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
+            type="button"
+          >
+            <Plus size={10} /> Add
+          </button>
+        </div>
+        {#each newPortsOnCreate as portEntry, i}
+          <div class="flex items-center gap-1 mt-1">
+            <input
+              type="number" placeholder="Port" min="1" max="65535"
+              bind:value={portEntry.number}
+              class="w-16 rounded border border-border bg-background px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <Select size="xs" value={portEntry.protocol} onchange={(v) => (newPortsOnCreate[i] = { ...portEntry, protocol: v })} options={[{ value: 'tcp', label: 'TCP' }, { value: 'udp', label: 'UDP' }]} />
+            <input
+              type="text" placeholder="Service"
+              bind:value={portEntry.service}
+              class="flex-1 min-w-0 rounded border border-border bg-background px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <button onclick={() => (newPortsOnCreate = newPortsOnCreate.filter((_, idx) => idx !== i))} class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-destructive hover:bg-destructive/10" type="button" aria-label="Remove port"><X size={12} /></button>
+          </div>
+        {/each}
+      </div>
+
+      <!-- Screenshot -->
+      <div class="space-y-1 mt-2 border-t border-border pt-2">
+        <span class="text-xs font-medium text-foreground">Wait, Screenshot that?</span>
+        {#if screenshotsLoading}
+          <p class="text-xs text-muted-foreground">Loading…</p>
+        {:else}
+          <select
+            bind:value={newScreenshotChoice}
+            class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            aria-label="Select screenshot"
+          >
+            <option value="">None</option>
+            {#each availableScreenshots as s}
+              <option value={s.filename}>{s.filename}</option>
+            {/each}
+            <option value="upload">Upload new…</option>
+          </select>
+          {#if newScreenshotChoice === 'upload'}
+            <input
+              type="file" accept="image/*"
+              onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; screenshotUploadFile = f ?? null; }}
+              class="w-full text-xs text-muted-foreground mt-1"
+              aria-label="Upload screenshot"
+            />
+          {/if}
+        {/if}
+      </div>
+    </div>
+    <div class="flex gap-2 border-t border-border px-5 py-3 bg-muted/30">
+      <button onclick={addHost} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">Add Host</button>
+      <button onclick={() => (addingHost = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent transition-colors">Cancel</button>
+    </div>
+  </div>
+{/if}
 
 {#if confirmDelete !== null}
   {@const pending = confirmDelete}

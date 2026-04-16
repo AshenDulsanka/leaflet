@@ -99,18 +99,18 @@
 
     <div class="flex justify-end gap-2">
       <button
-        onclick={onCancel}
-        class="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-accent"
-      >
-        Cancel
-      </button>
-      <button
         onclick={submit}
         class="rounded-md px-3 py-1.5 text-xs text-primary-foreground {destructive
           ? 'bg-destructive hover:bg-destructive/90'
           : 'bg-primary hover:bg-primary/90'}"
       >
         {confirmLabel}
+      </button>
+      <button
+        onclick={onCancel}
+        class="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-accent"
+      >
+        Cancel
       </button>
     </div>
   </div>

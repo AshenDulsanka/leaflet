@@ -23,9 +23,10 @@
     onPullSuccess?: () => void;
     onDeleteWorkspace?: (id: string) => void;
     onRenameWorkspace?: (id: string, newName: string) => void;
+    onReorderWorkspaces?: (reordered: Workspace[]) => void;
   }
 
-  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess, onDeleteWorkspace, onRenameWorkspace }: Props = $props();
+  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess, onDeleteWorkspace, onRenameWorkspace, onReorderWorkspaces }: Props = $props();
 
   let wsDropdownOpen = $state(false);
 
@@ -33,9 +34,48 @@
   let editingWorkspaceId = $state<string | null>(null);
   let editingWorkspaceName = $state('');
 
+  let wsContextMenu = $state<{ x: number; y: number } | null>(null);
+  let draggingWsId = $state<string | null>(null);
+  let dragOverWsId = $state<string | null>(null);
+  let rootDropTarget = $state(false);
+
   function handleSelectWorkspace(ws: Workspace) {
     wsDropdownOpen = false;
     onSelectWorkspace?.(ws);
+  }
+
+  async function handleWsReorder(e: DragEvent, targetId: string): Promise<void> {
+    e.preventDefault();
+    e.stopPropagation();
+    const fromId = e.dataTransfer?.getData('text/plain') ?? '';
+    draggingWsId = null;
+    dragOverWsId = null;
+    if (!fromId || fromId === targetId) return;
+
+    // Recompute order: move fromId to the position of targetId
+    const ids = workspaces.map((w) => w.id);
+    const fromIdx = ids.indexOf(fromId);
+    const toIdx = ids.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    const newOrder = [...ids];
+    newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, fromId);
+
+    // Optimistic update
+    const reordered = newOrder.map((id) => workspaces.find((w) => w.id === id)!);
+    onReorderWorkspaces?.(reordered);
+
+    // Persist
+    try {
+      await fetch('/api/workspaces/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: newOrder })
+      });
+    } catch (err) {
+      console.error('Failed to reorder workspaces:', err);
+    }
   }
 
   // Intercept delete/rename to keep pin list in sync.
@@ -130,7 +170,7 @@
   }
 </script>
 
-<svelte:window onclick={() => { closePinnedMenu(); wsDropdownOpen = false; }} />
+<svelte:window onclick={() => { closePinnedMenu(); wsContextMenu = null; wsDropdownOpen = false; }} />
 
 <aside
   class="relative flex flex-shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200"
@@ -170,6 +210,13 @@
         class="flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-accent"
         onclick={(e) => { e.stopPropagation(); wsDropdownOpen = !wsDropdownOpen; }}
         onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); wsDropdownOpen = !wsDropdownOpen; } }}
+        oncontextmenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (activeWorkspace) {
+            wsContextMenu = { x: e.clientX, y: e.clientY };
+          }
+        }}
         role="button"
         tabindex="0"
         aria-haspopup="listbox"
@@ -195,7 +242,27 @@
         >
           {#each workspaces as ws (ws.id)}
             <div
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs {activeWorkspace?.id === ws.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-accent'}"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs {activeWorkspace?.id === ws.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-accent'} {dragOverWsId === ws.id && draggingWsId !== ws.id ? 'bg-primary/10' : ''}"
+              draggable={true}
+              ondragstart={(e) => {
+                e.stopPropagation();
+                draggingWsId = ws.id;
+                e.dataTransfer?.setData('text/plain', ws.id);
+                if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+              }}
+              ondragover={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dragOverWsId = ws.id;
+              }}
+              ondragleave={() => {
+                if (dragOverWsId === ws.id) dragOverWsId = null;
+              }}
+              ondragend={() => {
+                draggingWsId = null;
+                dragOverWsId = null;
+              }}
+              ondrop={(e) => handleWsReorder(e, ws.id)}
             >
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <div
@@ -319,6 +386,19 @@
         if (e.key === 'ArrowUp')   btns[Math.max(idx - 1, 0)]?.focus();
       }}
     >
+      <div
+        role="presentation"
+        class="h-1 w-full rounded transition-colors {rootDropTarget ? 'bg-primary/30' : 'bg-transparent'}"
+        ondragover={(e) => { e.preventDefault(); e.stopPropagation(); rootDropTarget = true; }}
+        ondragleave={() => { rootDropTarget = false; }}
+        ondrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          rootDropTarget = false;
+          const fromPath = e.dataTransfer?.getData('text/plain') ?? '';
+          if (fromPath) onMoveItem(fromPath, activeWorkspace?.notes_folder ?? '');
+        }}
+      ></div>
       <FileTree
         nodes={tree}
         {activeFile}
@@ -346,6 +426,43 @@
     ></div>
   {/if}
 </aside>
+
+<!-- Workspace context menu -->
+{#if wsContextMenu}
+  {@const m = wsContextMenu}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div
+    class="fixed z-50 min-w-44 rounded-md border border-border bg-popover py-1 shadow-lg"
+    style="left: {m.x}px; top: {m.y}px"
+    onclick={(e) => e.stopPropagation()}
+  >
+    <button
+      class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+      onclick={() => {
+        wsContextMenu = null;
+        if (activeWorkspace) {
+          wsDropdownOpen = true;
+          editingWorkspaceId = activeWorkspace.id;
+          editingWorkspaceName = activeWorkspace.name;
+        }
+      }}
+    >
+      <Pencil size={13} /> Rename
+    </button>
+    <button
+      class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-accent"
+      onclick={() => {
+        wsContextMenu = null;
+        if (activeWorkspace) {
+          confirmDeleteWorkspace = { id: activeWorkspace.id, label: activeWorkspace.name };
+        }
+      }}
+    >
+      <Trash2 size={13} /> Delete
+    </button>
+  </div>
+{/if}
 
 <!-- Pinned-item context menu -->
 {#if pinnedMenu}

@@ -1,16 +1,18 @@
 <script lang="ts">
-  import { X, Settings, Moon, Sun, FileCode, Eye, Info } from '@lucide/svelte';
+  import { X, Settings, Moon, Sun, FileCode, Eye, Info, Layers, LayoutList } from '@lucide/svelte';
   import { theme } from '$lib/theme.svelte';
   import { fly, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
   interface Props {
     editorMode: 'wysiwyg' | 'source';
+    uiMode: 'modal' | 'inline';
     onClose: () => void;
     onEditorModeChange: (mode: 'wysiwyg' | 'source') => void;
+    onUiModeChange: (mode: 'modal' | 'inline') => void;
   }
 
-  let { editorMode, onClose, onEditorModeChange }: Props = $props();
+  let { editorMode, uiMode, onClose, onEditorModeChange, onUiModeChange }: Props = $props();
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') onClose();
@@ -115,6 +117,35 @@
       <p class="mt-1.5 text-xs text-muted-foreground">Toggle anytime with Ctrl+M while editing.</p>
     </section>
 
+    <!-- Interaction mode -->
+    <section>
+      <h3 class="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+        Interaction
+      </h3>
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-sm text-foreground">Panel form style</span>
+          <p class="mt-0.5 text-xs text-muted-foreground">How add/edit forms appear in engagement panels.</p>
+        </div>
+        <div class="flex gap-1">
+          <button
+            class="flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors {uiMode === 'modal' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'}"
+            onclick={() => onUiModeChange('modal')}
+          >
+            <Layers size={12} />
+            Modal
+          </button>
+          <button
+            class="flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors {uiMode === 'inline' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'}"
+            onclick={() => onUiModeChange('inline')}
+          >
+            <LayoutList size={12} />
+            Inline
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- System info -->
     <section>
       <h3 class="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -124,7 +155,7 @@
       <div class="space-y-1 text-xs text-muted-foreground">
         <div class="flex justify-between">
           <span>App</span>
-          <span>CPTS Notes</span>
+          <span>Leaflet Notes</span>
         </div>
         <div class="flex justify-between">
           <span>Version</span>

@@ -34,21 +34,23 @@ This project also serves as a reference for **agent orchestration** and open-sou
 - Isolated workspaces — each with its own note tree
 - Pentest workspaces are the default creation type
 - General workspaces remain available for everyday notes
-- Pentest workspaces unlock the methodology checklist and engagement tools
+- Pentest workspaces unlock the engagement tools; the optional **CPTS preset** additionally enables the methodology checklist
+- Workspace order can be rearranged by drag and drop; right-click a workspace for rename/delete
 
 **Templates and Workflow**
 - Command Palette templates insert raw Markdown snippets into the current note
 - Global templates are always available; workspace templates appear when that workspace is active
-- Methodology checklist is available only in pentest workspaces
+- Methodology checklist is available only in pentest workspaces with the CPTS preset enabled
 - Destructive panel actions use confirmation dialogs
 
-**CTF and Pentest Tools** (CTF workspaces only)
-- Host tracker with port management
+**CTF and Pentest Tools** (pentest workspaces only)
+- Host tracker with port management (initial port entry and screenshot association on add)
 - Credential vault
 - Flag tracker
 - Attack chain visualizer
 - Command snippets with variable substitution
 - Operation log, findings tracker, network topology, and CVSS calculator
+- Add forms open as centered modal dialogs by default (toggle to inline mode in Settings)
 
 **AI Integration** (optional)
 - AI chat assistant with current note as context

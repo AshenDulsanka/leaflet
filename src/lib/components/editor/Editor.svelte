@@ -56,9 +56,10 @@
     onImageClick?: (src: string, alt: string) => void;
     onWikilinkClick?: (noteName: string) => void;
     noteSuggestions?: string[];
+    workspaceId?: string | null;
   }
 
-  let { mode, content, filePath, scrollTarget = $bindable(null), onContentChange, onWordCountChange, onReady, onImageClick, onWikilinkClick, noteSuggestions = [] }: Props = $props();
+  let { mode, content, filePath, scrollTarget = $bindable(null), onContentChange, onWordCountChange, onReady, onImageClick, onWikilinkClick, noteSuggestions = [], workspaceId = null }: Props = $props();
 
   // Editor container ref
   let milkdownContainer = $state<HTMLDivElement | null>(null);
@@ -781,11 +782,14 @@
     }
   }
 
-  async function uploadAndInsert(file: File) {
+  async function uploadAndInsert(file: File, wsId: string | null = null) {
     const rawExt = file.type.split('/')[1] ?? 'png';
     const ext = rawExt === 'jpeg' ? 'jpg' : rawExt;
     const formData = new FormData();
     formData.append('image', file, `screenshot.${ext}`);
+    if (wsId) {
+      formData.append('workspace_id', wsId);
+    }
     try {
       const res = await fetch('/api/screenshots', { method: 'POST', body: formData });
       if (!res.ok) return;
@@ -802,7 +806,7 @@
     if (!imageItem) return;
     e.preventDefault();
     const blob = imageItem.getAsFile();
-    if (blob) await uploadAndInsert(blob);
+    if (blob) await uploadAndInsert(blob, workspaceId);
   }
 
   function handleDragover(e: DragEvent) {
@@ -816,7 +820,7 @@
     const imageFile = files.find((f) => f.type.startsWith('image/'));
     if (!imageFile) return;
     e.preventDefault();
-    await uploadAndInsert(imageFile);
+    await uploadAndInsert(imageFile, workspaceId);
   }
 
   onMount(async () => {

@@ -36,8 +36,9 @@ Leaflet is a self-hosted markdown note-taking app. Notes are `.md` files on disk
 
 | Term | Meaning |
 |------|---------|
-| Workspace | An isolated context for notes. Can be `general` or `ctf`. |
-| CTF Workspace | Unlocks engagement tools: host tracker, credential vault, flag tracker, attack chain. |
+| Workspace | An isolated context for notes. Can be `general` or `pentest`. |
+| Pentest Workspace | Unlocks engagement tools: host tracker, credential vault, flag tracker, attack chain, and more. |
+| CPTS Preset | Optional preset (`preset = 'cpts'`) on a pentest workspace. Gates the Methodology checklist button. Set via toggle in `WorkspaceCreateModal`. |
 | General Workspace | Standard note-taking without engagement panels. |
 | Notes Folder | Each workspace maps to a subfolder in `data/notes/`. |
 | Default Workspace | Auto-created on first run so the user always starts in a valid context. |
@@ -71,6 +72,8 @@ leaflet/
 - Use Lucide icons from `@lucide/svelte`. No emojis anywhere — not in code, data, seed files, comments, or UI strings. When an icon identifier is needed in data or database records, use the Lucide icon name as a string (e.g., `'notebook-pen'`, `'circle-alert'`).
 - Use `better-sqlite3` synchronously. No async DB calls.
 - Validate all file paths with `safePath()` before any `fs` operation (see `docs/SECURITY.md`).
+- Gate CPTS-specific features (e.g., Methodology panel) on `activeWorkspace.preset === 'cpts'`, not on `workspace.type`. Do not use `workspace.type` alone for fine-grained feature gating.
+- When adding a new engagement panel, implement the `uiMode: 'modal' | 'inline'` prop convention (default `'modal'`). In modal mode, add/edit forms must render as centered overlay dialogs; inline mode keeps forms expanding in-panel.
 - Follow `.github/skills/coding-standards/SKILL.md` for naming, imports, error handling.
 - Follow `.github/skills/commit-conventions/SKILL.md` for all commit messages.
 - Follow `.github/skills/branch-conventions/SKILL.md` for branch naming.

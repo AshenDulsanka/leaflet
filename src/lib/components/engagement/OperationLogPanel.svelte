@@ -16,9 +16,10 @@
   interface Props {
     workspaceId: string | null;
     onClose: () => void;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { workspaceId, onClose }: Props = $props();
+  let { workspaceId, onClose, uiMode = 'modal' }: Props = $props();
 
   let entries = $state<OperationLogEntry[]>([]);
   let hosts = $state<HostOption[]>([]);
@@ -77,6 +78,10 @@
     loading = true;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/oplog`);
+      if (!res.ok) {
+        console.error('Failed to load operation log:', { workspaceId, status: res.status });
+        return;
+      }
       entries = await res.json();
     } catch {
       console.error('Failed to load operation log');
@@ -89,6 +94,10 @@
     if (!workspaceId) return;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/hosts`);
+      if (!res.ok) {
+        console.error('Failed to load hosts:', { workspaceId, status: res.status });
+        return;
+      }
       const data = await res.json();
       hosts = (data as Array<{ id: string; ip: string; hostname: string }>).map((h) => ({
         id: h.id,
@@ -172,8 +181,13 @@
 
   async function deleteEntry(id: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/oplog/${id}`, { method: 'DELETE' });
-    entries = entries.filter((e) => e.id !== id);
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/oplog/${id}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete entry:', { workspaceId, id, status: res.status }); return; }
+      entries = entries.filter((e) => e.id !== id);
+    } catch (err) {
+      console.error('Failed to delete entry:', { workspaceId, id, error: err });
+    }
   }
 
   function formatTime(iso: string): string {
@@ -259,7 +273,7 @@
     </div>
 
     <!-- Add-entry form -->
-    {#if addingEntry}
+    {#if addingEntry && uiMode === 'inline'}
       <div class="space-y-2 border-b border-border bg-muted/40 p-3">
         <textarea
           placeholder="Describe what happened..."
@@ -417,6 +431,65 @@
     </div>
   {/if}
 </div>
+
+{#if addingEntry && uiMode === 'modal'}
+  <!-- Backdrop -->
+  <div
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    role="button"
+    tabindex="-1"
+    onclick={() => (addingEntry = false)}
+    onkeydown={(e) => { if (e.key === 'Escape') addingEntry = false; }}
+    aria-label="Close form"
+  ></div>
+  <!-- Modal -->
+  <div
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Add Log Entry"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <ScrollText size={14} class="text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Add Log Entry</h2>
+      <button onclick={() => (addingEntry = false)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+    </div>
+    <div class="space-y-3 px-5 py-4">
+      <textarea
+        placeholder="Describe what happened..."
+        bind:value={newDescription}
+        rows={2}
+        class="w-full resize-none rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        onkeydown={(e) => { if (e.key === 'Enter' && e.ctrlKey) addEntry(); if (e.key === 'Escape') { addingEntry = false; } }}
+      ></textarea>
+      <div class="flex gap-2">
+        <Select
+          size="sm"
+          value={newCategory}
+          onchange={(v) => newCategory = v as OpLogCategory}
+          options={CATEGORIES.map(c => ({ value: c.value, label: c.label }))}
+        />
+        <Select
+          size="sm"
+          value={newHostId}
+          onchange={(v) => newHostId = v}
+          options={[
+            { value: '', label: 'No host' },
+            ...hosts.map(h => ({ value: h.id, label: h.hostname ? `${h.ip} (${h.hostname})` : h.ip }))
+          ]}
+        />
+      </div>
+      <DateTimePicker
+        value={newTimestamp}
+        onchange={(v) => newTimestamp = v}
+      />
+    </div>
+    <div class="flex gap-2 border-t border-border px-5 py-3 bg-muted/30">
+      <button onclick={addEntry} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Log Entry</button>
+      <button onclick={() => (addingEntry = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
+    </div>
+  </div>
+{/if}
 
 {#if confirmDelete !== null}
   {@const pending = confirmDelete}

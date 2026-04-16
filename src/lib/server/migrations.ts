@@ -370,6 +370,19 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       CREATE INDEX IF NOT EXISTS idx_user_templates_workspace ON user_templates(workspace_id);
     `,
     },
+    {
+      // v12: add preset and sort_order columns to workspaces.
+      // preset: identifies a built-in workspace template (currently only 'cpts').
+      //   NULL means no preset (custom workspace). CHECK is advisory — API layer also validates.
+      //   Note: CHECK constraints in ALTER TABLE ADD COLUMN are unreliable across older SQLite
+      //   versions; the API layer is the authoritative validator.
+      // sort_order: integer used to control workspace display order; defaults to 0.
+      version: 12,
+      up: `
+      ALTER TABLE workspaces ADD COLUMN preset TEXT;
+      ALTER TABLE workspaces ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+    `,
+    },
   ];
 
 export function runMigrations(db: Database.Database): void {
@@ -433,8 +446,8 @@ export function seedDefaultWorkspace(db: Database.Database): void {
 
   db.prepare(
     `
-    INSERT INTO workspaces (id, name, type, icon_color, notes_folder, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO workspaces (id, name, type, icon_color, notes_folder, preset, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     id,
@@ -442,6 +455,8 @@ export function seedDefaultWorkspace(db: Database.Database): void {
     "pentest",
     "#6366f1",
     "default-workspace",
+    "cpts",
+    0,
     now,
     now,
   );

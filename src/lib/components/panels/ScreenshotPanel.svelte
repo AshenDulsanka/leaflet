@@ -106,7 +106,7 @@
 
 <aside
   transition:fly={{ x: 320, duration: 250, easing: cubicOut }}
-  class="flex w-80 shrink-0 flex-col overflow-hidden border-l border-border bg-card"
+  class="absolute right-0 top-0 flex h-full w-80 shrink-0 flex-col overflow-hidden border-l border-border bg-card"
 >
   <!-- Header -->
   <div class="flex items-center gap-2 border-b border-border px-3 py-2.5">
@@ -215,7 +215,7 @@
               </div>
               
               <!-- File size and insert hint at bottom -->
-              <div class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent p-1.5 pt-4">
+              <div class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent p-1.5 pt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                 <span class="text-[9px] text-white/90 drop-shadow-sm">
                   {formatSize(ss.sizeBytes)}
                 </span>

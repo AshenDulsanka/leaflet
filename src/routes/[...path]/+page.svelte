@@ -57,6 +57,19 @@
   let searchOpen = $state(false);
   let wordCount = $state(0);
   let editorMode = $state<'wysiwyg' | 'source'>('wysiwyg');
+
+  // Interaction mode — persisted in localStorage
+  let uiMode = $state<'modal' | 'inline'>(
+    (typeof localStorage !== 'undefined' ? (localStorage.getItem('leaflet-ui-mode') as 'modal' | 'inline' | null) : null) ?? 'modal'
+  );
+
+  function setUiMode(mode: 'modal' | 'inline'): void {
+    uiMode = mode;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('leaflet-ui-mode', mode);
+    }
+  }
+
   let toastError = $state<string | null>(null);
   let toastTimer: ReturnType<typeof setTimeout>;
 
@@ -85,6 +98,42 @@
   let cvssOpen = $state(false);
   let findingsTrackerOpen = $state(false);
   let topologyOpen = $state(false);
+  
+  let rightPanelWidth = $state(320); // 320px = 20rem default
+  let isResizingRight = $state(false);
+
+  function startRightResize(e: MouseEvent): void {
+    isResizingRight = true;
+    const startX = e.clientX;
+    const startWidth = rightPanelWidth;
+
+    function onMouseMove(ev: MouseEvent): void {
+      // Moving LEFT increases the panel width (since it's on the right)
+      rightPanelWidth = Math.min(600, Math.max(240, startWidth - (ev.clientX - startX)));
+    }
+
+    function onMouseUp(): void {
+      isResizingRight = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  const rightPanelOpen = $derived(
+    backlinksOpen || 
+    screenshotsOpen || 
+    hostTrackerOpen || 
+    credentialVaultOpen || 
+    flagTrackerOpen || 
+    snippetsOpen || 
+    operationLogOpen || 
+    cvssOpen || 
+    findingsTrackerOpen
+  );
+
   let aiMessages = $state<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   let insertIntoEditor = $state<((text: string) => void) | null>(null);
   let helpOpen = $state(false);
@@ -133,13 +182,13 @@
     activeContent = '';
   }
 
-  async function createWorkspace(data: { name: string; type: string; icon_color: string }) {
+  async function createWorkspace(data: { name: string; type: string; icon_color: string; preset: string | null }) {
     if (!data.name.trim()) return;
     try {
       const res = await fetch('/api/workspaces', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: data.name.trim(), type: data.type, icon_color: data.icon_color })
+        body: JSON.stringify({ name: data.name.trim(), type: data.type, icon_color: data.icon_color, preset: data.preset ?? null })
       });
       if (!res.ok) return;
       const ws: Workspace = await res.json();
@@ -409,7 +458,7 @@
     }
     if (e.ctrlKey && e.key === '.') {
       e.preventDefault();
-      if (activeWorkspace?.type === 'pentest') {
+      if (activeWorkspace?.preset === 'cpts') {
         methodologyOpen = !methodologyOpen;
       }
     }
@@ -499,6 +548,7 @@
     onOpenGraph={() => (graphOpen = !graphOpen)}
     hasWorkspace={!!activeWorkspace}
     isPentest={activeWorkspace?.type === 'pentest'}
+    isCpts={activeWorkspace?.preset === 'cpts'}
     onOpenHostTracker={() => (hostTrackerOpen = !hostTrackerOpen)}
     onOpenCredentialVault={() => (credentialVaultOpen = !credentialVaultOpen)}
     onOpenFlagTracker={() => (flagTrackerOpen = !flagTrackerOpen)}
@@ -527,6 +577,7 @@
       onCreateWorkspace={() => (createWorkspaceOpen = true)}
       onDeleteWorkspace={deleteWorkspace}
       onRenameWorkspace={renameWorkspace}
+      onReorderWorkspaces={(reordered) => (workspaces = reordered)}
       onPullSuccess={async () => {
         await loadWorkspaces();
         await loadTree(activeWorkspace?.notes_folder ?? '');
@@ -555,6 +606,7 @@
             if (path) openFile(path);
           }}
           {noteSuggestions}
+          workspaceId={activeWorkspace?.id ?? null}
         />
       {:else}
         <div class="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
@@ -578,10 +630,20 @@
         </div>
       {/if}
     </main>
-    {#if backlinksOpen}
-      <BacklinksPanel
-        {activeFile}
-        onClose={() => (backlinksOpen = false)}
+
+    <div class="right-panel-container relative shrink-0" style="width: {rightPanelOpen ? `${rightPanelWidth}px` : '0'}; overflow: hidden; transition: width {isResizingRight ? '0ms' : '200ms'} cubic-bezier(0.4, 0, 0.2, 1); --panel-width: {rightPanelWidth}px;">
+      {#if rightPanelOpen}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-primary/30 {isResizingRight ? 'bg-primary/50' : ''}"
+          onmousedown={startRightResize}
+        ></div>
+      {/if}
+
+      {#if backlinksOpen}
+        <BacklinksPanel
+          {activeFile}
+          onClose={() => (backlinksOpen = false)}
         onNavigate={(path, line, lineText) => {
           if (path === activeFile) {
             pendingScrollTarget = { line, lineText };
@@ -612,6 +674,7 @@
       <CredentialVaultPanel
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (credentialVaultOpen = false)}
+        {uiMode}
       />
     {/if}
 
@@ -621,6 +684,7 @@
         totalFlags={activeWorkspace?.total_flags ?? 0}
         passingFlags={activeWorkspace?.passing_flags ?? 0}
         onClose={() => (flagTrackerOpen = false)}
+        {uiMode}
       />
     {/if}
 
@@ -636,6 +700,7 @@
       <OperationLogPanel
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (operationLogOpen = false)}
+        {uiMode}
       />
     {/if}
 
@@ -650,8 +715,10 @@
       <FindingsTrackerPanel
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (findingsTrackerOpen = false)}
+        {uiMode}
       />
     {/if}
+    </div>
 
   </div>
 
@@ -659,6 +726,7 @@
     <AttackChainPanel
       workspaceId={activeWorkspace?.id ?? null}
       onClose={() => (attackChainOpen = false)}
+      {uiMode}
     />
   {/if}
 
@@ -736,6 +804,8 @@
       onClose={() => (settingsOpen = false)}
       {editorMode}
       onEditorModeChange={(m) => (editorMode = m)}
+      {uiMode}
+      onUiModeChange={setUiMode}
     />
   {/if}
 
@@ -763,3 +833,12 @@
     onCancel={() => (createWorkspaceOpen = false)}
   />
 {/if}
+
+<style>
+  /* Allow right panels to fill the resize container */
+  .right-panel-container > :global(aside),
+  .right-panel-container > :global(div[class*="h-full"]) {
+    width: 100% !important;
+    max-width: none !important;
+  }
+</style>

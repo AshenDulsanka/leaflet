@@ -49,6 +49,10 @@ export interface Workspace {
   total_flags: number;
   passing_flags: number;
   notes_folder: string;
+  /** Built-in workspace preset identifier, e.g. 'cpts'. NULL means no preset. */
+  preset: string | null;
+  /** Display order — lower values appear first in workspace lists. */
+  sort_order: number;
   created_at: string;
   updated_at: string;
   // Joined aggregates (from list/get queries)

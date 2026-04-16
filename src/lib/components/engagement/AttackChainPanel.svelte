@@ -39,9 +39,10 @@
   interface Props {
     workspaceId: string | null;
     onClose: () => void;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { workspaceId, onClose }: Props = $props();
+  let { workspaceId, onClose, uiMode = 'modal' }: Props = $props();
 
   // Register the custom node renderer
   const nodeTypes: NodeTypes = { attackNode: AttackChainNodeComponent };
@@ -104,6 +105,10 @@
     loading = true;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/nodes`);
+      if (!res.ok) {
+        console.error('Failed to load attack chain:', { workspaceId, status: res.status });
+        return;
+      }
       const data = await res.json() as { nodes: AttackNode[]; edges: AttackEdge[] };
 
       nodes = data.nodes.map(toFlowNode);
@@ -170,10 +175,15 @@
 
   async function deleteNode(nodeId: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/nodes/${nodeId}`, { method: 'DELETE' });
-    nodes = nodes.filter((n) => n.id !== nodeId);
-    edges = edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
-    if (selectedNodeId === nodeId) closeDrawer();
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/nodes/${nodeId}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete node:', { workspaceId, nodeId, status: res.status }); return; }
+      nodes = nodes.filter((n) => n.id !== nodeId);
+      edges = edges.filter((e) => e.source !== nodeId && e.target !== nodeId);
+      if (selectedNodeId === nodeId) closeDrawer();
+    } catch (err) {
+      console.error('Failed to delete node:', { workspaceId, nodeId, error: err });
+    }
   }
 
   /** Persist node position after a drag. */
@@ -306,7 +316,7 @@
     </div>
   {:else}
     <!-- Add node form (inline toolbar) -->
-    {#if addingNode}
+    {#if addingNode && uiMode === 'inline'}
       <div class="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-4 py-2">
         <Select
           size="sm"
@@ -499,3 +509,54 @@
     {/if}
   {/if}
 </div>
+
+{#if addingNode && uiMode === 'modal'}
+  <!-- Backdrop -->
+  <div
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    role="button"
+    tabindex="-1"
+    onclick={() => (addingNode = false)}
+    onkeydown={(e) => { if (e.key === 'Escape') addingNode = false; }}
+    aria-label="Close form"
+  ></div>
+  <!-- Modal -->
+  <div
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Add Attack Step"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <Network size={16} class="shrink-0 text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Add Attack Step</h2>
+      <button onclick={() => (addingNode = false)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"><X size={14} /></button>
+    </div>
+    <div class="space-y-3 px-5 py-4 max-h-[60vh] overflow-y-auto">
+      <div class="space-y-1">
+        <label for="step-type" class="text-xs font-medium text-foreground">Type</label>
+        <Select
+          size="sm"
+          value={newType}
+          onchange={(v) => (newType = v)}
+          options={NODE_TYPE_LIST.map((t) => ({ value: t, label: t }))}
+        />
+      </div>
+      <div class="space-y-1">
+        <label for="step-label" class="text-xs font-medium text-foreground">Label</label>
+        <input
+          id="step-label"
+          type="text"
+          placeholder="Node label *"
+          bind:value={newLabel}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+          onkeydown={(e) => { if (e.key === 'Enter') addNode(); if (e.key === 'Escape') addingNode = false; }}
+        />
+      </div>
+    </div>
+    <div class="flex gap-2 border-t border-border px-5 py-3">
+      <button onclick={addNode} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Step</button>
+      <button onclick={() => (addingNode = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
+    </div>
+  </div>
+{/if}

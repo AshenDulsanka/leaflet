@@ -23,9 +23,10 @@
     totalFlags?: number;
     passingFlags?: number;
     onClose: () => void;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { workspaceId, totalFlags = 0, passingFlags = 0, onClose }: Props = $props();
+  let { workspaceId, totalFlags = 0, passingFlags = 0, onClose, uiMode = 'modal' }: Props = $props();
 
   let flags = $state<FlagEntry[]>([]);
   let loading = $state(false);
@@ -194,7 +195,7 @@
     {/if}
 
     <!-- Add-flag form -->
-    {#if addingFlag}
+    {#if addingFlag && uiMode === 'inline'}
       <div class="border-b border-border bg-muted/40 p-3 space-y-2">
         <input
           type="text"
@@ -278,25 +279,80 @@
                 {#if flag.value}
                   <CopyButton text={flag.value} size={10} />
                 {/if}
+                <button
+                  onclick={() => confirmDelete = { id: flag.id, label: flag.value || flag.flag_type }}
+                  class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
+                  title="Delete flag"
+                >
+                  <Trash2 size={12} />
+                </button>
               </div>
               {#if flag.capture_method}
                 <p class="text-[10px] text-muted-foreground">via {flag.capture_method}</p>
               {/if}
             </div>
-
-            <button
-              onclick={() => confirmDelete = { id: flag.id, label: flag.value || flag.flag_type }}
-              class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-destructive hover:bg-destructive/10"
-              title="Delete flag"
-            >
-              <Trash2 size={10} />
-            </button>
           </div>
         {/each}
       {/if}
     </div>
   {/if}
 </div>
+
+{#if addingFlag && uiMode === 'modal'}
+  <!-- Backdrop -->
+  <div
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    role="button"
+    tabindex="-1"
+    onclick={() => (addingFlag = false)}
+    onkeydown={(e) => { if (e.key === 'Escape') addingFlag = false; }}
+    aria-label="Close form"
+  ></div>
+  <!-- Modal -->
+  <div
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Add Flag"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <Flag size={14} class="text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Add Flag</h2>
+      <button onclick={() => (addingFlag = false)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+    </div>
+    <div class="space-y-3 px-5 py-4">
+      <input
+        type="text"
+        placeholder="Flag value e.g. HTB&#123;...&#125;"
+        bind:value={newValue}
+        class="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        onkeydown={(e) => { if (e.key === 'Enter') addFlag(); if (e.key === 'Escape') addingFlag = false; }}
+      />
+      <div class="flex gap-2">
+        <Select
+          size="sm"
+          value={newFlagType}
+          onchange={(v) => newFlagType = v}
+          options={[
+            { value: 'user', label: 'User flag' },
+            { value: 'root', label: 'Root flag' },
+            { value: 'other', label: 'Other' }
+          ]}
+        />
+        <input
+          type="text"
+          placeholder="Via (e.g. LPE, DC Sync)"
+          bind:value={newCaptureMethod}
+          class="flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+      </div>
+    </div>
+    <div class="flex gap-2 border-t border-border px-5 py-3 bg-muted/30">
+      <button onclick={addFlag} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Flag</button>
+      <button onclick={() => (addingFlag = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
+    </div>
+  </div>
+{/if}
 
 {#if confirmDelete !== null}
   {@const pending = confirmDelete}
