@@ -1,241 +1,164 @@
 ---
 name: architecture
-description: Use when understanding the Leaflet project structure, folder layout, data flow, API routes, database design, SQLite WAL mode, Docker setup, or key design decisions. Covers the full high-level architecture, component map, and sync mechanism.
+description: Use when documenting, understanding, or reviewing a project's architecture — folder layout, data flow, API surface, database design, deployment setup, and key technical decisions. Provides a documentation template any project can fill in.
 ---
 
-# Architecture Overview
+# Architecture — Project Documentation Guide
 
-## What Is Leaflet
+## When to Use This Skill
 
-Leaflet is a self-hosted markdown note-taking application built for general use and for CTF and penetration testing engagements. It combines a rich WYSIWYG editor with engagement-specific tools (host tracker, credential vault, flag tracker, attack chain visualizer, report generator) that activate when a workspace is marked as CTF-related.
+Load this skill when you need to:
+- Document how a project is structured for a new contributor
+- Understand data flow before planning a new feature
+- Review architectural decisions (DB choice, file storage, caching, auth)
+- Map out API routes and their responsibilities
+- Set up or review Docker/deployment configuration
+- Understand how the project's key subsystems interact
 
-Notes are `.md` files on disk — Git is the sync mechanism between devices. Structured engagement data (workspaces, hosts, credentials, flags) is stored in a local SQLite database.
+**Note:** This skill is a documentation framework, not a description of any specific project. Apply it by filling in the templates below with the actual details of the project you are working on. If working on an existing project, read the project files first and use this skill as a checklist to ensure nothing is undocumented.
 
-## High-Level Architecture
+---
+
+## What a Good Architecture Document Covers
+
+### 1. What Is This System?
+- One paragraph describing what the system does and who uses it.
+- The core problem it solves.
+- Any domain-specific context needed to understand design choices.
+
+### 2. High-Level Architecture Diagram
+
+Show how the major subsystems communicate. At minimum:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         Browser                             │
-│                                                             │
-│  ┌──────────┐  ┌────────────────────────────────────────┐  │
-│  │ Sidebar  │  │              Editor Panel               │  │
-│  │          │  │   (Milkdown WYSIWYG / CodeMirror src)   │  │
-│  │ Workspace│  │                                         │  │
-│  │ selector │  ├────────────────────────────────────────┤  │
-│  │          │  │          Engagement Panels              │  │
-│  │ File     │  │  (Hosts / Creds / Flags / Attack Chain) │  │
-│  │ Tree     │  └────────────────────────────────────────┘  │
-│  │          │                                               │
-│  │ Pinned   │  ┌────────────────────────────────────────┐  │
-│  │ Notes    │  │          Utility Panels                 │  │
-│  └──────────┘  │   (Search / Backlinks / AI / Export)   │  │
-│                └────────────────────────────────────────┘  │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ fetch (JSON / SSE)
-┌──────────────────────────▼──────────────────────────────────┐
-│                   SvelteKit Server (Node)                    │
-│                                                             │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │               API Routes (/api/*)                    │  │
-│  │  /api/notes/[...path]   – CRUD for .md files         │  │
-│  │  /api/notes/tree        – directory tree             │  │
-│  │  /api/notes/search      – full-text search           │  │
-│  │  /api/workspaces/[id]   – workspace CRUD             │  │
-│  │  /api/workspaces/[id]/hosts, creds, flags, nodes...  │  │
-│  │  /api/ai/chat           – streaming AI chat (SSE)    │  │
-│  │  /api/ai/summarize      – note summarization         │  │
-│  │  /api/ai/status         – provider availability      │  │
-│  │  /api/sync/status       – git status                 │  │
-│  │  /api/sync/push         – git add+commit+push        │  │
-│  │  /api/sync/pull         – git pull                   │  │
-│  └────────┬──────────────────────────┬───────────────┘  │  │
-│           │                          │                      │
-│  ┌────────▼──────────┐   ┌───────────▼────────────────┐   │
-│  │   File System     │   │     SQLite (notes.db)       │   │
-│  │                   │   │                             │   │
-│  │  data/            │   │  workspaces                 │   │
-│  │  ├── notes.db     │   │  hosts / ports              │   │
-│  │  ├── default/     │   │  credentials                │   │
-│  │  │   ├── note.md  │   │  flags                      │   │
-│  │  ├── workspace-a/ │   │  attack_chain_nodes/edges   │   │
-│  │  │   └── note.md  │   │  command_snippets           │   │
-│  │  └── screenshots/ │   │  screenshot_metadata        │   │
-│  └───────────────────┘   └─────────────────────────────┘   │
-│                                                             │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │              External AI Providers                 │    │
-│  │  Google Gemini (default) / MiniMax (optional)      │    │
-│  └────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+[Client / Browser]
+       ↕ (HTTP / WebSocket / SSE)
+[Application Server]
+       ↕                    ↕
+[Database / Storage]  [External APIs / Services]
 ```
+
+Scale up to show multiple servers, queues, CDNs, caching layers, and third-party integrations as the project requires.
+
+### 3. Folder Structure
+
+Document top-level directories and their responsibilities. Fill in actual directories for your project:
+
+```
+project-root/
+├── src/
+│   ├── lib/
+│   │   ├── server/     – server-only logic (DB, file I/O, auth)
+│   │   ├── components/ – UI components
+│   │   └── utils/      – shared utilities
+│   └── routes/         – page and API routes
+├── static/             – static assets served directly
+├── tests/              – unit and integration tests
+└── docs/               – project documentation
+```
+
+### 4. API Surface
+
+List all API routes and their responsibilities. For each route:
+- **Method + Path**: `POST /api/users`
+- **Purpose**: What does it do?
+- **Input**: Request body shape or query params
+- **Output**: Response shape
+- **Auth required**: Yes / No / Role
+
+Group routes by domain (e.g. `Auth`, `Users`, `Content`, `Admin`).
+
+### 5. Data Layer
+
+Document how data is stored:
+- **Database type** (PostgreSQL, SQLite, MongoDB, etc.) and why it was chosen
+- **Key tables/collections** and their relationships
+- **Schema management**: migrations, seeding, ORMs/query builders used
+- **Connection management**: pooling, singleton pattern, WAL mode (if SQLite)
+- **File storage**: local disk, S3, object storage — paths and access patterns
+
+### 6. Authentication & Authorisation
+
+- Auth strategy (JWT, session cookies, OAuth, API keys)
+- Where tokens/sessions are validated (middleware, load functions, API routes)
+- Role/permission model if applicable
+
+### 7. Deployment & Infrastructure
+
+- **Environments**: dev / staging / production
+- **Hosting**: where it runs (Vercel, Fly.io, VPS, Docker Swarm, etc.)
+- **Docker**: note if a `docker-compose.yml` and `Dockerfile` exist; describe what they configure
+- **Environment variables**: list all required env vars (never their values), what they control, and whether the app fails fast on missing values
+- **CI/CD**: pipeline overview (lint → test → build → deploy)
+
+### 8. Key Design Decisions
+
+A short table of major technical choices and the rationale:
+
+| Decision | Choice | Why |
+|----------|--------|-----|
+| Database | SQLite | Single-user, self-hosted; no separate DB process needed |
+| Auth | Session cookies | Server-rendered app; no SPA token management needed |
+| Framework | SvelteKit | Full-stack with excellent DX; Svelte 5 runes for reactive UI |
+
+### 9. Data Flow Walkthroughs
+
+For the 2–3 most critical user actions, walk through the full request-response cycle:
+
+```
+1. User submits form
+2. Client calls POST /api/resource with validated payload
+3. API route validates input (Zod/schema check)
+4. Server writes to database
+5. Server returns { id, slug }
+6. Client navigates to /resource/[id]
+```
+
+Walkthroughs expose implicit dependencies, missing error handling, and performance bottlenecks.
+
+### 10. Known Constraints & Technical Debt
+
+List anything that is:
+- A deliberate simplification with a known downside (e.g. "no horizontal scaling — single process")
+- A debt item to address later (e.g. "search is linear scan; needs full-text index at scale")
+- A security tradeoff (e.g. "no rate limiting on auth endpoints yet")
+
+---
+
+## Documentation Template
+
+Copy and fill in this template for your project:
+
+```markdown
+# Architecture: [Project Name]
+
+## Overview
+[One paragraph describing the system and who uses it]
+
+## High-Level Diagram
+[ASCII or Mermaid diagram showing subsystems and their connections]
 
 ## Folder Structure
+[Annotated directory tree with one-line descriptions per directory]
 
-```
-leaflet/
-├── src/
-│   ├── app.css              – global styles and Tailwind base
-│   ├── app.html             – HTML shell
-│   ├── app.d.ts             – SvelteKit ambient type declarations
-│   ├── hooks.server.ts      – injects db singleton into event.locals
-│   ├── lib/
-│   │   ├── types.ts         – shared TypeScript interfaces
-│   │   ├── theme.svelte.ts  – dark/light theme state (Svelte 5 rune)
-│   │   ├── components/
-│   │   │   ├── editor/      – Milkdown, CodeMirror, ImageToolbar, Lightbox
-│   │   │   ├── layout/      – Sidebar, FileTree, StatusBar, SyncButton
-│   │   │   ├── panels/      – SearchPanel, AiChat, Backlinks, Screenshot, Export, NoteGraph
-│   │   │   ├── engagement/  – HostTracker, CredentialVault, FlagTracker, AttackChain, ReportGenerator
-│   │   │   └── modals/      – HelpModal, ExportModal, NewNoteModal
-│   │   ├── data/
-│   │   │   ├── commands.ts      – 50+ command snippet templates
-│   │   │   ├── methodology.ts   – pentest methodology checklist
-│   │   │   └── sync-messages.ts – funny auto-commit messages
-│   │   └── server/
-│   │       ├── database.ts  – SQLite singleton, WAL config, migrations
-│   │       ├── migrations.ts – schema versioning (v1, v2, v3)
-│   │       ├── notes.ts     – file I/O: safePath, readTree, writeNote, etc.
-│   │       ├── screenshots.ts – screenshot file management
-│   │       └── ai.ts        – Gemini and MiniMax provider abstraction
-│   └── routes/
-│       ├── +layout.svelte        – root layout, theme init
-│       ├── [...path]/
-│       │   ├── +page.svelte      – main editor UI (client-side only)
-│       │   └── +page.ts          – ssr: false, prerender: false
-│       └── api/
-│           ├── notes/
-│           │   ├── [...path]/+server.ts – note CRUD
-│           │   ├── tree/+server.ts      – directory tree
-│           │   ├── search/+server.ts    – full-text search
-│           │   └── graph/+server.ts     – wikilink graph data
-│           ├── workspaces/
-│           │   ├── +server.ts           – list and create workspaces
-│           │   └── [id]/
-│           │       ├── +server.ts       – single workspace CRUD
-│           │       ├── hosts/+server.ts
-│           │       ├── credentials/+server.ts
-│           │       ├── flags/+server.ts
-│           │       ├── nodes/+server.ts
-│           │       └── edges/+server.ts
-│           ├── screenshots/+server.ts
-│           ├── ai/
-│           │   ├── chat/+server.ts
-│           │   ├── summarize/+server.ts
-│           │   └── status/+server.ts
-│           └── sync/
-│               ├── status/+server.ts
-│               ├── push/+server.ts
-│               └── pull/+server.ts
-├── data/                    – gitignored runtime data (created on first run)
-│   ├── notes.db             – SQLite database (committed; WAL files are not)
-│   ├── default/             – notes folder for Default Workspace
-│   ├── templates/           – read-only note templates
-│   └── screenshots/         – uploaded screenshots (gitignored)
-├── static/                  – static assets
-├── Dockerfile               – production multi-stage build
-├── Dockerfile.dev           – development image with hot reload
-├── docker-compose.yml       – production compose (port 3000)
-├── docker-compose.dev.yml   – development compose with watch (port 5173)
-├── .env.example             – documented environment variable reference
-└── .github/
-    ├── skills/              – this directory
-    ├── ISSUE_TEMPLATE/
-    └── PULL_REQUEST_TEMPLATE.md
-```
+## API Routes
+[Route table by domain: Method | Path | Purpose | Auth required]
 
-## Data Flow: User Writes a Note
+## Data Layer
+[DB choice, key tables/collections, schema management, connection pattern]
 
-```
-1. User types in editor (Milkdown)
-         │
-2. 1.5s debounce fires
-         │
-3. PUT /api/notes/{path}
-   Body: { content: "# heading\n..." }
-         │
-4. +server.ts handler
-   ├── safePath() validates path stays within NOTES_DIR
-   ├── Checks .md extension
-   └── writeNote(path, content)  ← notes.ts
-         │
-5. fs.writeFile(resolvedPath, content, 'utf-8')
-         │
-6. File saved to data/{workspace_folder}/{filename}.md
-         │
-7. Response: 200 OK
-         │
-8. isDirty = false in editor state
-```
+## Authentication
+[Auth strategy and exactly where it is enforced]
 
-## Data Flow: User Opens a Workspace
-
-```
-1. User selects workspace from dropdown (Sidebar.svelte)
-         │
-2. activeWorkspace = selected workspace
-   localStorage.setItem('notes-active-workspace-v1', id)
-         │
-3. GET /api/notes/tree?base={notes_folder}
-         │
-4. Server: readTree(NOTES_DIR/{notes_folder})
-   Returns: FileNode[] (folders first, .md files only)
-         │
-5. File tree renders with workspace-scoped files
-         │
-6. Pinned notes reload from localStorage key
-   'notes-pinned-v1-{workspaceId}'
-```
-
-## SQLite and WAL Mode
-
-The database uses WAL (Write-Ahead Logging) journal mode for better read performance during concurrent web server operation. WAL writes go to a `.db-wal` file first, then checkpoint into the main `.db` file.
-
-**Important for Git sync:** The `.db-wal` file is gitignored. Before committing the database file, the sync feature runs `PRAGMA wal_checkpoint(TRUNCATE)` to flush all pending writes into the main `.db` file. This ensures the committed `.db` file contains all data.
-
-```
-Normal write:  PUT /api/notes → writeFile → disk
-Normal DB write:  INSERT → notes.db-wal (fast)
-                           ↓ (checkpoint)
-                         notes.db (persisted)
-
-Git sync push:  wal_checkpoint → git add . → git commit → git push
-Git sync pull:  git pull → reloadDb() → app reads fresh DB
-```
-
-## Docker Setup
-
-Two configurations:
-
-| Config | File | Port | Purpose |
-|--------|------|------|---------|
-| Development | `docker-compose.dev.yml` | 5173 | Hot reload via Vite HMR; files synced into container |
-| Production | `docker-compose.yml` | 3000 | Compiled Node.js app; minimal image |
-
-Both configurations bind-mount `./data` into the container at `/app/data`. The database file and notes live in `./data` on the host, so they persist across container restarts and rebuilds.
-
-`node_modules` is **never** bind-mounted — it is installed inside the container at build time to avoid cross-platform binary compatibility issues between Windows hosts and Linux containers.
-
-## Git-Based Sync
-
-The intended workflow for syncing between devices is:
-
-```
-Device A (after working):   click Sync → push
-Device B (before working):  click Sync → pull
-```
-
-There is no real-time collaboration. One device works at a time. Conflicts are not auto-resolved — the user must resolve them manually with standard git tools.
-
-The sync feature requires git to be installed on the host system and the repository to have a remote configured. Authentication (SSH key, credential helper) is the user's responsibility.
+## Deployment
+[Hosting, Docker setup, list of env vars, CI/CD pipeline]
 
 ## Key Design Decisions
+[Table: Decision | Choice | Why]
 
-| Decision | Rationale |
-|----------|-----------|
-| Notes as `.md` files on disk | Plain text, portable, Git-diffable, no lock-in |
-| SQLite for engagement data | Zero-infrastructure, embedded, fast for single-user |
-| WAL journal mode | Better read performance during concurrent API requests |
-| Workspace-scoped file trees | Separation of concerns between engagements |
-| Client-side-only rendering (`ssr: false`) | Editor (Milkdown) requires browser DOM; SSR would fail |
-| Gemini as default AI provider | No API key = AI features are hidden, not broken; Gemini free tier is accessible |
-| Git as sync mechanism | No server infrastructure needed; plays nicely with existing workflows |
+## Critical Data Flows
+[Step-by-step walkthroughs of the 2-3 most important user actions]
+
+## Known Constraints
+[Deliberate simplifications and technical debt items]
+```

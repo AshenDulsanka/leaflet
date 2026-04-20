@@ -5,7 +5,9 @@ description: Use when writing or reviewing TypeScript, Svelte 5 components, or A
 
 # Coding Standards
 
-This document defines the coding conventions for the Leaflet project. All contributors and AI agents must follow these standards.
+> **Stack note:** These standards target SvelteKit + Svelte 5 + TypeScript as the default stack. Adapt the Svelte-specific sections when working with a different framework.
+
+This document defines the coding conventions for SvelteKit + Svelte 5 + TypeScript projects. All contributors and AI agents must follow these standards.
 
 ## TypeScript
 
@@ -70,7 +72,7 @@ Every `.svelte` file must follow this exact order — no exceptions:
 
 - `src/lib/components/` — Svelte UI components, grouped by domain subdirectory
 - `src/lib/server/` — server-side only code (database, migrations, file I/O, AI)
-- `src/lib/data/` — static data files (command snippets, methodology, sync messages)
+- `src/lib/data/` — static data and constants used across the app
 - `src/routes/` — SvelteKit routes; API endpoints under `src/routes/api/`
 - One component per file — never put two exported components in the same `.svelte` file
 

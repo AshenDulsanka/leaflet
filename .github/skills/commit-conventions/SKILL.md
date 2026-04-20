@@ -21,16 +21,16 @@ All commits in this repository must follow the [Conventional Commits](https://ww
 
 | Type | Description | Example |
 |------|-------------|---------|
-| `feat` | A new user-facing feature | `feat(workspace): add CTF/general workspace type selection` |
-| `fix` | A bug fix | `fix(sidebar): scope pinned notes to active workspace` |
+| `feat` | A new user-facing feature | `feat(ui): add dark mode toggle to header` |
+| `fix` | A bug fix | `fix(auth): handle expired session tokens correctly` |
 | `docs` | Documentation changes only | `docs(readme): add Docker setup instructions` |
-| `style` | Formatting, whitespace, missing semicolons — no logic change | `style(editor): reformat toolbar button spacing` |
-| `refactor` | Code change that is neither a fix nor a feature | `refactor(tree): extract file rename logic to separate function` |
-| `perf` | Performance improvement | `perf(search): debounce full-text search queries` |
-| `test` | Adding or correcting tests | `test(api): add workspace creation endpoint tests` |
-| `chore` | Build process, dependency updates, tooling | `chore(deps): update @milkdown/crepe to v7.6` |
-| `ci` | CI/CD pipeline configuration | `ci: add svelte-check step to pull request workflow` |
-| `revert` | Reverts a previous commit | `revert: feat(sync): revert git push on sync button` |
+| `style` | Formatting, whitespace, missing semicolons — no logic change | `style(components): reformat button spacing` |
+| `refactor` | Code change that is neither a fix nor a feature | `refactor(api): extract validation logic to shared helper` |
+| `perf` | Performance improvement | `perf(db): add index on users.email column` |
+| `test` | Adding or correcting tests | `test(api): add user creation endpoint tests` |
+| `chore` | Build process, dependency updates, tooling | `chore(deps): update sveltekit to v2.17` |
+| `ci` | CI/CD pipeline configuration | `ci: add type-check step to pull request workflow` |
+| `revert` | Reverts a previous commit | `revert: feat(auth): revert oauth provider change` |
 
 ## Scopes
 
@@ -38,18 +38,18 @@ Use one of the following scopes when the commit is contained to a specific area:
 
 | Scope | Area |
 |-------|------|
-| `editor` | Milkdown WYSIWYG or CodeMirror source editor |
-| `workspace` | Workspace creation, selection, settings |
-| `sidebar` | Sidebar, file tree, pinned notes |
-| `tree` | File/folder tree API or component |
-| `ai` | AI chat, summarize, provider configuration |
-| `engagement` | Host tracker, credential vault, flag tracker, attack chain, report generator |
-| `sync` | Git-based sync feature |
-| `export` | Note export (Markdown, HTML, PDF) |
-| `api` | Server-side API routes |
-| `db` | Database schema, migrations |
-| `docker` | Dockerfile or docker-compose changes |
+| `ui` | Client-side UI components and layouts |
+| `api` | Server-side API routes and handlers |
+| `auth` | Authentication and authorisation |
+| `db` | Database schema, migrations, queries |
+| `config` | Application configuration files |
+| `docs` | Project documentation (use with `docs` type) |
 | `deps` | Dependency updates (use with `chore` type) |
+| `ci` | CI/CD pipeline (use with `ci` type) |
+| `tests` | Test files and test utilities |
+| `schema` | Data validation schemas (Zod, JSON Schema, etc.) |
+| `infra` | Infrastructure config (Docker, hosting, env) |
+| `build` | Build tooling (Vite, webpack, esbuild, etc.) |
 
 Scope is optional but recommended for non-trivial commits.
 
