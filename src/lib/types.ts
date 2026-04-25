@@ -10,6 +10,7 @@ export interface FileNode {
   type: 'file' | 'folder';
   children?: FileNode[]; // only present when type === 'folder'
   extension?: string; // only present when type === 'file'
+  sort_order?: number; // custom sort position; absent means unset (treated as Infinity)
 }
 
 /** A screenshot with workspace-scoped metadata */

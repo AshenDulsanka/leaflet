@@ -24,9 +24,11 @@
     onDeleteWorkspace?: (id: string) => void;
     onRenameWorkspace?: (id: string, newName: string) => void;
     onReorderWorkspaces?: (reordered: Workspace[]) => void;
+    onNewNoteInFolder?: (parentPath: string) => void;
+    onReorderNotes?: (orderedPaths: string[]) => void;
   }
 
-  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess, onDeleteWorkspace, onRenameWorkspace, onReorderWorkspaces }: Props = $props();
+  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess, onDeleteWorkspace, onRenameWorkspace, onReorderWorkspaces, onNewNoteInFolder, onReorderNotes }: Props = $props();
 
   let wsDropdownOpen = $state(false);
 
@@ -38,6 +40,7 @@
   let draggingWsId = $state<string | null>(null);
   let dragOverWsId = $state<string | null>(null);
   let rootDropTarget = $state(false);
+  let rootDropTargetBottom = $state(false);
 
   function handleSelectWorkspace(ws: Workspace) {
     wsDropdownOpen = false;
@@ -411,7 +414,22 @@
         onRenameItem={handleRenameItem}
         onTogglePin={togglePin}
         {onMoveItem}
+        {onNewNoteInFolder}
+        {onReorderNotes}
       />
+      <div
+        role="presentation"
+        class="min-h-12 w-full flex-1 rounded transition-colors {rootDropTargetBottom ? 'bg-primary/30' : 'bg-transparent'}"
+        ondragover={(e) => { e.preventDefault(); e.stopPropagation(); rootDropTargetBottom = true; }}
+        ondragleave={() => { rootDropTargetBottom = false; }}
+        ondrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          rootDropTargetBottom = false;
+          const fromPath = e.dataTransfer?.getData('text/plain') ?? '';
+          if (fromPath) onMoveItem(fromPath, activeWorkspace?.notes_folder ?? '');
+        }}
+      ></div>
     </div>
   {/if}
 

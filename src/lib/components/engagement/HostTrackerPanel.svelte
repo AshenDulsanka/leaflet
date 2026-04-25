@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Monitor, Plus, X, ChevronDown, ChevronRight, Trash2, RefreshCw, Globe, Image as ImageIcon, FileInput } from '@lucide/svelte';
+  import { Monitor, Plus, X, ChevronDown, ChevronRight, Trash2, RefreshCw, Globe, Image as ImageIcon, FileInput, Pencil } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
   import Select from '$lib/components/ui/Select.svelte';
-  import { fly } from 'svelte/transition';
+  import { fly, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
   interface Port {
@@ -72,6 +72,16 @@
   let editingScreenshotFor = $state<string | null>(null);
   let newScreenshotFilename = $state('');
 
+  // Edit-host form state
+  let editingHostId = $state<string | null>(null);
+  let editIp = $state('');
+  let editHostname = $state('');
+  let editOs = $state('');
+  let editStatus = $state('unknown');
+  let editScope = $state<Scope>('unknown');
+  let editNotes = $state('');
+  let editScreenshotFilename = $state('');
+
   // Nmap import
   let importingNmap = $state(false);
   let nmapRaw = $state('');
@@ -124,7 +134,11 @@
     screenshotsLoading = true;
     try {
       const res = await fetch(`/api/screenshots?workspaceId=${encodeURIComponent(workspaceId)}`);
-      if (res.ok) availableScreenshots = await res.json();
+      if (res.ok) {
+        availableScreenshots = await res.json();
+      } else {
+        console.error('[HostTracker] Failed to load screenshots:', { workspaceId, status: res.status });
+      }
     } catch (err) {
       console.error('[HostTracker] Failed to load screenshots:', err);
     } finally {
@@ -215,45 +229,61 @@
 
   async function deleteHost(id: string): Promise<void> {
     if (!workspaceId) return;
-    const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${id}`, { method: 'DELETE' });
-    if (!res.ok) { console.error('Failed to delete host:', { workspaceId, hostId: id, status: res.status }); return; }
-    hosts = hosts.filter((h) => h.id !== id);
-    if (expandedHost === id) expandedHost = null;
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${id}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete host:', { workspaceId, hostId: id, status: res.status }); return; }
+      hosts = hosts.filter((h) => h.id !== id);
+      if (expandedHost === id) expandedHost = null;
+    } catch (err) {
+      console.error('Failed to delete host:', { workspaceId, hostId: id, error: err });
+    }
   }
 
   async function updateHostStatus(host: Host, status: string): Promise<void> {
     if (!workspaceId) return;
-    const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status })
-    });
-    if (!res.ok) { console.error('Failed to update host status:', { workspaceId, hostId: host.id, status: res.status }); return; }
-    hosts = hosts.map((h) => h.id === host.id ? { ...h, status } : h);
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) { console.error('Failed to update host status:', { workspaceId, hostId: host.id, status: res.status }); return; }
+      hosts = hosts.map((h) => h.id === host.id ? { ...h, status } : h);
+    } catch (err) {
+      console.error('Failed to update host status:', { workspaceId, hostId: host.id, error: err });
+    }
   }
 
   async function updateHostScope(host: Host, scope: Scope): Promise<void> {
     if (!workspaceId) return;
-    const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope })
-    });
-    if (!res.ok) { console.error('Failed to update host scope:', { workspaceId, hostId: host.id, status: res.status }); return; }
-    hosts = hosts.map((h) => h.id === host.id ? { ...h, scope } : h);
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope })
+      });
+      if (!res.ok) { console.error('Failed to update host scope:', { workspaceId, hostId: host.id, status: res.status }); return; }
+      hosts = hosts.map((h) => h.id === host.id ? { ...h, scope } : h);
+    } catch (err) {
+      console.error('Failed to update host scope:', { workspaceId, hostId: host.id, error: err });
+    }
   }
 
   async function saveScreenshotFilename(host: Host): Promise<void> {
     if (!workspaceId) return;
     const filename = newScreenshotFilename.trim();
-    const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ screenshot_filename: filename })
-    });
-    if (!res.ok) { console.error('Failed to save screenshot filename:', { workspaceId, hostId: host.id, status: res.status }); return; }
-    hosts = hosts.map((h) => h.id === host.id ? { ...h, screenshot_filename: filename } : h);
-    editingScreenshotFor = null;
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ screenshot_filename: filename })
+      });
+      if (!res.ok) { console.error('Failed to save screenshot filename:', { workspaceId, hostId: host.id, status: res.status }); return; }
+      hosts = hosts.map((h) => h.id === host.id ? { ...h, screenshot_filename: filename } : h);
+      editingScreenshotFor = null;
+    } catch (err) {
+      console.error('Failed to save screenshot filename:', { workspaceId, hostId: host.id, error: err });
+    }
   }
 
   async function addPort(hostId: string): Promise<void> {
@@ -283,9 +313,13 @@
 
   async function deletePort(hostId: string, portId: string): Promise<void> {
     if (!workspaceId) return;
-    const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${hostId}/ports/${portId}`, { method: 'DELETE' });
-    if (!res.ok) { console.error('Failed to delete port:', { workspaceId, hostId, portId, status: res.status }); return; }
-    hosts = hosts.map((h) => h.id === hostId ? { ...h, ports: h.ports.filter((p) => p.id !== portId) } : h);
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${hostId}/ports/${portId}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete port:', { workspaceId, hostId, portId, status: res.status }); return; }
+      hosts = hosts.map((h) => h.id === hostId ? { ...h, ports: h.ports.filter((p) => p.id !== portId) } : h);
+    } catch (err) {
+      console.error('Failed to delete port:', { workspaceId, hostId, portId, error: err });
+    }
   }
 
   const statusDots: Record<string, string> = {
@@ -334,6 +368,45 @@
       nmapImportStatus = 'error';
       nmapErrors = [{ line: 0, message: 'Network error — import failed.' }];
     }
+  }
+
+  async function updateHost(): Promise<void> {
+    if (!workspaceId || !editingHostId) return;
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${editingHostId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ip: editIp.trim(),
+          hostname: editHostname.trim(),
+          os: editOs.trim(),
+          notes: editNotes.trim(),
+          status: editStatus,
+          scope: editScope,
+          screenshot_filename: editScreenshotFilename.trim()
+        })
+      });
+      if (!res.ok) {
+        console.error('Failed to update host:', { workspaceId, hostId: editingHostId, status: res.status });
+        return;
+      }
+      const updated = await res.json() as Partial<Host>;
+      hosts = hosts.map((h) => h.id === editingHostId ? { ...h, ...updated } : h);
+      editingHostId = null;
+    } catch (err) {
+      console.error('Failed to update host:', { workspaceId, error: err });
+    }
+  }
+
+  function startEditingHost(host: Host): void {
+    editingHostId = host.id;
+    editIp = host.ip;
+    editHostname = host.hostname;
+    editOs = host.os;
+    editStatus = host.status;
+    editScope = host.scope;
+    editNotes = host.notes;
+    editScreenshotFilename = host.screenshot_filename;
   }
 
   function handleKeydown(e: KeyboardEvent): void {
@@ -394,48 +467,63 @@
     <!-- Add-host form (Inline) -->
     {#if addingHost && uiMode === 'inline'}
       <div class="border-b border-border bg-muted/40 p-3 space-y-2">
-        <input
-          type="text"
-          placeholder="IP address *"
-          bind:value={newIp}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          onkeydown={(e) => { if (e.key === 'Enter') addHost(); if (e.key === 'Escape') addingHost = false; }}
-        />
-        <div class="flex gap-2">
+        <label class="block space-y-0.5">
+          <span class="text-[10px] text-muted-foreground">IP Address <span class="text-destructive">*</span></span>
           <input
             type="text"
-            placeholder="Hostname"
-            bind:value={newHostname}
-            class="flex-1 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            placeholder="IP address *"
+            bind:value={newIp}
+            class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            onkeydown={(e) => { if (e.key === 'Enter') addHost(); if (e.key === 'Escape') addingHost = false; }}
           />
-          <input
-            type="text"
-            placeholder="OS"
-            bind:value={newOs}
-            class="w-24 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        </label>
+        <div class="flex gap-2">
+          <label class="flex-1 space-y-0.5">
+            <span class="block text-[10px] text-muted-foreground">Hostname</span>
+            <input
+              type="text"
+              placeholder="Hostname"
+              bind:value={newHostname}
+              class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
+          <label class="w-24 space-y-0.5">
+            <span class="block text-[10px] text-muted-foreground">OS</span>
+            <input
+              type="text"
+              placeholder="OS"
+              bind:value={newOs}
+              class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
+        </div>
+        <div class="space-y-0.5">
+          <p class="text-[10px] text-muted-foreground">Status</p>
+          <Select
+            size="sm"
+            value={newStatus}
+            onchange={(v) => newStatus = v}
+            options={[
+              { value: 'unknown', label: 'Unknown' },
+              { value: 'up', label: 'Up' },
+              { value: 'down', label: 'Down' },
+              { value: 'rooted', label: 'Rooted' }
+            ]}
           />
         </div>
-        <Select
-          size="sm"
-          value={newStatus}
-          onchange={(v) => newStatus = v}
-          options={[
-            { value: 'unknown', label: 'Unknown' },
-            { value: 'up', label: 'Up' },
-            { value: 'down', label: 'Down' },
-            { value: 'rooted', label: 'Rooted' }
-          ]}
-        />
-        <Select
-          size="sm"
-          value={newScope}
-          onchange={(v) => newScope = v as Scope}
-          options={[
-            { value: 'unknown', label: 'Scope?' },
-            { value: 'in-scope', label: 'In-scope' },
-            { value: 'out-of-scope', label: 'Out-of-scope' }
-          ]}
-        />
+        <div class="space-y-0.5">
+          <p class="text-[10px] text-muted-foreground">Scope</p>
+          <Select
+            size="sm"
+            value={newScope}
+            onchange={(v) => newScope = v as Scope}
+            options={[
+              { value: 'unknown', label: 'Scope?' },
+              { value: 'in-scope', label: 'In-scope' },
+              { value: 'out-of-scope', label: 'Out-of-scope' }
+            ]}
+          />
+        </div>
 
         <!-- Initial ports -->
         <div class="space-y-1">
@@ -473,17 +561,16 @@
           {#if screenshotsLoading}
             <p class="text-[10px] text-muted-foreground">Loading…</p>
           {:else}
-            <select
-              bind:value={newScreenshotChoice}
-              class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-              aria-label="Select screenshot"
-            >
-              <option value="">None</option>
-              {#each availableScreenshots as s}
-                <option value={s.filename}>{s.filename}</option>
-              {/each}
-              <option value="upload">Upload new…</option>
-            </select>
+            <Select
+              size="sm"
+              value={newScreenshotChoice}
+              onchange={(v) => (newScreenshotChoice = v)}
+              options={[
+                { value: '', label: 'None' },
+                ...availableScreenshots.map((s) => ({ value: s.filename, label: s.filename })),
+                { value: 'upload', label: 'Upload new…' }
+              ]}
+            />
             {#if newScreenshotChoice === 'upload'}
               <input
                 type="file" accept="image/*"
@@ -513,7 +600,7 @@
     {/if}
 
     <!-- Nmap import form -->
-    {#if importingNmap}
+    {#if importingNmap && uiMode === 'inline'}
       <div class="border-b border-border bg-muted/40 p-3 space-y-2">
         <!-- Format badge -->
         <div class="flex items-center gap-2">
@@ -629,18 +716,13 @@
                 <span class="text-[10px] text-muted-foreground">{host.ports.length}p</span>
               {/if}
               <div class="flex items-center gap-1">
-                <Select
-                  size="xs"
-                  value={host.status}
-                  onchange={(v) => updateHostStatus(host, v)}
-                  stopPropagation={true}
-                  options={[
-                    { value: 'unknown', label: '?' },
-                    { value: 'up', label: 'Up' },
-                    { value: 'down', label: 'Down' },
-                    { value: 'rooted', label: 'Root' }
-                  ]}
-                />
+                <button
+                  onclick={(e) => { e.stopPropagation(); startEditingHost(host); }}
+                  class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                  title="Edit host"
+                >
+                  <Pencil size={11} />
+                </button>
                 <button
                   onclick={(e) => { e.stopPropagation(); confirmDelete = { id: host.id, label: host.ip, kind: 'host' }; }}
                   class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
@@ -651,6 +733,116 @@
               </div>
             </div>
 
+            {#if editingHostId === host.id && uiMode === 'inline'}
+              <div class="border-t border-border bg-muted/40 px-3 pb-3 pt-2 space-y-2">
+                <label class="block space-y-0.5">
+                  <span class="text-[10px] text-muted-foreground">IP Address <span class="text-destructive">*</span></span>
+                  <input
+                    type="text"
+                    bind:value={editIp}
+                    class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                    onkeydown={(e) => { if (e.key === 'Escape') editingHostId = null; }}
+                  />
+                </label>
+                <label class="block space-y-0.5">
+                  <span class="text-[10px] text-muted-foreground">Hostname</span>
+                  <input
+                    type="text"
+                    bind:value={editHostname}
+                    class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </label>
+                <label class="block space-y-0.5">
+                  <span class="text-[10px] text-muted-foreground">OS</span>
+                  <input
+                    type="text"
+                    bind:value={editOs}
+                    class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </label>
+                <div class="space-y-0.5">
+                  <p class="text-[10px] text-muted-foreground">Status</p>
+                  <Select
+                    size="sm"
+                    value={editStatus}
+                    onchange={(v) => editStatus = v}
+                    options={[
+                      { value: 'unknown', label: 'Unknown' },
+                      { value: 'up', label: 'Up' },
+                      { value: 'down', label: 'Down' },
+                      { value: 'rooted', label: 'Rooted' }
+                    ]}
+                  />
+                </div>
+                <div class="space-y-0.5">
+                  <p class="text-[10px] text-muted-foreground">Scope</p>
+                  <Select
+                    size="sm"
+                    value={editScope}
+                    onchange={(v) => editScope = v as Scope}
+                    options={[
+                      { value: 'unknown', label: 'Scope?' },
+                      { value: 'in-scope', label: 'In-scope' },
+                      { value: 'out-of-scope', label: 'Out-of-scope' }
+                    ]}
+                  />
+                </div>
+                <label class="block space-y-0.5">
+                  <span class="text-[10px] text-muted-foreground">Notes</span>
+                  <textarea
+                    rows={3}
+                    bind:value={editNotes}
+                    class="w-full resize-none rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  ></textarea>
+                </label>
+                <label class="block space-y-0.5">
+                  <span class="text-[10px] text-muted-foreground">Screenshot</span>
+                  <input
+                    type="text"
+                    placeholder="filename.png"
+                    bind:value={editScreenshotFilename}
+                    class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </label>
+                {#if host.ports.length > 0}
+                  <div class="space-y-0.5">
+                    <p class="text-[10px] text-muted-foreground">Ports</p>
+                    <div class="rounded border border-border overflow-hidden">
+                      <table class="w-full text-[10px]">
+                        <tbody>
+                          {#each getSortedPorts(host.ports) as port (port.id)}
+                            <tr class="border-b border-border last:border-b-0">
+                              <td class="px-2 py-0.5 font-mono font-medium text-foreground">{port.number}/{port.protocol}</td>
+                              <td class="px-2 py-0.5 text-muted-foreground">{port.service || '-'}</td>
+                              <td class="px-1 py-0.5">
+                                <button
+                                  onclick={() => confirmDelete = { id: port.id, label: `${port.number}/${port.protocol}`, kind: 'port', parentId: host.id }}
+                                  class="flex h-4 w-4 items-center justify-center rounded text-destructive hover:bg-destructive/10"
+                                  aria-label="Delete port"
+                                >
+                                  <X size={9} />
+                                </button>
+                              </td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                {/if}
+                <div class="flex gap-2 pt-1">
+                  <button
+                    onclick={updateHost}
+                    class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                  >Save</button>
+                  <button
+                    onclick={() => (editingHostId = null)}
+                    class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
+                  >Cancel</button>
+                </div>
+              </div>
+            {/if}
+
             <!-- Expanded: details + ports + add-port -->
             {#if expandedHost === host.id}
               <div class="bg-muted/20 px-3 pb-2">
@@ -660,61 +852,20 @@
                   </p>
                 {/if}
 
-                <!-- Scope selector (in expanded view) -->
-                <div class="mb-2 flex items-center gap-2">
-                  <span class="text-[10px] text-muted-foreground">Scope:</span>
-                  <Select
-                    size="xs"
-                    value={host.scope}
-                    onchange={(v) => updateHostScope(host, v as Scope)}
-                    options={[
-                      { value: 'unknown', label: 'Unknown' },
-                      { value: 'in-scope', label: 'In-scope' },
-                      { value: 'out-of-scope', label: 'Out-of-scope' }
-                    ]}
-                  />
-                </div>
-
                 <!-- Screenshot filename -->
                 <div class="mb-2 flex items-center gap-1.5">
                   <ImageIcon size={10} class="flex-shrink-0 text-muted-foreground" />
-                  {#if editingScreenshotFor === host.id}
-                    <input
-                      type="text"
-                      bind:value={newScreenshotFilename}
-                      placeholder="screenshot.png"
-                      class="flex-1 min-w-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
-                      onkeydown={(e) => {
-                        if (e.key === 'Enter') saveScreenshotFilename(host);
-                        if (e.key === 'Escape') editingScreenshotFor = null;
-                      }}
-                    />
-                    <button
-                      onclick={() => saveScreenshotFilename(host)}
-                      class="rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
-                    >Save</button>
-                    <button
-                      onclick={() => (editingScreenshotFor = null)}
-                      class="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-accent"
-                    >Cancel</button>
+                  {#if host.screenshot_filename}
+                    <a
+                      href="/api/screenshots/{host.screenshot_filename}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="flex-1 min-w-0 truncate text-[10px] text-primary hover:underline"
+                      title="Open screenshot"
+                    >{host.screenshot_filename}</a>
+                    <CopyButton text={host.screenshot_filename} size={9} />
                   {:else}
-                    {#if host.screenshot_filename}
-                      <a
-                        href="/api/screenshots/{host.screenshot_filename}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="flex-1 min-w-0 truncate text-[10px] text-primary hover:underline"
-                        title="Open screenshot"
-                      >{host.screenshot_filename}</a>
-                      <CopyButton text={host.screenshot_filename} size={9} />
-                    {:else}
-                      <span class="flex-1 min-w-0 truncate text-[10px] text-muted-foreground">No screenshot</span>
-                    {/if}
-                    <button
-                      onclick={() => { editingScreenshotFor = host.id; newScreenshotFilename = host.screenshot_filename; }}
-                      class="flex-shrink-0 rounded px-1 py-0.5 text-[9px] text-muted-foreground hover:bg-accent hover:text-foreground"
-                      title="Edit screenshot filename"
-                    >edit</button>
+                    <span class="flex-1 min-w-0 truncate text-[10px] text-muted-foreground">No screenshot</span>
                   {/if}
                 </div>
 
@@ -758,55 +909,7 @@
                   </div>
                 {/if}
 
-                <!-- Add-port form -->
-                {#if addingPortFor === host.id}
-                  <div class="flex gap-1.5 items-end flex-wrap">
-                    <input
-                      type="number"
-                      placeholder="Port"
-                      bind:value={newPortNum}
-                      min="1"
-                      max="65535"
-                      class="w-16 rounded border border-border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
-                      onkeydown={(e) => { if (e.key === 'Enter') addPort(host.id); if (e.key === 'Escape') addingPortFor = null; }}
-                    />
-                    <Select
-                      size="xs"
-                      value={newPortProto}
-                      onchange={(v) => newPortProto = v}
-                      options={[
-                        { value: 'tcp', label: 'TCP' },
-                        { value: 'udp', label: 'UDP' }
-                      ]}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Service"
-                      bind:value={newPortService}
-                      class="flex-1 min-w-0 rounded border border-border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <button
-                      onclick={() => addPort(host.id)}
-                      class="rounded bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
-                    >
-                      Add
-                    </button>
-                    <button
-                      onclick={() => (addingPortFor = null)}
-                      class="rounded border border-border px-2 py-0.5 text-[10px] hover:bg-accent"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                {:else}
-                  <button
-                    onclick={() => { addingPortFor = host.id; newPortNum = ''; newPortService = ''; newPortProto = 'tcp'; }}
-                    class="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
-                  >
-                    <Plus size={10} />
-                    Add port
-                  </button>
-                {/if}
+
               </div>
             {/if}
           </div>
@@ -816,9 +919,85 @@
   {/if}
 </div>
 
+{#if importingNmap && uiMode === 'modal'}
+  <!-- Backdrop -->
+  <div
+    transition:fade={{ duration: 150 }}
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    role="button"
+    tabindex="-1"
+    onclick={() => { importingNmap = false; nmapRaw = ''; nmapImportStatus = 'idle'; nmapErrors = []; nmapSummary = ''; }}
+    onkeydown={(e) => { if (e.key === 'Escape') { importingNmap = false; nmapRaw = ''; nmapImportStatus = 'idle'; nmapErrors = []; nmapSummary = ''; } }}
+    aria-label="Close Nmap importer"
+  ></div>
+  <!-- Modal -->
+  <div
+    transition:fly={{ y: 8, duration: 200, easing: cubicOut }}
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Import from Nmap"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <FileInput size={16} class="shrink-0 text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Import from Nmap</h2>
+      <button
+        onclick={() => { importingNmap = false; nmapRaw = ''; nmapImportStatus = 'idle'; nmapErrors = []; nmapSummary = ''; }}
+        class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+        aria-label="Close"
+      ><X size={14} /></button>
+    </div>
+    <div class="space-y-3 px-5 py-4">
+      <!-- Format badge -->
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-muted-foreground">Detected format:</span>
+        {#if detectedFormat === 'grepable'}
+          <span class="rounded bg-green-500/15 px-1.5 py-0.5 text-xs font-medium text-green-600 dark:text-green-400">Grepable (-oG)</span>
+        {:else if detectedFormat === 'xml'}
+          <span class="rounded bg-blue-500/15 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">XML (-oX)</span>
+        {:else}
+          <span class="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">Unknown</span>
+        {/if}
+      </div>
+      <textarea
+        rows={10}
+        bind:value={nmapRaw}
+        placeholder="Paste Nmap -oG or -oX output here…"
+        class="w-full rounded border border-border bg-background px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+      ></textarea>
+      {#if nmapErrors.length > 0}
+        <ul class="space-y-0.5">
+          {#each nmapErrors as err}
+            <li class="text-xs text-destructive">{err.line > 0 ? `Line ${err.line}: ` : ''}{err.message}</li>
+          {/each}
+        </ul>
+      {/if}
+      {#if nmapSummary}
+        <p class="text-xs text-green-600 dark:text-green-400">{nmapSummary}</p>
+      {/if}
+    </div>
+    <div class="flex gap-2 border-t border-border px-5 py-3 bg-muted/30">
+      <button
+        onclick={importNmap}
+        disabled={nmapRaw.trim() === '' || nmapImportStatus === 'loading'}
+        class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {nmapImportStatus === 'loading' ? 'Importing…' : 'Import'}
+      </button>
+      <button
+        onclick={() => { importingNmap = false; nmapRaw = ''; nmapImportStatus = 'idle'; nmapErrors = []; nmapSummary = ''; }}
+        class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+{/if}
+
 {#if addingHost && uiMode === 'modal'}
   <!-- Backdrop -->
   <div
+    transition:fade={{ duration: 150 }}
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
     role="button"
     tabindex="-1"
@@ -828,7 +1007,8 @@
   ></div>
   <!-- Modal -->
   <div
-    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+    transition:fly={{ y: 8, duration: 200, easing: cubicOut }}
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-2xl"
     role="dialog"
     aria-modal="true"
     aria-label="Add Host"
@@ -839,48 +1019,63 @@
       <button onclick={() => (addingHost = false)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Close modal"><X size={14} /></button>
     </div>
     <div class="space-y-3 px-5 py-4">
-      <input
-        type="text"
-        placeholder="IP address *"
-        bind:value={newIp}
-        class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        onkeydown={(e) => { if (e.key === 'Enter') addHost(); if (e.key === 'Escape') addingHost = false; }}
-      />
-      <div class="flex gap-2">
+      <label class="block space-y-1">
+        <span class="text-xs text-muted-foreground">IP Address <span class="text-destructive">*</span></span>
         <input
           type="text"
-          placeholder="Hostname"
-          bind:value={newHostname}
-          class="flex-1 rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          placeholder="IP address *"
+          bind:value={newIp}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          onkeydown={(e) => { if (e.key === 'Enter') addHost(); if (e.key === 'Escape') addingHost = false; }}
         />
-        <input
-          type="text"
-          placeholder="OS"
-          bind:value={newOs}
-          class="w-24 rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+      </label>
+      <div class="flex gap-2">
+        <label class="flex-1 space-y-1">
+          <span class="block text-xs text-muted-foreground">Hostname</span>
+          <input
+            type="text"
+            placeholder="Hostname"
+            bind:value={newHostname}
+            class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </label>
+        <label class="w-24 space-y-1">
+          <span class="block text-xs text-muted-foreground">OS</span>
+          <input
+            type="text"
+            placeholder="OS"
+            bind:value={newOs}
+            class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </label>
+      </div>
+      <div class="space-y-1">
+        <p class="text-xs text-muted-foreground">Status</p>
+        <Select
+          size="sm"
+          value={newStatus}
+          onchange={(v) => newStatus = v}
+          options={[
+            { value: 'unknown', label: 'Unknown' },
+            { value: 'up', label: 'Up' },
+            { value: 'down', label: 'Down' },
+            { value: 'rooted', label: 'Rooted' }
+          ]}
         />
       </div>
-      <Select
-        size="sm"
-        value={newStatus}
-        onchange={(v) => newStatus = v}
-        options={[
-          { value: 'unknown', label: 'Unknown' },
-          { value: 'up', label: 'Up' },
-          { value: 'down', label: 'Down' },
-          { value: 'rooted', label: 'Rooted' }
-        ]}
-      />
-      <Select
-        size="sm"
-        value={newScope}
-        onchange={(v) => newScope = v as Scope}
-        options={[
-          { value: 'unknown', label: 'Scope?' },
-          { value: 'in-scope', label: 'In-scope' },
-          { value: 'out-of-scope', label: 'Out-of-scope' }
-        ]}
-      />
+      <div class="space-y-1">
+        <p class="text-xs text-muted-foreground">Scope</p>
+        <Select
+          size="sm"
+          value={newScope}
+          onchange={(v) => newScope = v as Scope}
+          options={[
+            { value: 'unknown', label: 'Scope?' },
+            { value: 'in-scope', label: 'In-scope' },
+            { value: 'out-of-scope', label: 'Out-of-scope' }
+          ]}
+        />
+      </div>
 
       <!-- Initial ports -->
       <div class="space-y-1 mt-2 border-t border-border pt-2">
@@ -918,17 +1113,16 @@
         {#if screenshotsLoading}
           <p class="text-xs text-muted-foreground">Loading…</p>
         {:else}
-          <select
-            bind:value={newScreenshotChoice}
-            class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-            aria-label="Select screenshot"
-          >
-            <option value="">None</option>
-            {#each availableScreenshots as s}
-              <option value={s.filename}>{s.filename}</option>
-            {/each}
-            <option value="upload">Upload new…</option>
-          </select>
+          <Select
+            size="sm"
+            value={newScreenshotChoice}
+            onchange={(v) => (newScreenshotChoice = v)}
+            options={[
+              { value: '', label: 'None' },
+              ...availableScreenshots.map((s) => ({ value: s.filename, label: s.filename })),
+              { value: 'upload', label: 'Upload new…' }
+            ]}
+          />
           {#if newScreenshotChoice === 'upload'}
             <input
               type="file" accept="image/*"
@@ -943,6 +1137,140 @@
     <div class="flex gap-2 border-t border-border px-5 py-3 bg-muted/30">
       <button onclick={addHost} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">Add Host</button>
       <button onclick={() => (addingHost = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent transition-colors">Cancel</button>
+    </div>
+  </div>
+{/if}
+
+{#if editingHostId !== null && uiMode === 'modal'}
+  <!-- Backdrop -->
+  <div
+    transition:fade={{ duration: 150 }}
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    role="button"
+    tabindex="-1"
+    onclick={() => (editingHostId = null)}
+    onkeydown={(e) => { if (e.key === 'Escape') editingHostId = null; }}
+    aria-label="Close edit form"
+  ></div>
+  <!-- Modal -->
+  <div
+    transition:fly={{ y: 8, duration: 200, easing: cubicOut }}
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Edit Host"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <Monitor size={16} class="shrink-0 text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Edit Host</h2>
+      <button onclick={() => (editingHostId = null)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Close"><X size={14} /></button>
+    </div>
+    <div class="space-y-3 px-5 py-4">
+      <label class="block space-y-1">
+        <span class="text-xs text-muted-foreground">IP Address <span class="text-destructive">*</span></span>
+        <input
+          type="text"
+          bind:value={editIp}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          onkeydown={(e) => { if (e.key === 'Enter') updateHost(); if (e.key === 'Escape') editingHostId = null; }}
+        />
+      </label>
+      <div class="flex gap-2">
+        <label class="flex-1 space-y-1">
+          <span class="block text-xs text-muted-foreground">Hostname</span>
+          <input
+            type="text"
+            bind:value={editHostname}
+            class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </label>
+        <label class="w-24 space-y-1">
+          <span class="block text-xs text-muted-foreground">OS</span>
+          <input
+            type="text"
+            bind:value={editOs}
+            class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </label>
+      </div>
+      <div class="flex gap-2">
+        <div class="flex-1 space-y-1">
+          <p class="text-xs text-muted-foreground">Status</p>
+          <Select
+            size="sm"
+            value={editStatus}
+            onchange={(v) => editStatus = v}
+            options={[
+              { value: 'unknown', label: 'Unknown' },
+              { value: 'up', label: 'Up' },
+              { value: 'down', label: 'Down' },
+              { value: 'rooted', label: 'Rooted' }
+            ]}
+          />
+        </div>
+        <div class="flex-1 space-y-1">
+          <p class="text-xs text-muted-foreground">Scope</p>
+          <Select
+            size="sm"
+            value={editScope}
+            onchange={(v) => editScope = v as Scope}
+            options={[
+              { value: 'unknown', label: 'Scope?' },
+              { value: 'in-scope', label: 'In-scope' },
+              { value: 'out-of-scope', label: 'Out-of-scope' }
+            ]}
+          />
+        </div>
+      </div>
+      <label class="block space-y-1">
+        <span class="text-xs text-muted-foreground">Notes</span>
+        <textarea
+          rows={3}
+          bind:value={editNotes}
+          class="w-full resize-none rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        ></textarea>
+      </label>
+      <label class="block space-y-1">
+        <span class="text-xs text-muted-foreground">Screenshot</span>
+        <input
+          type="text"
+          placeholder="filename.png"
+          bind:value={editScreenshotFilename}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </label>
+      {#each hosts.filter((h) => h.id === editingHostId) as editingHost (editingHost.id)}
+        {#if editingHost.ports.length > 0}
+          <div class="space-y-1">
+            <p class="text-xs text-muted-foreground">Ports</p>
+            <div class="rounded border border-border overflow-hidden">
+              <table class="w-full text-xs">
+                <tbody>
+                  {#each getSortedPorts(editingHost.ports) as port (port.id)}
+                    <tr class="border-b border-border last:border-b-0">
+                      <td class="px-2 py-1 font-mono font-medium text-foreground">{port.number}/{port.protocol}</td>
+                      <td class="px-2 py-1 text-muted-foreground">{port.service || '-'}</td>
+                      <td class="px-1 py-1">
+                        <button
+                          onclick={() => confirmDelete = { id: port.id, label: `${port.number}/${port.protocol}`, kind: 'port', parentId: editingHost.id }}
+                          class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
+                          aria-label="Delete port"
+                        >
+                          <X size={11} />
+                        </button>
+                      </td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {/if}
+      {/each}
+    </div>
+    <div class="flex gap-2 border-t border-border px-5 py-3 bg-muted/30">
+      <button onclick={updateHost} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">Save Changes</button>
+      <button onclick={() => (editingHostId = null)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent transition-colors">Cancel</button>
     </div>
   </div>
 {/if}

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Terminal, Plus, X, RefreshCw, Copy, ChevronDown, ChevronRight, Trash2 } from '@lucide/svelte';
+  import { Terminal, Plus, X, RefreshCw, Copy, ChevronDown, ChevronRight, Trash2, Pencil } from '@lucide/svelte';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
   import Select from '$lib/components/ui/Select.svelte';
-  import { extractSnippetVarNames } from '$lib/data/commands.js';
-  import { fly } from 'svelte/transition';
+  import { extractSnippetVarNames } from '$lib/data/commands';
+  import { fly, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
   interface Snippet {
@@ -44,7 +44,14 @@
   let expandedCategories = $state<Set<string>>(new Set(['general', 'recon']));
   let addingSnippet = $state(false);
   let searchQuery = $state('');
-  let showClearVariablesConfirm = $state(false);
+  let editingSnippet = $state<Snippet | null>(null);
+  let editTitle = $state('');
+  let editCommand = $state('');
+  let editCategory = $state('general');
+  let editDescription = $state('');
+  let snippetToDelete = $state<string | null>(null);
+  let varToDelete = $state<string | null>(null);
+  let showAddVar = $state(false);
 
   // Add snippet form
   let newTitle = $state('');
@@ -129,15 +136,57 @@
     }
   }
 
-  async function deleteSnippet(id: string) {
-    if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/snippets/${id}`, { method: 'DELETE' });
-    snippets = snippets.filter((s) => s.id !== id);
+  function deleteSnippet(id: string) {
+    snippetToDelete = id;
+  }
+
+  async function confirmDeleteSnippet() {
+    if (!workspaceId || !snippetToDelete) return;
+    const res = await fetch(`/api/workspaces/${workspaceId}/snippets/${snippetToDelete}`, { method: 'DELETE' });
+    if (!res.ok) {
+      console.error('Failed to delete snippet:', { workspaceId, snippetId: snippetToDelete, status: res.status });
+      snippetToDelete = null;
+      return;
+    }
+    snippets = snippets.filter((s) => s.id !== snippetToDelete);
+    snippetToDelete = null;
+  }
+
+  function startEditSnippet(snippet: Snippet) {
+    editingSnippet = snippet;
+    editTitle = snippet.title;
+    editCommand = snippet.command;
+    editCategory = snippet.category;
+    editDescription = snippet.description;
+  }
+
+  async function saveEditSnippet() {
+    if (!editingSnippet || !workspaceId) return;
+    if (!editTitle.trim() || !editCommand.trim()) return;
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/snippets/${editingSnippet.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          command: editCommand.trim(),
+          category: editCategory,
+          description: editDescription.trim()
+        })
+      });
+      if (!res.ok) return;
+      const raw = await res.json() as Snippet & { tags: string | string[] };
+      const updated: Snippet = { ...raw, tags: typeof raw.tags === 'string' ? JSON.parse(raw.tags) : (raw.tags ?? []) };
+      snippets = snippets.map((s) => s.id === updated.id ? updated : s);
+      editingSnippet = null;
+    } catch {
+      console.error('Failed to update snippet');
+    }
   }
 
   /** Substitute {VARIABLE_NAME} placeholders with current variable values */
   function resolveCommand(command: string): string {
-    return command.replace(/\{([A-Z0-9_]+)\}/g, (_, name: string) => {
+    return command.replace(/\{([A-Z0-9_-]+)\}/g, (_, name: string) => {
       const v = variables.find((vr) => vr.name.toUpperCase() === name.toUpperCase());
       return v?.value || `{${name}}`;
     });
@@ -147,8 +196,8 @@
     const resolved = resolveCommand(snippet.command);
     try {
       await navigator.clipboard.writeText(resolved);
-    } catch {
-      // Silently ignore
+    } catch (err) {
+      console.error('Failed to copy snippet to clipboard:', err);
     }
   }
 
@@ -182,24 +231,21 @@
     }, 500));
   }
 
-  async function deleteVariable(id: string) {
-    if (!workspaceId) return;
-    const toDelete = variables.find((v) => v.id === id);
-    await fetch(`/api/workspaces/${workspaceId}/variables/${id}`, { method: 'DELETE' });
-    variables = variables.filter((v) => v.id !== id);
+  function deleteVariable(id: string) {
+    varToDelete = id;
+  }
+
+  async function confirmDeleteVariable() {
+    if (!workspaceId || !varToDelete) return;
+    const toDelete = variables.find((v) => v.id === varToDelete);
+    await fetch(`/api/workspaces/${workspaceId}/variables/${varToDelete}`, { method: 'DELETE' });
+    variables = variables.filter((v) => v.id !== varToDelete);
     if (toDelete) {
       editValues = Object.fromEntries(
         Object.entries(editValues).filter(([key]) => key !== toDelete.name)
       );
     }
-  }
-
-  async function clearAllVariables() {
-    if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/variables`, { method: 'DELETE' });
-    variables = [];
-    editValues = {};
-    showClearVariablesConfirm = false;
+    varToDelete = null;
   }
 
   function toggleCategory(cat: string) {
@@ -220,7 +266,7 @@
       : snippets
   );
 
-  const groupedSnippets = $derived(() => {
+  const groupedSnippets = $derived.by(() => {
     const groups = new Map<string, Snippet[]>();
     for (const s of filteredSnippets) {
       const cat = s.category;
@@ -231,7 +277,7 @@
   });
 
   /** Merge persisted variables with names auto-extracted from snippet commands. */
-  const mergedVars = $derived(() => {
+  const mergedVars = $derived.by(() => {
     const extractedNames = extractSnippetVarNames(snippets.map((s) => s.command));
     const persistedMap = new Map(variables.map((v) => [v.name, v]));
     const result: MergedVar[] = variables.map((v) => ({
@@ -382,7 +428,7 @@
             <p class="text-xs text-muted-foreground">No snippets. Click + to add one.</p>
           </div>
         {:else}
-          {#each [...groupedSnippets()] as [category, items] (category)}
+          {#each [...groupedSnippets] as [category, items] (category)}
             <div class="border-b border-border last:border-b-0">
               <!-- Category header -->
               <button
@@ -426,6 +472,13 @@
                           <Copy size={11} />
                         </button>
                         <button
+                          onclick={() => startEditSnippet(snippet)}
+                          title="Edit"
+                          class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                        <button
                           onclick={() => deleteSnippet(snippet.id)}
                           title="Delete"
                           class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
@@ -456,20 +509,17 @@
           <p class="text-[10px] text-muted-foreground">
             Use <code class="font-mono">&#123;NAME&#125;</code> in commands. Values auto-save.
           </p>
-          {#if variables.length > 0}
-            <button
-              onclick={() => (showClearVariablesConfirm = true)}
-              title="Clear all variables"
-              class="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-destructive hover:bg-destructive/10"
-            >
-              <Trash2 size={10} />
-              Clear all
-            </button>
-          {/if}
+          <button
+            onclick={() => (showAddVar = !showAddVar)}
+            title="Add variable"
+            class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <Plus size={11} />
+          </button>
         </div>
 
         <div class="p-3 space-y-1.5">
-          {#each mergedVars() as v (v.name)}
+          {#each mergedVars as v (v.name)}
             <div class="flex items-center gap-1.5 rounded border border-border px-2 py-1 hover:bg-accent/20">
               <code class="w-28 flex-shrink-0 truncate text-[10px] font-mono text-primary" title={'{' + v.name + '}'}>{'{' + v.name + '}'}</code>
               <input
@@ -483,7 +533,7 @@
                 <button
                   onclick={() => deleteVariable(v.id!)}
                   title="Delete variable"
-                  class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-destructive hover:bg-destructive/10"
                 >
                   <Trash2 size={10} />
                 </button>
@@ -494,15 +544,15 @@
             </div>
           {/each}
 
-          {#if mergedVars().length === 0}
+          {#if mergedVars.length === 0}
             <p class="py-4 text-center text-[10px] text-muted-foreground">
               No variables yet. Add snippets with &#123;VARIABLE&#125; placeholders or add one below.
             </p>
           {/if}
 
+          {#if showAddVar}
           <!-- Add new variable manually -->
           <div class="rounded border border-dashed border-border p-2 space-y-1 mt-2">
-            <p class="text-[10px] font-medium text-muted-foreground">Add variable</p>
             <div class="flex gap-1">
               <input
                 type="text"
@@ -515,28 +565,113 @@
                 placeholder="value"
                 bind:value={newVarValue}
                 class="flex-1 rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                onkeydown={(e) => { if (e.key === 'Enter' && newVarName.trim()) { void saveVariable(newVarName.trim().toUpperCase(), newVarValue); newVarName = ''; newVarValue = ''; } }}
+                onkeydown={(e) => { if (e.key === 'Enter' && newVarName.trim()) { if (!/^[A-Z0-9_-]+$/.test(newVarName.trim().toUpperCase())) return; void saveVariable(newVarName.trim().toUpperCase(), newVarValue); newVarName = ''; newVarValue = ''; showAddVar = false; } }}
               />
               <button
-                onclick={() => { if (newVarName.trim()) { void saveVariable(newVarName.trim().toUpperCase(), newVarValue); newVarName = ''; newVarValue = ''; } }}
+                onclick={() => { if (newVarName.trim()) { if (!/^[A-Z0-9_-]+$/.test(newVarName.trim().toUpperCase())) return; void saveVariable(newVarName.trim().toUpperCase(), newVarValue); newVarName = ''; newVarValue = ''; showAddVar = false; } }}
                 class="rounded bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
               >
                 Add
               </button>
+              <button
+                onclick={() => { newVarName = ''; newVarValue = ''; showAddVar = false; }}
+                title="Cancel"
+                class="flex h-6 w-6 items-center justify-center rounded border border-border text-muted-foreground hover:bg-accent"
+              >
+                <X size={10} />
+              </button>
             </div>
           </div>
+          {/if}
         </div>
       </div>
     {/if}
   {/if}
 </div>
 
-{#if showClearVariablesConfirm}
+{#if snippetToDelete}
   <ConfirmDialog
-    title="Clear All Variables"
-    message="Clear all variables for this workspace? This action cannot be undone."
-    confirmLabel="Clear all"
-    onConfirm={() => { void clearAllVariables(); }}
-    onCancel={() => (showClearVariablesConfirm = false)}
+    title="Delete Snippet"
+    message="Delete this snippet? This action cannot be undone."
+    confirmLabel="Delete"
+    onConfirm={() => { void confirmDeleteSnippet(); }}
+    onCancel={() => (snippetToDelete = null)}
   />
+{/if}
+
+{#if varToDelete}
+  <ConfirmDialog
+    title="Delete Variable"
+    message="Delete this variable? This action cannot be undone."
+    confirmLabel="Delete"
+    onConfirm={() => { void confirmDeleteVariable(); }}
+    onCancel={() => (varToDelete = null)}
+  />
+{/if}
+
+{#if editingSnippet}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    onclick={(e) => { if (e.target === e.currentTarget) { editingSnippet = null; } }}
+    role="presentation"
+    transition:fade={{ duration: 150 }}
+  >
+    <div
+      class="w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-2xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-snippet-title"
+      transition:fly={{ y: 10, duration: 200, easing: cubicOut }}
+    >
+      <div class="mb-4 flex items-center justify-between">
+        <h2 id="edit-snippet-title" class="text-sm font-semibold">Edit Snippet</h2>
+        <button
+          onclick={() => (editingSnippet = null)}
+          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label="Close"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <div class="space-y-2">
+        <input
+          type="text"
+          placeholder="Title *"
+          bind:value={editTitle}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <textarea
+          placeholder="Command *"
+          bind:value={editCommand}
+          rows={4}
+          class="w-full resize-none rounded border border-border bg-background px-2 py-1.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        ></textarea>
+        <Select
+          options={categoryOptions}
+          value={editCategory}
+          onchange={(value) => { editCategory = value; }}
+        />
+        <input
+          type="text"
+          placeholder="Description"
+          bind:value={editDescription}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button
+          onclick={() => (editingSnippet = null)}
+          class="rounded border border-border px-3 py-1.5 text-xs hover:bg-accent"
+        >
+          Cancel
+        </button>
+        <button
+          onclick={saveEditSnippet}
+          class="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  </div>
 {/if}

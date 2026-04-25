@@ -85,8 +85,10 @@
   let aiChatOpen = $state(false);
   let summarizeOpen = $state(false);
   let newNoteOpen = $state(false);
+  let newNoteParentPath = $state<string | null>(null);
   let backlinksOpen = $state(false);
   let screenshotsOpen = $state(false);
+  let screenshotVersion = $state(0);
   let exportOpen = $state(false);
   let hostTrackerOpen = $state(false);
   let credentialVaultOpen = $state(false);
@@ -256,6 +258,41 @@
   $effect(() => { if (findingsTrackerOpen) { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; } });
   $effect(() => { if (topologyOpen) { methodologyOpen = false; aiChatOpen = false; attackChainOpen = false; graphOpen = false; } });
 
+  function toggleRightPanel(panel: 'screenshots' | 'hosttracker' | 'credvault' | 'flagtracker' | 'snippets' | 'oplog' | 'cvss' | 'findings' | 'backlinks'): void {
+    const isCurrentlyOpen =
+      (panel === 'screenshots' && screenshotsOpen) ||
+      (panel === 'hosttracker' && hostTrackerOpen) ||
+      (panel === 'credvault' && credentialVaultOpen) ||
+      (panel === 'flagtracker' && flagTrackerOpen) ||
+      (panel === 'snippets' && snippetsOpen) ||
+      (panel === 'oplog' && operationLogOpen) ||
+      (panel === 'cvss' && cvssOpen) ||
+      (panel === 'findings' && findingsTrackerOpen) ||
+      (panel === 'backlinks' && backlinksOpen);
+    // Close all right panels
+    screenshotsOpen = false;
+    hostTrackerOpen = false;
+    credentialVaultOpen = false;
+    flagTrackerOpen = false;
+    snippetsOpen = false;
+    operationLogOpen = false;
+    cvssOpen = false;
+    findingsTrackerOpen = false;
+    backlinksOpen = false;
+    // Open the requested panel only if it wasn't already open (toggle)
+    if (!isCurrentlyOpen) {
+      if (panel === 'screenshots') screenshotsOpen = true;
+      else if (panel === 'hosttracker') hostTrackerOpen = true;
+      else if (panel === 'credvault') credentialVaultOpen = true;
+      else if (panel === 'flagtracker') flagTrackerOpen = true;
+      else if (panel === 'snippets') snippetsOpen = true;
+      else if (panel === 'oplog') operationLogOpen = true;
+      else if (panel === 'cvss') cvssOpen = true;
+      else if (panel === 'findings') findingsTrackerOpen = true;
+      else if (panel === 'backlinks') backlinksOpen = true;
+    }
+  }
+
   onMount(async () => {
     // Load workspaces first so we can scope the tree to the active workspace
     await loadWorkspaces();
@@ -417,6 +454,34 @@
     return paths;
   }
   const noteSuggestions = $derived(flattenTree(tree));
+
+  function applyReorder(nodes: FileNode[], orderedPaths: string[]): FileNode[] {
+    if (nodes.some((n) => orderedPaths.includes(n.path))) {
+      return orderedPaths.map((p) => nodes.find((n) => n.path === p)!).filter(Boolean);
+    }
+    return nodes.map((n) => ({
+      ...n,
+      children: n.children ? applyReorder(n.children, orderedPaths) : undefined
+    }));
+  }
+
+  async function reorderNotes(orderedPaths: string[]): Promise<void> {
+    tree = applyReorder(tree, orderedPaths);
+    const items = orderedPaths.map((path, i) => ({ path, sort_order: i }));
+    try {
+      const res = await fetch('/api/notes/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items })
+      });
+      if (!res.ok) throw new Error('Reorder failed');
+    } catch (err) {
+      console.error('Failed to persist note sort order:', err);
+      showError('Failed to reorder notes. Please try again.');
+      await loadTree(activeWorkspace?.notes_folder ?? '');
+    }
+  }
+
   const noteTitle = $derived(
     activeFile ? (activeFile.split('/').pop()?.replace(/\.md$/i, '') ?? 'Leaflet') : 'Leaflet'
   );
@@ -476,11 +541,11 @@
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'B') {
       e.preventDefault();
-      if (activeFile) backlinksOpen = !backlinksOpen;
+      if (activeFile) toggleRightPanel('backlinks');
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'G') {
       e.preventDefault();
-      screenshotsOpen = !screenshotsOpen;
+      toggleRightPanel('screenshots');
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'X') {
       e.preventDefault();
@@ -492,11 +557,11 @@
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'V') {
       e.preventDefault();
-      cvssOpen = !cvssOpen;
+      toggleRightPanel('cvss');
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'F') {
       e.preventDefault();
-      findingsTrackerOpen = !findingsTrackerOpen;
+      toggleRightPanel('findings');
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'T') {
       e.preventDefault();
@@ -533,15 +598,20 @@
     bind:methodologyOpen
     bind:aiChatOpen
     bind:newNoteOpen
-    onNewNote={(path, templateContent) => createFile(path, 'file', templateContent || undefined)}
+    onNewNote={(fileName, templateContent) => {
+      const baseName = fileName.endsWith('.md') ? fileName : `${fileName}.md`;
+      const fullPath = newNoteParentPath ? `${newNoteParentPath}/${baseName}` : fileName;
+      newNoteParentPath = null;
+      createFile(fullPath, 'file', templateContent || undefined);
+    }}
     onNewFolder={(path) => createFile(path, 'folder')}
     onToggleTheme={() => theme.toggle()}
     isDark={theme.isDark}
     hasActiveFile={!!activeFile}
     onOpenCommandPalette={() => (commandOpen = true)}
     onSummarize={handleSummarize}
-    onOpenBacklinks={() => { if (activeFile) backlinksOpen = !backlinksOpen; }}
-    onOpenScreenshots={() => (screenshotsOpen = !screenshotsOpen)}
+    onOpenBacklinks={() => { if (activeFile) toggleRightPanel('backlinks'); }}
+    onOpenScreenshots={() => toggleRightPanel('screenshots')}
     onOpenExport={() => { if (activeFile) exportOpen = true; }}
     onOpenHelp={() => (helpOpen = true)}
     onOpenSettings={() => (settingsOpen = true)}
@@ -549,14 +619,14 @@
     hasWorkspace={!!activeWorkspace}
     isPentest={activeWorkspace?.type === 'pentest'}
     isCpts={activeWorkspace?.preset === 'cpts'}
-    onOpenHostTracker={() => (hostTrackerOpen = !hostTrackerOpen)}
-    onOpenCredentialVault={() => (credentialVaultOpen = !credentialVaultOpen)}
-    onOpenFlagTracker={() => (flagTrackerOpen = !flagTrackerOpen)}
-    onOpenSnippets={() => (snippetsOpen = !snippetsOpen)}
+    onOpenHostTracker={() => toggleRightPanel('hosttracker')}
+    onOpenCredentialVault={() => toggleRightPanel('credvault')}
+    onOpenFlagTracker={() => toggleRightPanel('flagtracker')}
+    onOpenSnippets={() => toggleRightPanel('snippets')}
     onOpenAttackChain={() => (attackChainOpen = !attackChainOpen)}
-    onOpenOperationLog={() => (operationLogOpen = !operationLogOpen)}
-    onOpenCvssCalculator={() => (cvssOpen = !cvssOpen)}
-    onOpenFindingsTracker={() => (findingsTrackerOpen = !findingsTrackerOpen)}
+    onOpenOperationLog={() => toggleRightPanel('oplog')}
+    onOpenCvssCalculator={() => toggleRightPanel('cvss')}
+    onOpenFindingsTracker={() => toggleRightPanel('findings')}
     onOpenTopology={() => (topologyOpen = !topologyOpen)}
   />
 
@@ -578,6 +648,11 @@
       onDeleteWorkspace={deleteWorkspace}
       onRenameWorkspace={renameWorkspace}
       onReorderWorkspaces={(reordered) => (workspaces = reordered)}
+      onNewNoteInFolder={(parentPath) => {
+        newNoteParentPath = parentPath;
+        newNoteOpen = true;
+      }}
+      onReorderNotes={reorderNotes}
       onPullSuccess={async () => {
         await loadWorkspaces();
         await loadTree(activeWorkspace?.notes_folder ?? '');
@@ -600,6 +675,7 @@
           onContentChange={handleContentChange}
           onWordCountChange={(count: number) => (wordCount = count)}
           onReady={(api: EditorApi) => { insertIntoEditor = api.insertText; editorApi = api; }}
+          onImageUploaded={() => { screenshotVersion += 1; }}
           onImageClick={(src: string, alt: string) => (lightboxImage = { src, alt })}
           onWikilinkClick={(name: string) => {
             const path = findNoteByName(tree, name);
@@ -635,7 +711,8 @@
       {#if rightPanelOpen}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-          class="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-primary/30 {isResizingRight ? 'bg-primary/50' : ''}"
+          class="absolute left-0 top-0 z-10 w-1 cursor-col-resize transition-colors hover:bg-primary/30 {isResizingRight ? 'bg-primary/50' : ''}"
+          style="height: 100%"
           onmousedown={startRightResize}
         ></div>
       {/if}
@@ -660,6 +737,7 @@
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (screenshotsOpen = false)}
         onInsert={(md) => { insertIntoEditor?.(md); }}
+        refreshTrigger={screenshotVersion}
       />
     {/if}
 
@@ -667,6 +745,7 @@
       <HostTrackerPanel
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (hostTrackerOpen = false)}
+        {uiMode}
       />
     {/if}
 

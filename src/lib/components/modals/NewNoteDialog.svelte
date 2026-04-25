@@ -266,18 +266,18 @@ nmap -sC -sV -oA nmap/initial 10.10.x.x
     <!-- Actions -->
     <div class="flex justify-end gap-2">
       <button
-        onclick={onCancel}
-        class="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-      >
-        Cancel
-      </button>
-      <button
         onclick={submit}
         disabled={!name.trim()}
         class="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground
                hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Create
+      </button>
+      <button
+        onclick={onCancel}
+        class="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+      >
+        Cancel
       </button>
     </div>
   </div>

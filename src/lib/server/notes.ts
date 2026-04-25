@@ -67,6 +67,28 @@ export async function readTree(dirPath: string, relativeTo: string): Promise<Fil
   });
 }
 
+/**
+ * Apply custom sort order from the DB to a FileNode tree.
+ * Nodes without a sort_order entry fall to the end (Infinity), then
+ * tie-break: folders before files, then alphabetical.
+ */
+export function sortTreeNodes(nodes: FileNode[], sortMap: Map<string, number>): FileNode[] {
+  return nodes
+    .map((node) => ({
+      ...node,
+      sort_order: sortMap.get(node.path),
+      children: node.children ? sortTreeNodes(node.children, sortMap) : undefined
+    }))
+    .sort((a, b) => {
+      const aOrder = a.sort_order ?? Infinity;
+      const bOrder = b.sort_order ?? Infinity;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      // tie-break: folders before files, then alphabetical
+      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+}
+
 /** Read a note's content from disk */
 export async function readNote(relativePath: string): Promise<string> {
   const filePath = safePath(relativePath);

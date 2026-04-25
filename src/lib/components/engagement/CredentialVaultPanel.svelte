@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { KeyRound, Plus, X, RefreshCw, Eye, EyeOff, Trash2, ShieldCheck } from '@lucide/svelte';
+  import { KeyRound, Pencil, Plus, X, RefreshCw, Eye, EyeOff, Trash2, ShieldCheck } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
   import Select from '$lib/components/ui/Select.svelte';
-  import { fly } from 'svelte/transition';
+  import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
   interface Credential {
@@ -39,6 +39,17 @@
   let newDomain = $state('');
   let newSource = $state('');
   let newStatus = $state<'unknown' | 'valid' | 'invalid' | 'expired'>('unknown');
+  let newNotes = $state('');
+
+  // Edit-credential state
+  let editingCredId = $state<string | null>(null);
+  let editUsername = $state('');
+  let editSecret = $state('');
+  let editCredType = $state<Credential['credential_type']>('password');
+  let editDomain = $state('');
+  let editSource = $state('');
+  let editStatus = $state<Credential['status']>('unknown');
+  let editNotes = $state('');
 
   $effect(() => {
     if (workspaceId) loadCredentials();
@@ -74,7 +85,8 @@
           credential_type: newCredType,
           domain: newDomain.trim(),
           source: newSource.trim(),
-          status: newStatus
+          status: newStatus,
+          notes: newNotes.trim()
         })
       });
       if (!res.ok) {
@@ -89,29 +101,63 @@
       newDomain = '';
       newSource = '';
       newStatus = 'unknown';
+      newNotes = '';
       addingCred = false;
     } catch (err) {
       console.error('Failed to add credential:', { workspaceId, error: err });
     }
   }
 
-  async function deleteCredential(id: string): Promise<void> {
-    if (!workspaceId) return;
-    const res = await fetch(`/api/workspaces/${workspaceId}/credentials/${id}`, { method: 'DELETE' });
-    if (!res.ok) { console.error('Failed to delete credential:', { workspaceId, credentialId: id, status: res.status }); return; }
-    credentials = credentials.filter((c) => c.id !== id);
+  function startEditing(cred: Credential): void {
+    editingCredId = cred.id;
+    editUsername = cred.username;
+    editSecret = cred.secret;
+    editCredType = cred.credential_type;
+    editDomain = cred.domain;
+    editSource = cred.source;
+    editStatus = cred.status;
+    editNotes = cred.notes;
   }
 
-  async function updateStatus(cred: Credential, status: Credential['status']): Promise<void> {
-    if (!workspaceId) return;
-    const res = await fetch(`/api/workspaces/${workspaceId}/credentials/${cred.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status })
-    });
-    if (!res.ok) { console.error('Failed to update credential status:', { workspaceId, credentialId: cred.id, status: res.status }); return; }
-    credentials = credentials.map((c) => c.id === cred.id ? { ...c, status } : c);
+  async function updateCredential(): Promise<void> {
+    if (!workspaceId || !editingCredId) return;
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/credentials/${editingCredId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: editUsername.trim(),
+          secret: editSecret,
+          credential_type: editCredType,
+          domain: editDomain.trim(),
+          source: editSource.trim(),
+          status: editStatus,
+          notes: editNotes.trim()
+        })
+      });
+      if (!res.ok) {
+        console.error('Failed to update credential:', { workspaceId, credId: editingCredId, status: res.status });
+        return;
+      }
+      const updated: Credential = await res.json();
+      credentials = credentials.map((c) => c.id === editingCredId ? updated : c);
+      editingCredId = null;
+    } catch (err) {
+      console.error('Failed to update credential:', { workspaceId, error: err });
+    }
   }
+
+  async function deleteCredential(id: string): Promise<void> {
+    if (!workspaceId) return;
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/credentials/${id}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete credential:', { workspaceId, credentialId: id, status: res.status }); return; }
+      credentials = credentials.filter((c) => c.id !== id);
+    } catch (err) {
+      console.error('Failed to delete credential:', { workspaceId, credentialId: id, error: err });
+    }
+  }
+
 
   function toggleReveal(id: string) {
     const next = new Set(revealedIds);
@@ -137,7 +183,13 @@
   };
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') onClose();
+    if (e.key === 'Escape') {
+      if (editingCredId !== null) {
+        editingCredId = null;
+        return;
+      }
+      onClose();
+    }
   }
 </script>
 
@@ -188,58 +240,85 @@
     {#if addingCred && uiMode === 'inline'}
       <div class="border-b border-border bg-muted/40 p-3 space-y-2">
         <div class="flex gap-2">
-          <input
-            type="text"
-            placeholder="Username"
-            bind:value={newUsername}
-            class="flex-1 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-          <input
-            type="text"
-            placeholder="Domain"
-            bind:value={newDomain}
-            class="w-24 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <label class="flex-1 space-y-0.5">
+            <span class="block text-[10px] text-muted-foreground">Username</span>
+            <input
+              type="text"
+              placeholder="username"
+              bind:value={newUsername}
+              class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
+          <label class="w-24 space-y-0.5">
+            <span class="block text-[10px] text-muted-foreground">Domain</span>
+            <input
+              type="text"
+              placeholder="CORP"
+              bind:value={newDomain}
+              class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
         </div>
-        <input
-          type="text"
-          placeholder="Secret (password / hash / key)"
-          bind:value={newSecret}
-          class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          onkeydown={(e) => { if (e.key === 'Enter') addCredential(); if (e.key === 'Escape') addingCred = false; }}
-        />
+        <label class="block space-y-0.5">
+          <span class="text-[10px] text-muted-foreground">Secret</span>
+          <input
+            type="text"
+            placeholder="password / hash / key"
+            bind:value={newSecret}
+            class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            onkeydown={(e) => { if (e.key === 'Enter') addCredential(); if (e.key === 'Escape') addingCred = false; }}
+          />
+        </label>
         <div class="flex gap-2">
-          <Select
-            size="sm"
-            value={newCredType}
-            onchange={(v) => newCredType = v as Credential['credential_type']}
-            options={[
-              { value: 'password', label: 'Password' },
-              { value: 'hash', label: 'Hash' },
-              { value: 'key', label: 'SSH Key' },
-              { value: 'ticket', label: 'Kerberos Ticket' },
-              { value: 'token', label: 'Token' },
-              { value: 'other', label: 'Other' }
-            ]}
-          />
-          <Select
-            size="sm"
-            value={newStatus}
-            onchange={(v) => newStatus = v as Credential['status']}
-            options={[
-              { value: 'unknown', label: 'Unknown' },
-              { value: 'valid', label: 'Valid' },
-              { value: 'invalid', label: 'Invalid' },
-              { value: 'expired', label: 'Expired' }
-            ]}
-          />
+          <div class="flex-1 space-y-0.5">
+            <p class="text-[10px] text-muted-foreground">Type</p>
+            <Select
+              size="sm"
+              value={newCredType}
+              onchange={(v) => newCredType = v as Credential['credential_type']}
+              options={[
+                { value: 'password', label: 'Password' },
+                { value: 'hash', label: 'Hash' },
+                { value: 'key', label: 'SSH Key' },
+                { value: 'ticket', label: 'Kerberos Ticket' },
+                { value: 'token', label: 'Token' },
+                { value: 'other', label: 'Other' }
+              ]}
+            />
+          </div>
+          <div class="flex-1 space-y-0.5">
+            <p class="text-[10px] text-muted-foreground">Status</p>
+            <Select
+              size="sm"
+              value={newStatus}
+              onchange={(v) => newStatus = v as Credential['status']}
+              options={[
+                { value: 'unknown', label: 'Unknown' },
+                { value: 'valid', label: 'Valid' },
+                { value: 'invalid', label: 'Invalid' },
+                { value: 'expired', label: 'Expired' }
+              ]}
+            />
+          </div>
         </div>
-        <input
-          type="text"
-          placeholder="Source (e.g. SMB share, /etc/passwd)"
-          bind:value={newSource}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-        />
+        <label class="block space-y-0.5">
+          <span class="text-[10px] text-muted-foreground">URL / Source</span>
+          <input
+            type="text"
+            placeholder="e.g. SMB share, /etc/passwd"
+            bind:value={newSource}
+            class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </label>
+        <label class="block space-y-0.5">
+          <span class="text-[10px] text-muted-foreground">Notes</span>
+          <input
+            type="text"
+            placeholder="Optional notes"
+            bind:value={newNotes}
+            class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </label>
         <div class="flex gap-2">
           <button
             onclick={addCredential}
@@ -270,64 +349,150 @@
         </div>
       {:else}
         {#each credentials as cred (cred.id)}
-          <div class="group border-b border-border px-3 py-2 hover:bg-accent/30 last:border-b-0">
-            <!-- Header row -->
-            <div class="flex items-center gap-2">
-              <span class="rounded border px-1 py-0.5 text-[9px] font-medium uppercase {statusColors[cred.status] ?? statusColors.unknown}">
-                {typeLabels[cred.credential_type] ?? cred.credential_type}
-              </span>
-              <span class="min-w-0 flex-1 text-xs">
-                {#if cred.domain}
-                  <span class="font-medium text-muted-foreground">{cred.domain}\</span>
-                {/if}
-                <span class="font-medium">{cred.username || '(no username)'}</span>
-              </span>
-              <div class="flex items-center gap-0.5">
-                {#if cred.username}
-                  <CopyButton
-                    text={cred.domain ? `${cred.domain}\\${cred.username}` : cred.username}
-                    size={10}
-                  />
-                {/if}
-                <Select
-                  size="xs"
-                  value={cred.status}
-                  onchange={(v) => updateStatus(cred, v as Credential['status'])}
-                  options={[
-                    { value: 'unknown', label: '?' },
-                    { value: 'valid', label: 'Valid' },
-                    { value: 'invalid', label: 'Invalid' },
-                    { value: 'expired', label: 'Expired' }
-                  ]}
-                />
+          <div class="group border-b border-border hover:bg-accent/30 last:border-b-0">
+            <div class="px-3 py-2">
+              <!-- Header row -->
+              <div class="flex items-center gap-2">
+                <span class="rounded border px-1 py-0.5 text-[9px] font-medium uppercase {statusColors[cred.status] ?? statusColors.unknown}">
+                  {typeLabels[cred.credential_type] ?? cred.credential_type}
+                </span>
+                <span class="min-w-0 flex-1 text-xs">
+                  {#if cred.domain}
+                    <span class="font-medium text-muted-foreground">{cred.domain}\</span>
+                  {/if}
+                  <span class="font-medium">{cred.username || '(no username)'}</span>
+                </span>
+                <div class="flex items-center gap-0.5">
+                  {#if cred.username}
+                    <CopyButton
+                      text={cred.domain ? `${cred.domain}\\${cred.username}` : cred.username}
+                      size={10}
+                    />
+                  {/if}
+                  <button
+                    onclick={() => startEditing(cred)}
+                    class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                    title="Edit credential"
+                  >
+                    <Pencil size={11} />
+                  </button>
+                  <button
+                    onclick={() => confirmDelete = { id: cred.id, label: cred.username || 'Credential' }}
+                    class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
+                    title="Delete"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+              </div>
+              <!-- Secret row -->
+              <div class="mt-1 flex items-center gap-1">
+                <code class="flex-1 truncate rounded bg-muted px-1 py-0.5 text-[10px] font-mono">
+                  {revealedIds.has(cred.id) ? cred.secret : '••••••••••••'}
+                </code>
                 <button
-                  onclick={() => confirmDelete = { id: cred.id, label: cred.username || 'Credential' }}
-                  class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
-                  title="Delete"
+                  onclick={() => toggleReveal(cred.id)}
+                  class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
-                  <Trash2 size={10} />
+                  {#if revealedIds.has(cred.id)}
+                    <EyeOff size={10} />
+                  {:else}
+                    <Eye size={10} />
+                  {/if}
                 </button>
               </div>
+              {#if cred.source}
+                <p class="mt-0.5 text-[10px] text-muted-foreground">via {cred.source}</p>
+              {/if}
             </div>
-
-            <!-- Secret row -->
-            <div class="mt-1 flex items-center gap-1">
-              <code class="flex-1 truncate rounded bg-muted px-1 py-0.5 text-[10px] font-mono">
-                {revealedIds.has(cred.id) ? cred.secret : '••••••••••••'}
-              </code>
-              <button
-                onclick={() => toggleReveal(cred.id)}
-                class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-              >
-                {#if revealedIds.has(cred.id)}
-                  <EyeOff size={10} />
-                {:else}
-                  <Eye size={10} />
-                {/if}
-              </button>
-            </div>
-            {#if cred.source}
-              <p class="mt-0.5 text-[10px] text-muted-foreground">via {cred.source}</p>
+            {#if editingCredId === cred.id && uiMode === 'inline'}
+              <div class="border-t border-border bg-muted/40 px-3 pb-3 pt-2 space-y-2">
+                <div class="flex gap-2">
+                  <label class="flex-1 space-y-0.5">
+                    <span class="block text-[10px] text-muted-foreground">Username</span>
+                    <input
+                      type="text"
+                      bind:value={editUsername}
+                      class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </label>
+                  <label class="w-20 space-y-0.5">
+                    <span class="block text-[10px] text-muted-foreground">Domain</span>
+                    <input
+                      type="text"
+                      bind:value={editDomain}
+                      class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </label>
+                </div>
+                <label class="block space-y-0.5">
+                  <span class="text-[10px] text-muted-foreground">Secret</span>
+                  <input
+                    type="text"
+                    bind:value={editSecret}
+                    class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                    onkeydown={(e) => { if (e.key === 'Enter') updateCredential(); if (e.key === 'Escape') editingCredId = null; }}
+                  />
+                </label>
+                <div class="flex gap-2">
+                  <div class="flex-1 space-y-0.5">
+                    <p class="text-[10px] text-muted-foreground">Type</p>
+                    <Select
+                      size="sm"
+                      value={editCredType}
+                      onchange={(v) => editCredType = v as Credential['credential_type']}
+                      options={[
+                        { value: 'password', label: 'Password' },
+                        { value: 'hash', label: 'Hash' },
+                        { value: 'key', label: 'SSH Key' },
+                        { value: 'ticket', label: 'Kerberos Ticket' },
+                        { value: 'token', label: 'Token' },
+                        { value: 'other', label: 'Other' }
+                      ]}
+                    />
+                  </div>
+                  <div class="flex-1 space-y-0.5">
+                    <p class="text-[10px] text-muted-foreground">Status</p>
+                    <Select
+                      size="sm"
+                      value={editStatus}
+                      onchange={(v) => editStatus = v as Credential['status']}
+                      options={[
+                        { value: 'unknown', label: 'Unknown' },
+                        { value: 'valid', label: 'Valid' },
+                        { value: 'invalid', label: 'Invalid' },
+                        { value: 'expired', label: 'Expired' }
+                      ]}
+                    />
+                  </div>
+                </div>
+                <label class="block space-y-0.5">
+                  <span class="text-[10px] text-muted-foreground">URL / Source</span>
+                  <input
+                    type="text"
+                    bind:value={editSource}
+                    class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </label>
+                <label class="block space-y-0.5">
+                  <span class="text-[10px] text-muted-foreground">Notes</span>
+                  <input
+                    type="text"
+                    bind:value={editNotes}
+                    class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </label>
+                <div class="flex gap-2">
+                  <button
+                    onclick={updateCredential}
+                    class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                  >Save</button>
+                  <button
+                    onclick={() => (editingCredId = null)}
+                    class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
+                  >Cancel</button>
+                </div>
+              </div>
             {/if}
           </div>
         {/each}
@@ -345,10 +510,12 @@
     onclick={() => (addingCred = false)}
     onkeydown={(e) => { if (e.key === 'Escape') addingCred = false; }}
     aria-label="Close form"
+    transition:fade={{ duration: 150 }}
   ></div>
   <!-- Modal -->
   <div
-    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-2xl"
+    transition:fly={{ y: 8, duration: 200, easing: cubicOut }}
     role="dialog"
     aria-modal="true"
     aria-label="Add Credential"
@@ -360,58 +527,85 @@
     </div>
     <div class="space-y-3 px-5 py-4">
       <div class="flex gap-2">
-        <input
-          type="text"
-          placeholder="Username"
-          bind:value={newUsername}
-          class="flex-1 rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-        <input
-          type="text"
-          placeholder="Domain"
-          bind:value={newDomain}
-          class="w-24 rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        />
+        <label class="flex-1 space-y-1">
+          <span class="block text-xs text-muted-foreground">Username</span>
+          <input
+            type="text"
+            placeholder="username"
+            bind:value={newUsername}
+            class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </label>
+        <label class="w-24 space-y-1">
+          <span class="block text-xs text-muted-foreground">Domain</span>
+          <input
+            type="text"
+            placeholder="CORP"
+            bind:value={newDomain}
+            class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </label>
       </div>
-      <input
-        type="text"
-        placeholder="Secret (password / hash / key)"
-        bind:value={newSecret}
-        class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        onkeydown={(e) => { if (e.key === 'Enter') addCredential(); if (e.key === 'Escape') addingCred = false; }}
-      />
+      <label class="block space-y-1">
+        <span class="text-xs text-muted-foreground">Secret</span>
+        <input
+          type="text"
+          placeholder="password / hash / key"
+          bind:value={newSecret}
+          class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          onkeydown={(e) => { if (e.key === 'Enter') addCredential(); if (e.key === 'Escape') addingCred = false; }}
+        />
+      </label>
       <div class="flex gap-2">
-        <Select
-          size="sm"
-          value={newCredType}
-          onchange={(v) => newCredType = v as Credential['credential_type']}
-          options={[
-            { value: 'password', label: 'Password' },
-            { value: 'hash', label: 'Hash' },
-            { value: 'key', label: 'SSH Key' },
-            { value: 'ticket', label: 'Kerberos Ticket' },
-            { value: 'token', label: 'Token' },
-            { value: 'other', label: 'Other' }
-          ]}
-        />
-        <Select
-          size="sm"
-          value={newStatus}
-          onchange={(v) => newStatus = v as Credential['status']}
-          options={[
-            { value: 'unknown', label: 'Unknown' },
-            { value: 'valid', label: 'Valid' },
-            { value: 'invalid', label: 'Invalid' },
-            { value: 'expired', label: 'Expired' }
-          ]}
-        />
+        <div class="flex-1 space-y-1">
+          <p class="text-xs text-muted-foreground">Type</p>
+          <Select
+            size="sm"
+            value={newCredType}
+            onchange={(v) => newCredType = v as Credential['credential_type']}
+            options={[
+              { value: 'password', label: 'Password' },
+              { value: 'hash', label: 'Hash' },
+              { value: 'key', label: 'SSH Key' },
+              { value: 'ticket', label: 'Kerberos Ticket' },
+              { value: 'token', label: 'Token' },
+              { value: 'other', label: 'Other' }
+            ]}
+          />
+        </div>
+        <div class="flex-1 space-y-1">
+          <p class="text-xs text-muted-foreground">Status</p>
+          <Select
+            size="sm"
+            value={newStatus}
+            onchange={(v) => newStatus = v as Credential['status']}
+            options={[
+              { value: 'unknown', label: 'Unknown' },
+              { value: 'valid', label: 'Valid' },
+              { value: 'invalid', label: 'Invalid' },
+              { value: 'expired', label: 'Expired' }
+            ]}
+          />
+        </div>
       </div>
-      <input
-        type="text"
-        placeholder="Source (e.g. SMB share, /etc/passwd)"
-        bind:value={newSource}
-        class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-      />
+      <label class="block space-y-1">
+        <span class="text-xs text-muted-foreground">URL / Source</span>
+        <input
+          type="text"
+          placeholder="e.g. SMB share, /etc/passwd"
+          bind:value={newSource}
+          class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </label>
+      <label class="block space-y-1">
+        <span class="text-xs text-muted-foreground">Notes</span>
+        <input
+          type="text"
+          placeholder="Optional notes"
+          bind:value={newNotes}
+          class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </label>
     </div>
     <div class="flex gap-2 border-t border-border px-5 py-3">
       <button onclick={addCredential} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Credential</button>
@@ -428,4 +622,117 @@
     onConfirm={() => { deleteCredential(pending.id); confirmDelete = null; }}
     onCancel={() => confirmDelete = null}
   />
+{/if}
+
+{#if editingCredId !== null && uiMode === 'modal'}
+  <!-- Backdrop -->
+  <div
+    transition:fade={{ duration: 150 }}
+    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+    role="button"
+    tabindex="-1"
+    onclick={() => (editingCredId = null)}
+    onkeydown={(e) => { if (e.key === 'Escape') editingCredId = null; }}
+    aria-label="Close edit form"
+  ></div>
+  <!-- Modal -->
+  <div
+    transition:fly={{ y: 8, duration: 200, easing: cubicOut }}
+    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Edit Credential"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <KeyRound size={14} class="text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Edit Credential</h2>
+      <button onclick={() => (editingCredId = null)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+    </div>
+    <div class="space-y-3 px-5 py-4">
+      <div class="flex gap-2">
+        <label class="flex-1 space-y-1">
+          <span class="block text-xs text-muted-foreground">Username</span>
+          <input
+            type="text"
+            bind:value={editUsername}
+            class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </label>
+        <label class="w-24 space-y-1">
+          <span class="block text-xs text-muted-foreground">Domain</span>
+          <input
+            type="text"
+            bind:value={editDomain}
+            class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </label>
+      </div>
+      <label class="block space-y-1">
+        <span class="text-xs text-muted-foreground">Secret</span>
+        <input
+          type="text"
+          bind:value={editSecret}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+      </label>
+      <div class="flex gap-2">
+        <div class="flex-1 space-y-1">
+          <p class="text-xs text-muted-foreground">Type</p>
+          <Select
+            size="sm"
+            value={editCredType}
+            onchange={(v) => editCredType = v as Credential['credential_type']}
+            options={[
+              { value: 'password', label: 'Password' },
+              { value: 'hash', label: 'Hash' },
+              { value: 'key', label: 'SSH Key' },
+              { value: 'ticket', label: 'Kerberos Ticket' },
+              { value: 'token', label: 'Token' },
+              { value: 'other', label: 'Other' }
+            ]}
+          />
+        </div>
+        <div class="flex-1 space-y-1">
+          <p class="text-xs text-muted-foreground">Status</p>
+          <Select
+            size="sm"
+            value={editStatus}
+            onchange={(v) => editStatus = v as Credential['status']}
+            options={[
+              { value: 'unknown', label: 'Unknown' },
+              { value: 'valid', label: 'Valid' },
+              { value: 'invalid', label: 'Invalid' },
+              { value: 'expired', label: 'Expired' }
+            ]}
+          />
+        </div>
+      </div>
+      <label class="block space-y-1">
+        <span class="text-xs text-muted-foreground">URL / Source</span>
+        <input
+          type="text"
+          bind:value={editSource}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+      </label>
+      <label class="block space-y-1">
+        <span class="text-xs text-muted-foreground">Notes</span>
+        <input
+          type="text"
+          bind:value={editNotes}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+      </label>
+    </div>
+    <div class="flex gap-2 border-t border-border bg-muted/30 px-5 py-3">
+      <button
+        onclick={updateCredential}
+        class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+      >Save Changes</button>
+      <button
+        onclick={() => (editingCredId = null)}
+        class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent"
+      >Cancel</button>
+    </div>
+  </div>
 {/if}

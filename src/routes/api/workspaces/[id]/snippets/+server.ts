@@ -31,8 +31,17 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     global?: boolean;
   };
 
+  const VALID_CATEGORIES = new Set([
+    'general', 'recon', 'exploitation', 'privesc-linux', 'privesc-windows',
+    'pivoting', 'ad-attacks', 'file-transfer', 'credential-attacks'
+  ]);
+
   if (!body.title?.trim() || !body.command?.trim()) {
     return json({ error: 'title and command are required' }, { status: 400 });
+  }
+
+  if (body.category !== undefined && !VALID_CATEGORIES.has(body.category)) {
+    return json({ error: 'Invalid category' }, { status: 400 });
   }
 
   const id = randomUUID();

@@ -16,9 +16,11 @@
     onRenameItem: (fromPath: string, toPath: string) => void;
     onTogglePin?: (path: string) => void;
     onMoveItem?: (fromPath: string, toFolderPath: string) => void;
+    onNewNoteInFolder?: (parentPath: string) => void;
+    onReorderNotes?: (orderedPaths: string[]) => void;
   }
 
-  let { nodes, activeFile, depth, pinned = [], onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onTogglePin, onMoveItem }: Props =
+  let { nodes, activeFile, depth, pinned = [], onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onTogglePin, onMoveItem, onNewNoteInFolder, onReorderNotes }: Props =
     $props();
 
   // Track which folders are expanded
@@ -27,35 +29,146 @@
   // Drag-and-drop: highlight the folder being hovered as a drop target
   let dropTargetPath = $state<string | null>(null);
 
+  // Sibling reorder drag indicator
+  let reorderDragOver = $state<{ path: string; position: 'before' | 'after' } | null>(null);
+
+  // Module-level dragged path — avoids browser protected-mode getData() restriction during dragover
+  let draggedPath = $state<string | null>(null);
+
+  // Flat set of all known paths (including children) for drag validation
+  function flattenPaths(ns: FileNode[]): Set<string> {
+    const paths = new Set<string>();
+    const collect = (items: FileNode[]) => {
+      for (const n of items) {
+        paths.add(n.path);
+        if (n.children) collect(n.children);
+      }
+    };
+    collect(ns);
+    return paths;
+  }
+
+  const knownPaths = $derived(flattenPaths(nodes));
+
+  function getDirname(filePath: string): string {
+    const idx = filePath.lastIndexOf('/');
+    return idx >= 0 ? filePath.substring(0, idx) : '';
+  }
+
   function handleDragStart(e: DragEvent, nodePath: string) {
+    draggedPath = nodePath;
     e.dataTransfer?.setData('text/plain', nodePath);
     e.stopPropagation();
   }
 
-  function handleDragOver(e: DragEvent, folderPath: string) {
+  function handleFolderDragOver(e: DragEvent, node: FileNode) {
+    if (!draggedPath || draggedPath === node.path) return;
+    if (draggedPath.startsWith(node.path + '/')) return; // ancestor guard
     e.preventDefault();
     e.stopPropagation();
-    dropTargetPath = folderPath;
-  }
 
-  function handleDragLeave(e: DragEvent) {
-    // Only clear if leaving the folder row entirely (not entering a child)
-    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const pct = (e.clientY - rect.top) / rect.height;
+    const sameSiblings = getDirname(draggedPath) === getDirname(node.path);
+
+    if (sameSiblings && onReorderNotes && pct < 0.3) {
+      reorderDragOver = { path: node.path, position: 'before' };
       dropTargetPath = null;
+    } else if (sameSiblings && onReorderNotes && pct > 0.7) {
+      reorderDragOver = { path: node.path, position: 'after' };
+      dropTargetPath = null;
+    } else {
+      dropTargetPath = node.path;
+      reorderDragOver = null;
     }
   }
 
-  function handleDrop(e: DragEvent, targetFolder: FileNode) {
+  function handleFolderDragLeave(e: DragEvent) {
+    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+      dropTargetPath = null;
+      reorderDragOver = null;
+    }
+  }
+
+  function handleFolderDrop(e: DragEvent, node: FileNode, siblings: FileNode[]) {
     e.preventDefault();
     e.stopPropagation();
+
+    const fromPath = draggedPath || e.dataTransfer?.getData('text/plain');
     dropTargetPath = null;
-    const fromPath = e.dataTransfer?.getData('text/plain') ?? '';
-    if (!fromPath || fromPath === targetFolder.path) return;
-    // Prevent dropping a folder into itself or a descendant
-    if (fromPath.startsWith(targetFolder.path + '/')) return;
-    onMoveItem?.(fromPath, targetFolder.path);
-    expanded[targetFolder.path] = true; // expand the target folder
+    reorderDragOver = null;
+
+    if (!fromPath || fromPath === node.path) return;
+    if (!knownPaths.has(fromPath)) return; // reject untrusted drag source
+    if (fromPath.startsWith(node.path + '/')) return; // prevent drop into descendant
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const pct = (e.clientY - rect.top) / rect.height;
+    const sameSiblings = getDirname(fromPath) === getDirname(node.path);
+
+    if (sameSiblings && onReorderNotes && (pct < 0.3 || pct > 0.7)) {
+      const position: 'before' | 'after' = pct < 0.3 ? 'before' : 'after';
+      const paths = siblings.map((n) => n.path);
+      const fromIdx = paths.indexOf(fromPath);
+      if (fromIdx === -1) return;
+      const newPaths = [...paths];
+      newPaths.splice(fromIdx, 1);
+      const targetIdx = newPaths.indexOf(node.path);
+      if (targetIdx === -1) return;
+      const insertAt = position === 'after' ? targetIdx + 1 : targetIdx;
+      newPaths.splice(insertAt, 0, fromPath);
+      onReorderNotes(newPaths);
+    } else {
+      onMoveItem?.(fromPath, node.path);
+      expanded[node.path] = true;
+    }
   }
+  function handleReorderDragOver(e: DragEvent, targetNode: FileNode) {
+    if (!onReorderNotes || !draggedPath) return;
+    if (draggedPath === targetNode.path) return;
+    // Only allow within same folder
+    if (getDirname(draggedPath) !== getDirname(targetNode.path)) return;
+    e.preventDefault();
+    e.stopPropagation(); // prevent folder drop handlers from firing
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const position: 'before' | 'after' = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    reorderDragOver = { path: targetNode.path, position };
+  }
+
+  function handleReorderDragLeave(_e: DragEvent) {
+    reorderDragOver = null;
+  }
+
+  function handleReorderDrop(e: DragEvent, targetNode: FileNode, siblings: FileNode[]) {
+    if (!onReorderNotes) return;
+    // getData IS readable in drop events; prefer trusted in-memory state
+    const fromPath = draggedPath || e.dataTransfer?.getData('text/plain');
+    if (!fromPath || fromPath === targetNode.path) return;
+    if (!knownPaths.has(fromPath)) return; // reject untrusted drag source
+    if (getDirname(fromPath) !== getDirname(targetNode.path)) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const position: 'before' | 'after' = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    reorderDragOver = null;
+
+    const paths = siblings.map((n) => n.path);
+    const fromIdx = paths.indexOf(fromPath);
+    if (fromIdx === -1) return;
+
+    const newPaths = [...paths];
+    newPaths.splice(fromIdx, 1);
+
+    const targetIdx = newPaths.indexOf(targetNode.path);
+    if (targetIdx === -1) return;
+
+    const insertAt = position === 'after' ? targetIdx + 1 : targetIdx;
+    newPaths.splice(insertAt, 0, fromPath);
+
+    onReorderNotes(newPaths);
+  }
+
   let contextMenu = $state<{ x: number; y: number; node: FileNode } | null>(null);
 
   // Dialog state
@@ -93,7 +206,12 @@
   function handleNewFile(node: FileNode) {
     closeContextMenu();
     expanded[node.path] = true;
-    activeDialog = { type: 'newFile', parent: node };
+    if (onNewNoteInFolder) {
+      // Let the parent open the rich NewNoteDialog with template picker
+      onNewNoteInFolder(node.path);
+    } else {
+      activeDialog = { type: 'newFile', parent: node };
+    }
   }
 
   function handleNewFolder(node: FileNode) {
@@ -174,18 +292,19 @@
 {#each nodes as node (node.path)}
   <div style="padding-left: {depth * 12}px">
     {#if node.type === 'folder'}
-      <!-- Folder row with drop target support -->
+      <!-- Folder row with drop target and reorder support -->
+      <div class="rounded {dropTargetPath === node.path ? 'ring-1 ring-primary/60 bg-primary/5' : ''}">
       <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        ondragover={(e) => handleDragOver(e, node.path)}
-        ondragleave={handleDragLeave}
-        ondrop={(e) => handleDrop(e, node)}
-        class="rounded {dropTargetPath === node.path ? 'ring-1 ring-primary/60 bg-primary/5' : ''}"
-      >
       <button
-        class="flex w-full items-center gap-1.5 rounded px-2 py-0.5 text-left text-sm text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-primary"
+        class="flex w-full items-center gap-1.5 rounded px-2 py-0.5 text-left text-sm text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-primary
+               {reorderDragOver?.path === node.path && reorderDragOver.position === 'before' ? 'border-t-2 border-blue-500' : ''}
+               {reorderDragOver?.path === node.path && reorderDragOver.position === 'after' ? 'border-b-2 border-blue-500' : ''}"
         draggable={true}
         ondragstart={(e) => handleDragStart(e, node.path)}
+        ondragover={(e) => handleFolderDragOver(e, node)}
+        ondragleave={handleFolderDragLeave}
+        ondrop={(e) => handleFolderDrop(e, node, nodes)}
+        ondragend={() => { draggedPath = null; reorderDragOver = null; dropTargetPath = null; }}
         onclick={() => toggleFolder(node.path)}
         oncontextmenu={(e) => handleContextMenu(e, node)}
         onkeydown={(e) => {
@@ -221,6 +340,8 @@
           {onRenameItem}
           {onTogglePin}
           {onMoveItem}
+          {onNewNoteInFolder}
+          {onReorderNotes}
         />
       {/if}
       </div>
@@ -228,9 +349,15 @@
       <!-- File row -->
       <button
         class="flex w-full items-center gap-1.5 rounded px-2 py-0.5 text-left text-sm hover:bg-accent
-               {activeFile === node.path ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}"
+               {activeFile === node.path ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}
+               {reorderDragOver?.path === node.path && reorderDragOver.position === 'before' ? 'border-t-2 border-blue-500' : ''}
+               {reorderDragOver?.path === node.path && reorderDragOver.position === 'after' ? 'border-b-2 border-blue-500' : ''}"
         draggable={true}
         ondragstart={(e) => handleDragStart(e, node.path)}
+        ondragover={(e) => handleReorderDragOver(e, node)}
+        ondragleave={handleReorderDragLeave}
+        ondrop={(e) => handleReorderDrop(e, node, nodes)}
+        ondragend={() => { draggedPath = null; reorderDragOver = null; dropTargetPath = null; }}
         onclick={() => onOpenFile(node.path)}
         oncontextmenu={(e) => handleContextMenu(e, node)}
       >

@@ -8,6 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- CommandSnippetsPanel: snippet edit — Pencil icon per row opens a pre-populated edit modal; changes saved via `PATCH /api/workspaces/[id]/snippets/[snippetId]`
+- CommandSnippetsPanel: snippet delete now requires `ConfirmDialog` confirmation before removing
+- CommandSnippetsPanel: Variables tab — add-variable form is hidden by default behind a `+` button; per-variable delete styled as destructive red with confirmation; bulk "Clear All" button removed
+- ScreenshotPanel: rename screenshot via Pencil icon in hover controls — triggers an inline rename input
+- HostTrackerPanel: field labels on all add-host form inputs; edit modal now shows all host fields (IP, hostname, OS, status, scope, notes, screenshot, ports read-only)
+- CredentialVaultPanel: Notes field added to credential records; field labels added to all forms
+- `extractSnippetVarNames` regex extended from `[A-Z0-9_]+` to `[A-Z0-9_-]+` — hyphenated variable names like `{TEST-NAME}` are now extracted and substituted correctly
+- Screenshot panel auto-refreshes when an image is pasted or dropped into the editor — no manual refresh needed
+- FileTree right-click "New Note" now opens the same template-picker dialog as the Toolbar button (6 templates: Blank, Module Notes, Section Notes, Machine Writeup, Pentest Engagement, Finding Report, Cheatsheet)
+- AI chat footer now displays the active model name dynamically (fetched from `/api/ai/config`) instead of a hardcoded string
+- Nmap importer in HostTracker respects `uiMode` — shows as a centered modal overlay in modal mode, inline panel in inline mode
+- Edit functionality for HostTracker, CredentialVault, and FlagTracker — each row now has a Pencil edit button that opens an edit form (modal overlay) pre-populated with the existing values
+- New `GET /api/ai/config` endpoint returning the active AI provider and model name
+- File tree drag-and-drop reordering — drag notes within a folder to reorder them; order persists to SQLite (`note_sort_order` table, migration v13)
+
+### Fixed
+- FileTree drag-reorder dead zones — top-level folder-to-folder reorder, sibling folder-to-folder reorder within the same parent, and file drop between two sibling folders now all register correctly; drop zones are split by position: top 30% = insert before, bottom 30% = insert after, center 40% = move into folder
+- Editor image toolbar: replaced `posAtCoords` with `posAtDOM` for accurate image-node targeting; type guards added to delete and align handlers to prevent operating on non-image nodes
+- HostTrackerPanel: removed stale inline status dropdown from host row, scope dropdown, screenshot edit input, and add-port form from the expanded view; edit form now opens as a centered modal overlay (or inline when `uiMode==='inline'`)
+- CredentialVaultPanel: removed inline status dropdown from credential row; edit form now respects `uiMode` — overlay modal by default, inline when `uiMode==='inline'`; Escape key during inline edit now cancels the edit instead of closing the panel
+- Remove `overflow-hidden` from FlagTracker, HostTracker, and CredentialVault add-form modal containers — Select dropdowns were being clipped and options were invisible
+- Add `transition:fly` and `transition:fade` to FlagTracker, HostTracker, and CredentialVault modal overlay forms for consistent open/close animations
+- Add `{uiMode}` prop to `<HostTrackerPanel>` in main page — inline mode was not being passed, so the setting had no effect
+- Replace native `<select>` screenshot dropdown in HostTracker (inline and modal forms) with custom `Select` component for visual consistency
+- Fix `NewNoteDialog` button order — Create now appears left of Cancel
+- Fix AiChat `renderMarkdown()` to HTML-escape all user/AI content before injecting into `{@html}`, preventing XSS via crafted AI responses
+- Add `try/catch` error handling to `toggleSubmitted`, `deleteFlag` (FlagTracker), `deleteHost`, `updateHostStatus`, `updateHostScope`, `saveScreenshotFilename`, `deletePort` (HostTracker), `deleteCredential`, `updateStatus` (CredentialVault)
+
+### Added
 - `WorkspaceCreateModal` CPTS preset toggle — when creating a pentest workspace a checkbox enables the `cpts` preset; the selected preset is stored as `preset = 'cpts'` in the DB and returned on workspace load
 - Methodology toolbar button (`ListChecks`) is now gated to `activeWorkspace.preset === 'cpts'`; pentest workspaces without the CPTS preset no longer show the methodology checklist button
 - Workspace drag-to-reorder in Sidebar — drag a workspace tab to reorder; new position is persisted immediately via `PATCH /api/workspaces/reorder`
@@ -27,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flag Tracker: delete button is now in the same flex row as the copy button
 
 ### Security
+- FileTree drop handler validates the dragged source path against known in-memory tree paths before processing; in-memory `draggedPath` state is preferred over the `dataTransfer` string fallback to prevent spoofed drag payloads from operating on arbitrary paths
+- Snippet `PATCH` and `DELETE` endpoints: added `workspace_id` ownership check; maximum field length validation on all string inputs; `category` field validated against an allowlist on both `POST /api/workspaces/[id]/snippets` and `PATCH /api/workspaces/[id]/snippets/[snippetId]`
 - Workspace folder creation now routes through `safePath()` instead of direct `path.join` (path traversal prevention)
 - Workspace type field validated against `['cpts']` allowlist in `POST /api/workspaces`; numeric fields validated as integers in `PATCH` handler
 - `PATCH /api/workspaces/reorder` hardened: array length capped at 200, IDs deduplicated before processing, workspace-not-found error no longer echoes the supplied ID

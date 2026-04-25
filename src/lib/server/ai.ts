@@ -143,6 +143,12 @@ export async function* streamChat(
   }
 }
 
+export function getAiConfig(): { provider: string; model: string } {
+  const provider = getProvider();
+  const model = provider === 'minimax' ? getMiniMaxModel() : getGeminiModel();
+  return { provider, model };
+}
+
 export async function summarize(content: string): Promise<string> {
   const prompt = `Please summarize these penetration testing notes into a concise quick-reference card.
 

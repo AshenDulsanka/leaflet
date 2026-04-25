@@ -383,6 +383,18 @@ const MIGRATIONS: Array<{ version: number; up: string; disableFks?: boolean }> =
       ALTER TABLE workspaces ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
     `,
     },
+    {
+      // v13: add note_sort_order table for persisting custom file tree sort order.
+      // note_path is the workspace-relative path of the note or folder.
+      // sort_order: lower values appear first; nodes without a row use Infinity as tie-break.
+      version: 13,
+      up: `
+      CREATE TABLE IF NOT EXISTS note_sort_order (
+        note_path  TEXT PRIMARY KEY,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      );
+    `,
+    },
   ];
 
 export function runMigrations(db: Database.Database): void {

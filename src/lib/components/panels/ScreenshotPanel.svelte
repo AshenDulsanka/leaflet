@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Camera, X, Trash2, Upload, RefreshCw, Image, Eye } from '@lucide/svelte';
+  import { Camera, Pencil, X, Trash2, Upload, RefreshCw, Image, Eye } from '@lucide/svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
@@ -10,9 +10,10 @@
     onClose: () => void;
     onInsert: (markdown: string) => void;
     workspaceId: string | null;
+    refreshTrigger?: number;
   }
 
-  let { onClose, onInsert, workspaceId }: Props = $props();
+  let { onClose, onInsert, workspaceId, refreshTrigger = 0 }: Props = $props();
 
   let screenshots = $state<ScreenshotMeta[]>([]);
   let loading = $state(false);
@@ -21,8 +22,11 @@
   
   let lightboxImage = $state<string | null>(null);
   let confirmDelete = $state<{ id: string; label: string } | null>(null);
+  let renaming = $state<{ filename: string; value: string } | null>(null);
 
   $effect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    refreshTrigger; // track changes to force refresh when editor uploads an image
     loadScreenshots();
   });
 
@@ -53,6 +57,28 @@
       screenshots = screenshots.filter((s) => s.filename !== filename);
     } catch (err) {
       console.error('Failed to delete screenshot:', err);
+    }
+  }
+
+  async function renameScreenshot(filename: string, caption: string): Promise<void> {
+    if (!workspaceId) return;
+    const trimmed = caption.trim();
+    if (!trimmed) return;
+    try {
+      const res = await fetch(`/api/screenshots/${encodeURIComponent(filename)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, caption: trimmed }),
+      });
+      if (!res.ok) {
+        console.error('Failed to rename screenshot:', { filename, status: res.status });
+        return;
+      }
+      screenshots = screenshots.map((s) => s.filename === filename ? { ...s, caption: trimmed } : s);
+    } catch (err) {
+      console.error('Failed to rename screenshot:', err);
+    } finally {
+      renaming = null;
     }
   }
 
@@ -206,6 +232,14 @@
                   <Eye size={12} />
                 </button>
                 <button
+                  class="flex h-6 w-6 items-center justify-center rounded-full bg-background/90 text-foreground shadow hover:bg-muted"
+                  onclick={(e) => { e.stopPropagation(); renaming = { filename: ss.filename, value: ss.caption || ss.filename }; }}
+                  title="Rename screenshot"
+                  aria-label="Rename {ss.filename}"
+                >
+                  <Pencil size={12} />
+                </button>
+                <button
                   class="flex h-6 w-6 items-center justify-center rounded-full bg-destructive/90 text-white shadow hover:bg-destructive"
                   onclick={(e) => { e.stopPropagation(); confirmDelete = { id: ss.filename, label: ss.filename }; }}
                   title="Delete screenshot"
@@ -224,9 +258,26 @@
                 </span>
               </div>
             </div>
-            <p class="truncate px-1.5 pb-1.5 text-[10px] leading-4 text-muted-foreground" title={ss.filename}>
-              {ss.filename}
-            </p>
+            {#if renaming !== null && renaming.filename === ss.filename}
+              <form
+                class="flex items-center gap-1 px-1.5 pb-1.5"
+                onsubmit={(e) => { e.preventDefault(); renameScreenshot(ss.filename, renaming!.value); }}
+              >
+                <!-- svelte-ignore a11y_autofocus -->
+                <input
+                  type="text"
+                  class="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-foreground outline-none focus:border-primary"
+                  bind:value={renaming.value}
+                  onkeydown={(e) => { if (e.key === 'Escape') renaming = null; }}
+                  autofocus
+                />
+                <button type="submit" class="shrink-0 text-[10px] text-primary hover:underline">Save</button>
+              </form>
+            {:else}
+              <p class="truncate px-1.5 pb-1.5 text-[10px] leading-4 text-muted-foreground" title={ss.caption || ss.filename}>
+                {ss.caption || ss.filename}
+              </p>
+            {/if}
           </div>
         {/each}
       </div>

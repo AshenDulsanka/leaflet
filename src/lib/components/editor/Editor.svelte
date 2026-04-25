@@ -57,9 +57,10 @@
     onWikilinkClick?: (noteName: string) => void;
     noteSuggestions?: string[];
     workspaceId?: string | null;
+    onImageUploaded?: () => void;
   }
 
-  let { mode, content, filePath, scrollTarget = $bindable(null), onContentChange, onWordCountChange, onReady, onImageClick, onWikilinkClick, noteSuggestions = [], workspaceId = null }: Props = $props();
+  let { mode, content, filePath, scrollTarget = $bindable(null), onContentChange, onWordCountChange, onReady, onImageClick, onWikilinkClick, noteSuggestions = [], workspaceId = null, onImageUploaded }: Props = $props();
 
   // Editor container ref
   let milkdownContainer = $state<HTMLDivElement | null>(null);
@@ -388,7 +389,7 @@
     try {
       const view = crepeEditor.editor.ctx.get(editorViewCtx);
       const node = view.state.doc.nodeAt(pmPos);
-      if (node) view.dispatch(view.state.tr.delete(pmPos, pmPos + node.nodeSize));
+      if (node && node.type.name === 'image') view.dispatch(view.state.tr.delete(pmPos, pmPos + node.nodeSize));
     } catch { /* ignore stale state */ }
   }
 
@@ -399,7 +400,7 @@
     try {
       const view = crepeEditor.editor.ctx.get(editorViewCtx);
       const node = view.state.doc.nodeAt(pmPos);
-      if (!node) return;
+      if (!node || node.type.name !== 'image') return;
       const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
         ...node.attrs,
         title: `align-${direction}`,
@@ -519,8 +520,7 @@
     if (crepeEditor && editorReady) {
       try {
         const view = crepeEditor.editor.ctx.get(editorViewCtx);
-        const coords = view.posAtCoords({ left: e.clientX, top: e.clientY });
-        if (coords) pmPos = coords.pos;
+        pmPos = view.posAtDOM(img, 0);
       } catch { /* ignore */ }
     }
     imageToolbarState = { rect: r, src: img.src, alt: img.alt, pmPos };
@@ -795,6 +795,7 @@
       if (!res.ok) return;
       const { url } = (await res.json()) as { url: string };
       insertText(`![screenshot](${url})`);
+      onImageUploaded?.();
     } catch {
       console.error('Failed to upload screenshot');
     }
