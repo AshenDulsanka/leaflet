@@ -48,6 +48,16 @@
     resetContent: (content: string) => void;
   }
 
+  interface SaveSnapshot {
+    filePath: string;
+    content: string;
+    workspaceNotesFolder: string | null;
+  }
+
+  interface OpenFileError {
+    status: number;
+  }
+
   // State
   let tree = $state<FileNode[]>([]);
   let activeFile = $state<string | null>(null);
@@ -150,9 +160,23 @@
 
   // Workspace management
   const WS_STORAGE_KEY = 'notes-active-workspace-v1';
+  const SMALL_SCREEN_WARNING_DISMISS_KEY = 'leaflet-small-screen-warning-dismissed-v1';
+  const SMALL_SCREEN_MEDIA_QUERY = '(max-width: 900px)';
   let workspaces = $state<Workspace[]>([]);
   let activeWorkspace = $state<Workspace | null>(null);
   let createWorkspaceOpen = $state(false);
+  let isSmallScreen = $state(false);
+  let showSmallScreenWarning = $state(false);
+  let treeLoadRequestId = $state(0);
+  let treeWriteDepth = $state(0);
+
+  function beginTreeWrite(): void {
+    treeWriteDepth += 1;
+  }
+
+  function endTreeWrite(): void {
+    treeWriteDepth = Math.max(0, treeWriteDepth - 1);
+  }
 
   async function loadWorkspaces() {
     try {
@@ -172,16 +196,112 @@
     }
   }
 
-  function selectWorkspace(ws: Workspace) {
+  function dismissSmallScreenWarning(): void {
+    showSmallScreenWarning = false;
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(SMALL_SCREEN_WARNING_DISMISS_KEY, '1');
+  }
+
+  function encodePathForUrl(path: string): string {
+    return path
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+  }
+
+  function normalizeNotesFolder(folder: string | null | undefined): string {
+    return folder?.replace(/^\/+|\/+$/g, '') ?? '';
+  }
+
+  function resolveWorkspacePath(path: string, workspaceNotesFolder: string | null = activeWorkspace?.notes_folder ?? null): string {
+    const normalized = path.replace(/^\/+|\/+$/g, '');
+    const wsFolder = normalizeNotesFolder(workspaceNotesFolder);
+    if (!wsFolder) return normalized;
+    if (normalized === wsFolder || normalized.startsWith(`${wsFolder}/`)) {
+      return normalized;
+    }
+    return `${wsFolder}/${normalized}`;
+  }
+
+  function workspaceRootUrl(ws: Workspace | null): string {
+    const folder = normalizeNotesFolder(ws?.notes_folder ?? null);
+    if (!folder) return '/';
+    return `/${encodePathForUrl(folder)}`;
+  }
+
+  function isPathWithinWorkspace(path: string, workspaceNotesFolder: string | null): boolean {
+    const normalizedPath = path.replace(/^\/+|\/+$/g, '');
+    const workspaceFolder = normalizeNotesFolder(workspaceNotesFolder);
+
+    if (!normalizedPath) {
+      return false;
+    }
+
+    if (!workspaceFolder) {
+      return true;
+    }
+
+    if (normalizedPath === workspaceFolder || normalizedPath.startsWith(`${workspaceFolder}/`)) {
+      return true;
+    }
+
+    return !workspaces.some((workspace) => {
+      const folder = normalizeNotesFolder(workspace.notes_folder);
+      return folder !== '' && (normalizedPath === folder || normalizedPath.startsWith(`${folder}/`));
+    });
+  }
+
+  function migrateWorkspacePath(path: string, oldWorkspaceNotesFolder: string | null, newWorkspaceNotesFolder: string | null): string {
+    const normalizedPath = path.replace(/^\/+|\/+$/g, '');
+    const oldWorkspaceFolder = normalizeNotesFolder(oldWorkspaceNotesFolder);
+    const newWorkspaceFolder = normalizeNotesFolder(newWorkspaceNotesFolder);
+
+    if (!oldWorkspaceFolder || !newWorkspaceFolder) {
+      return normalizedPath;
+    }
+
+    if (normalizedPath === oldWorkspaceFolder) {
+      return newWorkspaceFolder;
+    }
+
+    if (normalizedPath.startsWith(`${oldWorkspaceFolder}/`)) {
+      return `${newWorkspaceFolder}${normalizedPath.slice(oldWorkspaceFolder.length)}`;
+    }
+
+    return normalizedPath;
+  }
+
+  function clearPendingAutosave(): void {
+    clearTimeout(saveTimer);
+  }
+
+  function clearActiveEditorState(): void {
+    activeFile = null;
+    activeContent = '';
+    isDirty = false;
+  }
+
+  function createSaveSnapshot(): SaveSnapshot | null {
+    if (!activeFile || !isDirty) {
+      return null;
+    }
+
+    return {
+      filePath: activeFile,
+      content: activeContent,
+      workspaceNotesFolder: activeWorkspace?.notes_folder ?? null
+    };
+  }
+
+  async function selectWorkspace(ws: Workspace): Promise<void> {
+    clearPendingAutosave();
+    clearActiveEditorState();
     activeWorkspace = ws;
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(WS_STORAGE_KEY, ws.id);
     }
-    // Reload the file tree scoped to this workspace's notes folder,
-    // and clear any open file since it belongs to the previous workspace context.
-    loadTree(ws.notes_folder ?? '');
-    activeFile = null;
-    activeContent = '';
+    await loadTree(ws.notes_folder ?? '');
+    await goto(workspaceRootUrl(ws), { replaceState: true, noScroll: true, keepFocus: true });
   }
 
   async function createWorkspace(data: { name: string; type: string; icon_color: string; preset: string | null }) {
@@ -221,16 +341,63 @@
     }
   }
 
-  async function renameWorkspace(id: string, newName: string) {
-    if (!newName.trim()) return;
-    const res = await fetch(`/api/workspaces/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim() })
-    });
-    if (res.ok) {
-      await invalidateAll();
-      await loadWorkspaces();
+  async function renameWorkspace(id: string, newName: string): Promise<void> {
+    const trimmedName = newName.trim();
+    if (!trimmedName) return;
+
+    const previousWorkspace = activeWorkspace?.id === id ? activeWorkspace : null;
+    const previousActiveFile = previousWorkspace?.id === id ? activeFile : null;
+
+    try {
+      const res = await fetch(`/api/workspaces/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedName })
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({} as { error?: string }));
+        showError(payload.error ?? 'Failed to rename workspace. Please try again.');
+        return;
+      }
+
+      const updatedWorkspace = await res.json() as Workspace;
+      workspaces = workspaces.map((w) => (w.id === id ? { ...w, ...updatedWorkspace } : w));
+
+      if (previousWorkspace?.id === id) {
+        const nextActiveFile = previousActiveFile && isPathWithinWorkspace(previousActiveFile, previousWorkspace.notes_folder ?? null)
+          ? migrateWorkspacePath(previousActiveFile, previousWorkspace.notes_folder ?? null, updatedWorkspace.notes_folder ?? null)
+          : null;
+
+        clearPendingAutosave();
+        activeWorkspace = updatedWorkspace;
+
+        if (nextActiveFile) {
+          activeFile = nextActiveFile;
+        } else {
+          clearActiveEditorState();
+        }
+
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(WS_STORAGE_KEY, updatedWorkspace.id);
+        }
+
+        await loadTree(updatedWorkspace.notes_folder ?? '');
+
+        if (nextActiveFile) {
+          await goto(`/${encodePathForUrl(resolveWorkspacePath(nextActiveFile, updatedWorkspace.notes_folder ?? null))}`, {
+            replaceState: true,
+            noScroll: true,
+            keepFocus: true,
+          });
+          return;
+        }
+
+        await goto(workspaceRootUrl(updatedWorkspace), { replaceState: true, noScroll: true, keepFocus: true });
+      }
+    } catch (error) {
+      console.error('Failed to rename workspace:', error);
+      showError('Failed to rename workspace. Please try again.');
     }
   }
 
@@ -296,30 +463,115 @@
   onMount(async () => {
     // Load workspaces first so we can scope the tree to the active workspace
     await loadWorkspaces();
-    await loadTree(activeWorkspace?.notes_folder ?? '');
-    // If URL already has a file path (e.g. hard refresh on /templates/cheatsheet),
-    // open that file without pushing another history entry.
     const urlPath = $page.params.path;
     if (urlPath) {
-      await openFile(urlPath, false);
+      const matchedWorkspace = workspaces.find(
+        (ws) => urlPath === ws.notes_folder || urlPath.startsWith(`${ws.notes_folder}/`)
+      );
+      if (matchedWorkspace) {
+        activeWorkspace = matchedWorkspace;
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(WS_STORAGE_KEY, matchedWorkspace.id);
+        }
+      }
+    }
+    await loadTree(activeWorkspace?.notes_folder ?? '');
+    // If URL already has a note file path, open it without pushing another history entry.
+    // open that file without pushing another history entry.
+    if (urlPath && urlPath.endsWith('.md')) {
+      try {
+        await openFile(urlPath, false, undefined, true);
+      } catch (openErr: unknown) {
+        const status = getOpenFileStatus(openErr);
+        if (status === 400 || status === 404) {
+          await goto(`/${encodePathForUrl(urlPath)}`, {
+            replaceState: true,
+            noScroll: true,
+            keepFocus: true,
+            invalidateAll: true
+          });
+          return;
+        }
+
+        console.error('Failed to open file:', urlPath);
+      }
     }
   });
 
-  async function loadTree(base = '') {
+  onMount(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQueryList = window.matchMedia(SMALL_SCREEN_MEDIA_QUERY);
+
+    const updateWarningVisibility = (): void => {
+      isSmallScreen = mediaQueryList.matches;
+      if (!mediaQueryList.matches) {
+        showSmallScreenWarning = false;
+        return;
+      }
+
+      const dismissed = localStorage.getItem(SMALL_SCREEN_WARNING_DISMISS_KEY) === '1';
+      showSmallScreenWarning = !dismissed;
+    };
+
+    updateWarningVisibility();
+    mediaQueryList.addEventListener('change', updateWarningVisibility);
+
+    return () => {
+      mediaQueryList.removeEventListener('change', updateWarningVisibility);
+    };
+  });
+
+  async function loadTree(base = '', options: { force?: boolean } = {}): Promise<void> {
+    const requestId = treeLoadRequestId + 1;
+    treeLoadRequestId = requestId;
+
     try {
       const query = base ? `?base=${encodeURIComponent(base)}` : '';
       const res = await fetch(`/api/notes/tree${query}`);
       const data = await res.json();
+
+      if (requestId !== treeLoadRequestId) {
+        return;
+      }
+
+      if (treeWriteDepth > 0 && !options.force) {
+        return;
+      }
+
       tree = data.tree ?? [];
     } catch {
       console.error('Failed to load file tree');
     }
   }
 
+  function getOpenFileStatus(error: unknown): number | null {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'status' in error &&
+      typeof (error as { status: unknown }).status === 'number'
+    ) {
+      return (error as OpenFileError).status;
+    }
+
+    return null;
+  }
+
   // updateUrl = false when we are already at the correct URL (e.g. on mount)
-  async function openFile(path: string, updateUrl = true, scrollTo?: { line: number; lineText: string }) {
+  async function openFile(
+    path: string,
+    updateUrl = true,
+    scrollTo?: { line: number; lineText: string },
+    throwOnError = false
+  ) {
     try {
-      const res = await fetch(`/api/notes/${path}`);
+      const resolvedPath = resolveWorkspacePath(path);
+      const encodedPath = encodePathForUrl(resolvedPath);
+      const res = await fetch(`/api/notes/${encodedPath}`);
+      if (!res.ok) {
+        throw { status: res.status } satisfies OpenFileError;
+      }
       const data = await res.json();
       activeFile = path;
       // Un-escape [[wikilinks]] that may have been over-escaped by a previous version of the serializer
@@ -331,9 +583,12 @@
       if (scrollTo) pendingScrollTarget = scrollTo;
       isDirty = false;
       if (updateUrl) {
-        await goto('/' + path, { replaceState: true, noScroll: true, keepFocus: true });
+        await goto('/' + encodedPath, { replaceState: true, noScroll: true, keepFocus: true });
       }
-    } catch {
+    } catch (error: unknown) {
+      if (throwOnError) {
+        throw error;
+      }
       console.error('Failed to open file:', path);
     }
   }
@@ -343,20 +598,36 @@
   function handleContentChange(content: string) {
     activeContent = content;
     isDirty = true;
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveFile(), 1500);
+    clearPendingAutosave();
+    const snapshot = createSaveSnapshot();
+    if (!snapshot) {
+      return;
+    }
+
+    saveTimer = setTimeout(() => {
+      void saveFile(snapshot);
+    }, 1500);
   }
 
-  async function saveFile() {
-    if (!activeFile || !isDirty) return;
+  async function saveFile(snapshot: SaveSnapshot | null = createSaveSnapshot()): Promise<void> {
+    if (!snapshot) return;
+
     isSaving = true;
     try {
-      await fetch(`/api/notes/${activeFile}`, {
+      const resolvedPath = resolveWorkspacePath(snapshot.filePath, snapshot.workspaceNotesFolder);
+      await fetch(`/api/notes/${encodePathForUrl(resolvedPath)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: activeContent })
+        body: JSON.stringify({ content: snapshot.content })
       });
-      isDirty = false;
+
+      const isCurrentFile = activeFile === snapshot.filePath;
+      const isCurrentWorkspace = (activeWorkspace?.notes_folder ?? null) === snapshot.workspaceNotesFolder;
+      const isCurrentContent = activeContent === snapshot.content;
+
+      if (isCurrentFile && isCurrentWorkspace && isCurrentContent) {
+        isDirty = false;
+      }
     } catch {
       console.error('Failed to save file');
     } finally {
@@ -365,54 +636,74 @@
   }
 
   async function createFile(path: string, type: 'file' | 'folder', initialContent?: string) {
-    const wsFolder = activeWorkspace?.notes_folder;
-    const alreadyPrefixed = wsFolder && path.startsWith(`${wsFolder}/`);
-    const fullPath = wsFolder && !alreadyPrefixed ? `${wsFolder}/${path}` : path;
-    const res = await fetch(`/api/notes/${fullPath}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type })
-    });
-    if (!res.ok) {
-      if (res.status === 409) {
-        const name = path.split('/').pop() ?? path;
-        showError(`"${name}" already exists. Choose a different name.`);
-      } else {
-        showError('Failed to create item.');
-      }
-      return;
-    }
-    if (type === 'file' && initialContent) {
-      await fetch(`/api/notes/${fullPath}`, {
-        method: 'PUT',
+    const fullPath = resolveWorkspacePath(path);
+    const encodedPath = encodePathForUrl(fullPath);
+    beginTreeWrite();
+    try {
+      const res = await fetch(`/api/notes/${encodedPath}`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: initialContent })
+        body: JSON.stringify({ type })
       });
+      if (!res.ok) {
+        if (res.status === 409) {
+          const name = path.split('/').pop() ?? path;
+          showError(`"${name}" already exists. Choose a different name.`);
+        } else {
+          showError('Failed to create item.');
+        }
+        return;
+      }
+      if (type === 'file' && initialContent) {
+        await fetch(`/api/notes/${encodedPath}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: initialContent })
+        });
+      }
+    } finally {
+      endTreeWrite();
     }
-    await loadTree(activeWorkspace?.notes_folder ?? '');
+
+    await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
   }
 
   async function deleteFile(path: string) {
-    await fetch(`/api/notes/${path}`, { method: 'DELETE' });
+    const resolvedPath = resolveWorkspacePath(path);
+    beginTreeWrite();
+    try {
+      await fetch(`/api/notes/${encodePathForUrl(resolvedPath)}`, { method: 'DELETE' });
+    } finally {
+      endTreeWrite();
+    }
+
     if (activeFile === path) {
       activeFile = null;
       activeContent = '';
-      await goto('/', { replaceState: true, noScroll: true });
+      await goto(workspaceRootUrl(activeWorkspace), { replaceState: true, noScroll: true, keepFocus: true });
     }
-    await loadTree(activeWorkspace?.notes_folder ?? '');
+    await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
   }
 
   async function renameFile(fromPath: string, toPath: string) {
-    await fetch(`/api/notes/${fromPath}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ newPath: toPath })
-    });
+    const resolvedFromPath = resolveWorkspacePath(fromPath);
+    const resolvedToPath = resolveWorkspacePath(toPath);
+    beginTreeWrite();
+    try {
+      await fetch(`/api/notes/${encodePathForUrl(resolvedFromPath)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPath: resolvedToPath })
+      });
+    } finally {
+      endTreeWrite();
+    }
+
     if (activeFile === fromPath) {
       activeFile = toPath;
-      await goto('/' + toPath, { replaceState: true, noScroll: true });
+      await goto('/' + encodePathForUrl(resolvedToPath), { replaceState: true, noScroll: true, keepFocus: true });
     }
-    await loadTree(activeWorkspace?.notes_folder ?? '');
+    await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
   }
 
   function handleSummarize() {
@@ -420,9 +711,87 @@
     summarizeOpen = true;
   }
 
+  function applyMove(nodes: FileNode[], fromPath: string, toFolderPath: string): FileNode[] {
+    const filename = fromPath.split('/').pop()!;
+
+    function removeNode(items: FileNode[]): { found: FileNode | null; remaining: FileNode[] } {
+      const remaining: FileNode[] = [];
+      let found: FileNode | null = null;
+      for (const n of items) {
+        if (n.path === fromPath) {
+          found = n;
+        } else if (n.children) {
+          const result = removeNode(n.children);
+          remaining.push({ ...n, children: result.remaining });
+          if (result.found) found = result.found;
+        } else {
+          remaining.push(n);
+        }
+      }
+      return { found, remaining };
+    }
+
+    function rewritePaths(node: FileNode, oldPrefix: string, newPrefix: string): FileNode {
+      const newPath = node.path.startsWith(oldPrefix + '/') ? newPrefix + node.path.slice(oldPrefix.length) : node.path;
+      return { ...node, path: newPath, children: node.children?.map((c) => rewritePaths(c, oldPrefix, newPrefix)) };
+    }
+
+    function insertNode(items: FileNode[], movedNode: FileNode): FileNode[] {
+      if (!toFolderPath) {
+        const newPath = filename;
+        return [...items, rewritePaths(movedNode, fromPath, newPath)];
+      }
+      return items.map((n) => {
+        if (n.path === toFolderPath && n.type === 'folder') {
+          const newPath = `${toFolderPath}/${filename}`;
+          return { ...n, children: [...(n.children ?? []), rewritePaths(movedNode, fromPath, newPath)] };
+        }
+        if (n.children) {
+          return { ...n, children: insertNode(n.children, movedNode) };
+        }
+        return n;
+      });
+    }
+
+    const { found, remaining } = removeNode(nodes);
+    if (!found) return nodes;
+    return insertNode(remaining, found);
+  }
+
   async function moveFile(fromPath: string, toFolderPath: string) {
     const filename = fromPath.split('/').pop()!;
-    await renameFile(fromPath, `${toFolderPath}/${filename}`);
+    const targetPath = toFolderPath ? `${toFolderPath}/${filename}` : filename;
+    if (targetPath === fromPath) {
+      return;
+    }
+
+    tree = applyMove(tree, fromPath, toFolderPath);
+
+    const resolvedFrom = resolveWorkspacePath(fromPath);
+    const resolvedTo = resolveWorkspacePath(targetPath);
+    beginTreeWrite();
+    let moveSuccess = false;
+    try {
+      const res = await fetch(`/api/notes/${encodePathForUrl(resolvedFrom)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPath: resolvedTo })
+      });
+      if (res.ok) {
+        moveSuccess = true;
+      } else {
+        await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
+      }
+    } catch {
+      await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
+    } finally {
+      endTreeWrite();
+    }
+
+    if (moveSuccess && activeFile === fromPath) {
+      activeFile = targetPath;
+      await goto('/' + encodePathForUrl(resolvedTo), { replaceState: true, noScroll: true, keepFocus: true });
+    }
   }
 
   // Find a note in the file tree by name (without .md extension)
@@ -468,6 +837,7 @@
   async function reorderNotes(orderedPaths: string[]): Promise<void> {
     tree = applyReorder(tree, orderedPaths);
     const items = orderedPaths.map((path, i) => ({ path, sort_order: i }));
+    beginTreeWrite();
     try {
       const res = await fetch('/api/notes/reorder', {
         method: 'PATCH',
@@ -478,7 +848,9 @@
     } catch (err) {
       console.error('Failed to persist note sort order:', err);
       showError('Failed to reorder notes. Please try again.');
-      await loadTree(activeWorkspace?.notes_folder ?? '');
+      await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
+    } finally {
+      endTreeWrite();
     }
   }
 
@@ -592,6 +964,37 @@
       >&#x2715;</button>
     </div>
   {/if}
+
+  {#if showSmallScreenWarning && isSmallScreen}
+    <div
+      class="fixed inset-0 z-[210] flex items-center justify-center bg-background/45 p-4 backdrop-blur-sm"
+      role="presentation"
+    >
+      <div
+        class="w-full max-w-md rounded-xl border border-amber-500/45 bg-card p-4 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="small-screen-warning-title"
+        aria-describedby="small-screen-warning-description"
+      >
+        <p id="small-screen-warning-title" class="text-sm font-semibold text-foreground">Desktop-focused app</p>
+        <p id="small-screen-warning-description" class="mt-2 text-xs leading-relaxed text-muted-foreground">
+          Leaflet is optimized for desktop workflows. On small screens, some features may be limited or behave unexpectedly.
+        </p>
+        <div class="mt-4 flex justify-end">
+          <button
+            type="button"
+            onclick={dismissSmallScreenWarning}
+            class="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-primary/60"
+            aria-label="Dismiss small screen warning"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <Toolbar
     bind:searchOpen
     bind:editorMode
@@ -600,7 +1003,7 @@
     bind:newNoteOpen
     onNewNote={(fileName, templateContent) => {
       const baseName = fileName.endsWith('.md') ? fileName : `${fileName}.md`;
-      const fullPath = newNoteParentPath ? `${newNoteParentPath}/${baseName}` : fileName;
+      const fullPath = newNoteParentPath ? `${newNoteParentPath}/${baseName}` : baseName;
       newNoteParentPath = null;
       createFile(fullPath, 'file', templateContent || undefined);
     }}
@@ -707,7 +1110,7 @@
       {/if}
     </main>
 
-    <div class="right-panel-container relative shrink-0" style="width: {rightPanelOpen ? `${rightPanelWidth}px` : '0'}; overflow: hidden; transition: width {isResizingRight ? '0ms' : '200ms'} cubic-bezier(0.4, 0, 0.2, 1); --panel-width: {rightPanelWidth}px;">
+    <div class="right-panel-container relative shrink-0 {rightPanelOpen ? '' : 'pointer-events-none'}" style="width: {rightPanelOpen ? `${rightPanelWidth}px` : '0'}; overflow: hidden; transition: width {isResizingRight ? '0ms' : '200ms'} cubic-bezier(0.4, 0, 0.2, 1); --panel-width: {rightPanelWidth}px;">
       {#if rightPanelOpen}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
@@ -738,6 +1141,7 @@
         onClose={() => (screenshotsOpen = false)}
         onInsert={(md) => { insertIntoEditor?.(md); }}
         refreshTrigger={screenshotVersion}
+        {uiMode}
       />
     {/if}
 

@@ -129,10 +129,41 @@ export async function deleteNote(relativePath: string): Promise<void> {
   await fs.rm(filePath, { recursive: true, force: true });
 }
 
+function assertValidMovePath(path: string, label: string): void {
+  const normalized = path.trim();
+  if (!normalized) {
+    throw new Error(`Invalid ${label} path`);
+  }
+  if (normalized.length > 512) {
+    throw new Error(`Invalid ${label} path`);
+  }
+  if (normalized.includes('\0')) {
+    throw new Error(`Invalid ${label} path`);
+  }
+  if (normalized.includes('..')) {
+    throw new Error(`Invalid ${label} path`);
+  }
+  if (normalized.startsWith('/') || normalized.startsWith('\\')) {
+    throw new Error(`Invalid ${label} path`);
+  }
+  const segments = normalized.split('/');
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    throw new Error(`Invalid ${label} path`);
+  }
+}
+
 /** Rename or move a note */
 export async function moveNote(fromPath: string, toPath: string): Promise<void> {
+  assertValidMovePath(fromPath, 'source');
+  assertValidMovePath(toPath, 'destination');
+
   const from = safePath(fromPath);
   const to = safePath(toPath);
+
+  if (from === to) {
+    return;
+  }
+
   await fs.mkdir(dirname(to), { recursive: true });
   await fs.rename(from, to);
 }

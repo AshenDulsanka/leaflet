@@ -1,5 +1,6 @@
 <script lang="ts">
   import { PanelLeftClose, PanelLeftOpen, FileText, Pin, PinOff, Pencil, Trash2, ChevronDown, Plus } from '@lucide/svelte';
+  import { notifications } from '$lib/notifications.svelte';
   import FileTree from './FileTree.svelte';
   import SyncButton from './SyncButton.svelte';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
@@ -33,14 +34,12 @@
   let wsDropdownOpen = $state(false);
 
   let confirmDeleteWorkspace = $state<{ id: string; label: string } | null>(null);
-  let editingWorkspaceId = $state<string | null>(null);
-  let editingWorkspaceName = $state('');
+  let renameModalId = $state<string | null>(null);
+  let renameModalName = $state('');
 
   let wsContextMenu = $state<{ x: number; y: number } | null>(null);
   let draggingWsId = $state<string | null>(null);
   let dragOverWsId = $state<string | null>(null);
-  let rootDropTarget = $state(false);
-  let rootDropTargetBottom = $state(false);
 
   function handleSelectWorkspace(ws: Workspace) {
     wsDropdownOpen = false;
@@ -65,19 +64,27 @@
     newOrder.splice(fromIdx, 1);
     newOrder.splice(toIdx, 0, fromId);
 
+    const previousOrder = [...workspaces];
+
     // Optimistic update
     const reordered = newOrder.map((id) => workspaces.find((w) => w.id === id)!);
     onReorderWorkspaces?.(reordered);
 
     // Persist
     try {
-      await fetch('/api/workspaces/reorder', {
+      const res = await fetch('/api/workspaces/reorder', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order: newOrder })
       });
+
+      if (!res.ok) {
+        throw new Error(`Workspace reorder failed with status ${res.status}`);
+      }
     } catch (err) {
       console.error('Failed to reorder workspaces:', err);
+      onReorderWorkspaces?.(previousOrder);
+      notifications.add('error', 'Failed to reorder workspaces. Please try again.');
     }
   }
 
@@ -119,6 +126,9 @@
 
   let pinned = $state<string[]>(loadPinned());
 
+  const SIDEBAR_MIN_WIDTH = 180;
+  const SIDEBAR_MAX_WIDTH = 400;
+
   // Reload pinned list when workspace changes
   $effect(() => {
     // Access activeWorkspace to track it as a dependency
@@ -152,14 +162,18 @@
   let sidebarWidth = $state(260);
   let isResizing = $state(false);
 
+  function clampSidebarWidth(value: number): number {
+    return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, value));
+  }
+
   function startResize(e: MouseEvent) {
     isResizing = true;
     const startX = e.clientX;
-    const startWidth = sidebarWidth;
+    const startWidth = clampSidebarWidth(sidebarWidth);
 
     function onMouseMove(e: MouseEvent) {
       const newWidth = startWidth + (e.clientX - startX);
-      sidebarWidth = Math.min(400, Math.max(180, newWidth));
+      sidebarWidth = clampSidebarWidth(newWidth);
     }
 
     function onMouseUp() {
@@ -176,8 +190,8 @@
 <svelte:window onclick={() => { closePinnedMenu(); wsContextMenu = null; wsDropdownOpen = false; }} />
 
 <aside
-  class="relative flex flex-shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200"
-  style={collapsed ? 'width: 40px' : `width: ${sidebarWidth}px`}
+  class="relative flex flex-shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 {collapsed ? '' : 'sidebar-resizable'}"
+  style={collapsed ? 'width: 40px' : `width: ${clampSidebarWidth(sidebarWidth)}px`}
 >
   <!-- Header: title + sync + collapse toggle -->
   <div class="flex h-8 items-center justify-between pl-3 pr-1">
@@ -209,6 +223,7 @@
   <!-- Workspace selector (hidden when collapsed) -->
   {#if !collapsed && (workspaces.length > 0 || onCreateWorkspace)}
     <div class="relative px-2 pb-2">
+      <div class="rounded-md border border-border bg-card p-0.5 shadow-sm ring-1 ring-border/60">
       <div
         class="flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-accent"
         onclick={(e) => { e.stopPropagation(); wsDropdownOpen = !wsDropdownOpen; }}
@@ -235,17 +250,18 @@
         </span>
         <ChevronDown size={11} class="flex-shrink-0 text-muted-foreground" />
       </div>
+      </div>
 
       {#if wsDropdownOpen}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div
-          class="absolute left-2 right-2 top-full z-50 mt-0.5 rounded-md border border-border bg-popover py-1 shadow-lg"
+          class="absolute left-2 right-2 top-full z-50 rounded-md border border-border bg-popover shadow-lg"
           onclick={(e) => e.stopPropagation()}
         >
           {#each workspaces as ws (ws.id)}
             <div
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs {activeWorkspace?.id === ws.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-accent'} {dragOverWsId === ws.id && draggingWsId !== ws.id ? 'bg-primary/10' : ''}"
+              class="flex w-full items-center gap-2 px-3 text-left text-xs {activeWorkspace?.id === ws.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-accent'} {dragOverWsId === ws.id && draggingWsId !== ws.id ? 'bg-primary/10' : ''}"
               draggable={true}
               ondragstart={(e) => {
                 e.stopPropagation();
@@ -269,66 +285,47 @@
             >
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <div
-                class="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
+                class="flex min-w-0 flex-1 cursor-pointer items-center gap-2"
                 onclick={() => handleSelectWorkspace(ws)}
                 role="button"
                 tabindex="0"
               >
                 <div class="h-2.5 w-2.5 flex-shrink-0 rounded-sm" style="background-color: {ws.icon_color}"></div>
-                {#if editingWorkspaceId === ws.id}
-                  <!-- svelte-ignore a11y_autofocus -->
-                  <input
-                    type="text"
-                    bind:value={editingWorkspaceName}
-                    class="min-w-0 flex-1 bg-transparent px-1 py-0.5 outline-none rounded border border-border"
-                    onkeydown={(e) => {
-                      if (e.key === 'Enter') {
-                        onRenameWorkspace?.(ws.id, editingWorkspaceName.trim());
-                        editingWorkspaceId = null;
-                      } else if (e.key === 'Escape') {
-                        editingWorkspaceId = null;
-                      }
-                    }}
-                    onblur={() => {
-                      onRenameWorkspace?.(ws.id, editingWorkspaceName.trim());
-                      editingWorkspaceId = null;
-                    }}
-                    onclick={(e) => e.stopPropagation()}
-                    autofocus
-                  />
-                {:else}
-                  <span class="flex-1 truncate text-left">{ws.name}</span>
-                {/if}
+                <span class="flex-1 truncate text-left">{ws.name}</span>
               </div>
-              
-              {#if editingWorkspaceId !== ws.id}
-                <div class="flex items-center gap-1.5 ml-auto">
-                  {#if ws.host_count || ws.flag_count}
-                    <span class="text-[10px] text-muted-foreground mr-1">{ws.host_count ?? 0}H / {ws.flag_count ?? 0}F</span>
-                  {/if}
+
+              <div class="ml-2 flex shrink-0 items-center gap-1.5">
+                {#if ws.host_count || ws.flag_count}
+                  <span class="text-[10px] text-muted-foreground">{ws.host_count ?? 0}H / {ws.flag_count ?? 0}F</span>
+                {/if}
+                <div class="flex items-center gap-0.5">
                   <button
-                    class="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-                    title="Rename Workspace"
+                    type="button"
                     onclick={(e) => {
                       e.stopPropagation();
-                      editingWorkspaceId = ws.id;
-                      editingWorkspaceName = ws.name;
+                      renameModalId = ws.id;
+                      renameModalName = ws.name;
+                      wsDropdownOpen = false;
                     }}
+                    class="inline-flex h-7 w-7 items-center justify-center rounded text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-primary"
+                    title="Rename workspace"
+                    aria-label="Rename workspace"
                   >
-                    <Pencil size={11} />
+                    <Pencil size={12} />
                   </button>
-                  <button
-                    class="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-                    title="Delete Workspace"
-                    onclick={(e) => {
-                      e.stopPropagation();
-                      confirmDeleteWorkspace = { id: ws.id, label: ws.name };
-                    }}
-                  >
-                    <Trash2 size={11} />
-                  </button>
+                <button
+                  class="inline-flex h-7 w-7 items-center justify-center rounded text-destructive transition-colors hover:bg-destructive/15 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
+                  title="Delete Workspace"
+                  aria-label={`Delete workspace ${ws.name}`}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    confirmDeleteWorkspace = { id: ws.id, label: ws.name };
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
                 </div>
-              {/if}
+              </div>
             </div>
           {/each}
           {#if onCreateWorkspace}
@@ -389,19 +386,6 @@
         if (e.key === 'ArrowUp')   btns[Math.max(idx - 1, 0)]?.focus();
       }}
     >
-      <div
-        role="presentation"
-        class="h-1 w-full rounded transition-colors {rootDropTarget ? 'bg-primary/30' : 'bg-transparent'}"
-        ondragover={(e) => { e.preventDefault(); e.stopPropagation(); rootDropTarget = true; }}
-        ondragleave={() => { rootDropTarget = false; }}
-        ondrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          rootDropTarget = false;
-          const fromPath = e.dataTransfer?.getData('text/plain') ?? '';
-          if (fromPath) onMoveItem(fromPath, activeWorkspace?.notes_folder ?? '');
-        }}
-      ></div>
       <FileTree
         nodes={tree}
         {activeFile}
@@ -417,19 +401,6 @@
         {onNewNoteInFolder}
         {onReorderNotes}
       />
-      <div
-        role="presentation"
-        class="min-h-12 w-full flex-1 rounded transition-colors {rootDropTargetBottom ? 'bg-primary/30' : 'bg-transparent'}"
-        ondragover={(e) => { e.preventDefault(); e.stopPropagation(); rootDropTargetBottom = true; }}
-        ondragleave={() => { rootDropTargetBottom = false; }}
-        ondrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          rootDropTargetBottom = false;
-          const fromPath = e.dataTransfer?.getData('text/plain') ?? '';
-          if (fromPath) onMoveItem(fromPath, activeWorkspace?.notes_folder ?? '');
-        }}
-      ></div>
     </div>
   {/if}
 
@@ -442,6 +413,28 @@
         : ''}"
       onmousedown={startResize}
     ></div>
+  {/if}
+
+  {#if renameModalId !== null}
+    <Dialog
+      title="Rename Workspace"
+      defaultValue={renameModalName}
+      confirmLabel="Save"
+      onConfirm={(value) => {
+        if (!renameModalId || !value.trim()) {
+          renameModalId = null;
+          renameModalName = '';
+          return;
+        }
+        onRenameWorkspace?.(renameModalId, value.trim());
+        renameModalId = null;
+        renameModalName = '';
+      }}
+      onCancel={() => {
+        renameModalId = null;
+        renameModalName = '';
+      }}
+    />
   {/if}
 </aside>
 
@@ -460,9 +453,8 @@
       onclick={() => {
         wsContextMenu = null;
         if (activeWorkspace) {
-          wsDropdownOpen = true;
-          editingWorkspaceId = activeWorkspace.id;
-          editingWorkspaceName = activeWorkspace.name;
+          renameModalId = activeWorkspace.id;
+          renameModalName = activeWorkspace.name;
         }
       }}
     >
