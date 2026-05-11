@@ -23,7 +23,7 @@ const ALLOWED_TYPES = new Set([
   "image/webp",
 ]);
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
-const SAFE_NAME = /^[0-9]+\.(png|jpg|jpeg|gif|webp)$/;
+const SAFE_NAME = /^[a-z0-9][a-z0-9-]*\.(png|jpg|jpeg|gif|webp)$/;
 
 export const GET: RequestHandler = async ({ url }) => {
   const workspaceIdParam = url.searchParams.get("workspaceId");

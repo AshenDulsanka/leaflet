@@ -3,6 +3,7 @@
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import ToolModal from '$lib/components/modals/ToolModal.svelte';
   import ImageLightbox from '$lib/components/editor/ImageLightbox.svelte';
   import type { ScreenshotMeta } from '$lib/types';
 
@@ -11,9 +12,10 @@
     onInsert: (markdown: string) => void;
     workspaceId: string | null;
     refreshTrigger?: number;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { onClose, onInsert, workspaceId, refreshTrigger = 0 }: Props = $props();
+  let { onClose, onInsert, workspaceId, refreshTrigger = 0, uiMode = 'modal' }: Props = $props();
 
   let screenshots = $state<ScreenshotMeta[]>([]);
   let loading = $state(false);
@@ -23,6 +25,7 @@
   let lightboxImage = $state<string | null>(null);
   let confirmDelete = $state<{ id: string; label: string } | null>(null);
   let renaming = $state<{ filename: string; value: string } | null>(null);
+  let screenshotQuery = $state('');
 
   $effect(() => {
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -52,7 +55,8 @@
 
   async function deleteScreenshot(filename: string): Promise<void> {
     try {
-      const res = await fetch(`/api/screenshots/${filename}`, { method: 'DELETE' });
+      const qs = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';
+      const res = await fetch(`/api/screenshots/${encodeURIComponent(filename)}${qs}`, { method: 'DELETE' });
       if (!res.ok) { console.error('Failed to delete screenshot:', { filename, status: res.status }); return; }
       screenshots = screenshots.filter((s) => s.filename !== filename);
     } catch (err) {
@@ -60,25 +64,36 @@
     }
   }
 
-  async function renameScreenshot(filename: string, caption: string): Promise<void> {
+  async function renameScreenshot(filename: string, newName: string): Promise<void> {
     if (!workspaceId) return;
-    const trimmed = caption.trim();
+    const trimmed = newName.trim();
     if (!trimmed) return;
     try {
       const res = await fetch(`/api/screenshots/${encodeURIComponent(filename)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId, caption: trimmed }),
+        body: JSON.stringify({ workspaceId, caption: trimmed, newFilename: trimmed }),
       });
       if (!res.ok) {
         console.error('Failed to rename screenshot:', { filename, status: res.status });
+        return; // keep renaming open
+      }
+      const raw: unknown = await res.json();
+      if (typeof raw !== 'object' || raw === null || !('filename' in raw)) {
+        console.error('Unexpected rename response shape:', raw);
+        renaming = null;
         return;
       }
-      screenshots = screenshots.map((s) => s.filename === filename ? { ...s, caption: trimmed } : s);
+      const data = raw as { filename: string; url?: string; caption?: string };
+      screenshots = screenshots.map((s) =>
+        s.filename === filename
+          ? { ...s, filename: data.filename, url: data.url ?? s.url, caption: data.caption ?? trimmed }
+          : s
+      );
+      renaming = null; // only clear on success
     } catch (err) {
       console.error('Failed to rename screenshot:', err);
-    } finally {
-      renaming = null;
+      // do NOT clear renaming — keep form open for retry
     }
   }
 
@@ -124,8 +139,38 @@
   }
 
   function handleKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') onClose();
+    if (e.defaultPrevented || e.key !== 'Escape') return;
+
+    if (confirmDelete !== null) {
+      e.preventDefault();
+      confirmDelete = null;
+      return;
+    }
+
+    if (lightboxImage !== null) {
+      e.preventDefault();
+      lightboxImage = null;
+      return;
+    }
+
+    if (renaming !== null) {
+      e.preventDefault();
+      renaming = null;
+      return;
+    }
+
+    onClose();
   }
+
+  const filteredScreenshots = $derived(
+    screenshotQuery.trim()
+      ? screenshots.filter(
+          (s) =>
+            s.filename.toLowerCase().includes(screenshotQuery.toLowerCase()) ||
+            (s.caption ?? '').toLowerCase().includes(screenshotQuery.toLowerCase())
+        )
+      : screenshots
+  );
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -142,6 +187,7 @@
       class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
       onclick={loadScreenshots}
       title="Refresh"
+      aria-label="Refresh screenshots"
     >
       <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
     </button>
@@ -149,6 +195,7 @@
       class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
       onclick={onClose}
       title="Close"
+      aria-label="Close screenshots panel"
     >
       <X size={13} />
     </button>
@@ -185,6 +232,16 @@
     onchange={handleFileChange}
   />
 
+  <div class="border-b border-border px-3 py-2">
+    <input
+      type="text"
+      aria-label="Filter screenshots"
+      placeholder="Filter screenshots..."
+      bind:value={screenshotQuery}
+      class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+    />
+  </div>
+
   <!-- Screenshot grid -->
   <div class="flex-1 overflow-y-auto p-3">
     {#if loading && screenshots.length === 0}
@@ -197,13 +254,17 @@
         <p class="text-xs text-muted-foreground">No screenshots yet</p>
         <p class="mt-1 text-[11px] text-muted-foreground">Upload an image or paste one into the editor</p>
       </div>
+    {:else if filteredScreenshots.length === 0}
+      <div class="py-8 text-center">
+        <p class="text-xs text-muted-foreground">No screenshots match your filter</p>
+      </div>
     {:else}
       <p class="mb-2 text-[11px] text-muted-foreground">
-        {screenshots.length} screenshot{screenshots.length !== 1 ? 's' : ''} - click to insert into note
+        {filteredScreenshots.length} screenshot{filteredScreenshots.length !== 1 ? 's' : ''}{#if screenshotQuery.trim()} (filtered){/if} - click to insert into note
       </p>
       <div class="grid grid-cols-2 gap-2">
-        {#each screenshots as ss (ss.filename)}
-          <div class="flex flex-col gap-1 rounded-md border border-border bg-muted/30 overflow-hidden">
+        {#each filteredScreenshots as ss (ss.filename)}
+          <div class="flex flex-col rounded-md border border-border bg-muted/30">
             <!-- Thumbnail clickable area -->
             <div
               class="group relative cursor-pointer overflow-hidden transition-colors hover:border-primary/50"
@@ -221,35 +282,8 @@
                 class="aspect-video w-full object-cover"
                 loading="lazy"
               />
-              <!-- Persistent top-right controls -->
-              <div class="absolute right-1 top-1 flex flex-col gap-1">
-                <button
-                  class="flex h-6 w-6 items-center justify-center rounded-full bg-background/90 text-foreground shadow hover:bg-muted"
-                  onclick={(e) => { e.stopPropagation(); lightboxImage = ss.url; }}
-                  title="View full image"
-                  aria-label="View {ss.filename}"
-                >
-                  <Eye size={12} />
-                </button>
-                <button
-                  class="flex h-6 w-6 items-center justify-center rounded-full bg-background/90 text-foreground shadow hover:bg-muted"
-                  onclick={(e) => { e.stopPropagation(); renaming = { filename: ss.filename, value: ss.caption || ss.filename }; }}
-                  title="Rename screenshot"
-                  aria-label="Rename {ss.filename}"
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  class="flex h-6 w-6 items-center justify-center rounded-full bg-destructive/90 text-white shadow hover:bg-destructive"
-                  onclick={(e) => { e.stopPropagation(); confirmDelete = { id: ss.filename, label: ss.filename }; }}
-                  title="Delete screenshot"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-              
               <!-- File size and insert hint at bottom -->
-              <div class="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent p-1.5 pt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              <div class="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/80 via-black/40 to-transparent p-1.5 pt-6 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                 <span class="text-[9px] text-white/90 drop-shadow-sm">
                   {formatSize(ss.sizeBytes)}
                 </span>
@@ -258,26 +292,60 @@
                 </span>
               </div>
             </div>
-            {#if renaming !== null && renaming.filename === ss.filename}
-              <form
-                class="flex items-center gap-1 px-1.5 pb-1.5"
-                onsubmit={(e) => { e.preventDefault(); renameScreenshot(ss.filename, renaming!.value); }}
-              >
-                <!-- svelte-ignore a11y_autofocus -->
-                <input
-                  type="text"
-                  class="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] text-foreground outline-none focus:border-primary"
-                  bind:value={renaming.value}
-                  onkeydown={(e) => { if (e.key === 'Escape') renaming = null; }}
-                  autofocus
-                />
-                <button type="submit" class="shrink-0 text-[10px] text-primary hover:underline">Save</button>
-              </form>
-            {:else}
-              <p class="truncate px-1.5 pb-1.5 text-[10px] leading-4 text-muted-foreground" title={ss.caption || ss.filename}>
-                {ss.caption || ss.filename}
-              </p>
-            {/if}
+
+            <!-- Action row -->
+            <div class="flex items-center gap-1 border-t border-border/50 bg-background/50 px-1 py-0.5">
+              {#if renaming !== null && renaming.filename === ss.filename && uiMode === 'inline'}
+                <form
+                  class="flex w-full items-center gap-1"
+                  onsubmit={(e) => { e.preventDefault(); renameScreenshot(ss.filename, renaming!.value); }}
+                >
+                  <!-- svelte-ignore a11y_autofocus -->
+                  <input
+                    type="text"
+                    class="min-w-0 flex-1 rounded border border-input bg-background px-1 py-0.5 text-[10px] text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    bind:value={renaming.value}
+                    onkeydown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        renaming = null;
+                      }
+                    }}
+                    autofocus
+                  />
+                  <button type="submit" class="shrink-0 px-1 text-[10px] font-medium text-primary hover:underline">Save</button>
+                </form>
+              {:else}
+                <span class="min-w-0 flex-1 truncate px-1 text-[10px] text-muted-foreground" title={ss.caption || ss.filename}>
+                  {ss.caption || ss.filename}
+                </span>
+                <button
+                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
+                  onclick={(e) => { e.stopPropagation(); lightboxImage = ss.url; }}
+                  title="View full image"
+                  aria-label="View {ss.filename}"
+                >
+                  <Eye size={12} />
+                </button>
+                <button
+                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
+                  onclick={(e) => { e.stopPropagation(); renaming = { filename: ss.filename, value: ss.caption || ss.filename.replace(/\.[^.]+$/, '') }; }}
+                  title="Rename screenshot"
+                  aria-label="Rename {ss.filename}"
+                >
+                  <Pencil size={12} />
+                </button>
+                <button
+                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-destructive dark:text-red-400 transition-colors hover:bg-destructive/20 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
+                  onclick={(e) => { e.stopPropagation(); confirmDelete = { id: ss.filename, label: ss.filename }; }}
+                  title="Delete screenshot"
+                  aria-label="Delete {ss.filename}"
+                >
+                  <Trash2 size={12} />
+                </button>
+              {/if}
+            </div>
           </div>
         {/each}
       </div>
@@ -297,5 +365,51 @@
     onConfirm={() => { deleteScreenshot(pending.id); confirmDelete = null; }}
     onCancel={() => confirmDelete = null}
   />
+{/if}
+
+{#if renaming !== null && uiMode === 'modal'}
+  {@const r = renaming}
+  <ToolModal
+    ariaLabel="Rename screenshot"
+    onClose={() => (renaming = null)}
+    maxWidthClass="max-w-xs"
+  >
+    <div class="p-4">
+      <h3 class="mb-3 text-sm font-semibold text-foreground">Rename Screenshot</h3>
+      <form
+        onsubmit={(e) => { e.preventDefault(); renameScreenshot(r.filename, r.value); }}
+      >
+        <!-- svelte-ignore a11y_autofocus -->
+        <input
+          type="text"
+          class="mb-3 w-full rounded border border-input bg-background px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          bind:value={renaming.value}
+          onkeydown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              renaming = null;
+            }
+          }}
+          autofocus
+        />
+        <div class="flex justify-end gap-2">
+          <button
+            type="button"
+            onclick={() => renaming = null}
+            class="rounded px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/30"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Rename
+          </button>
+        </div>
+      </form>
+    </div>
+  </ToolModal>
 {/if}
 
