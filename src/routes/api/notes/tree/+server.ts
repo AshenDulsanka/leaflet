@@ -6,23 +6,30 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 
-import { join, resolve } from 'path';
+import { existsSync, statSync } from 'fs';
+import { isAbsolute, relative, resolve } from 'path';
 
 import { getDb } from '$lib/server/database';
 import { getNotesDir, readTree, sortTreeNodes } from '$lib/server/notes';
 
 export const GET: RequestHandler = async ({ url }) => {
   try {
-    const notesDir = getNotesDir();
+    const notesDir = resolve(getNotesDir());
     const base = url.searchParams.get('base') ?? '';
 
     let startDir = notesDir;
     if (base) {
-      // Security: resolve and verify the path stays within notesDir
-      const resolved = resolve(join(notesDir, base));
-      if (!resolved.startsWith(resolve(notesDir))) {
+      // Security: canonical containment check (no string prefix checks)
+      const resolved = resolve(notesDir, base);
+      const relativePath = relative(notesDir, resolved);
+      if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
         return json({ error: 'Invalid base path' }, { status: 400 });
       }
+
+      if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+        return json({ error: 'Base folder not found' }, { status: 404 });
+      }
+
       startDir = resolved;
     }
 

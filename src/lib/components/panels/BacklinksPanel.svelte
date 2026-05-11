@@ -22,10 +22,19 @@
   let backlinks = $state<BacklinkResult[]>([]);
   let loading = $state(false);
   let fetchError = $state(false);
+  let backlinkQuery = $state('');
 
   // Note name without folder or .md extension - used as the [[link]] target text
   const noteName = $derived(
     activeFile ? (activeFile.split('/').pop()?.replace(/\.md$/i, '') ?? null) : null
+  );
+
+  const filteredBacklinks = $derived(
+    backlinkQuery.trim()
+      ? backlinks.filter((b) =>
+          b.fileName.toLowerCase().includes(backlinkQuery.toLowerCase())
+        )
+      : backlinks
   );
 
   $effect(() => {
@@ -43,6 +52,11 @@
       const res = await fetch(
         `/api/notes/search?q=${encodeURIComponent(`[[${name}]]`)}`
       );
+      if (!res.ok) {
+        fetchError = true;
+        backlinks = [];
+        return;
+      }
       const data: BacklinkResult[] = await res.json();
       // Exclude the current note from results (self-references)
       backlinks = data.filter((r) => r.path !== activeFile);
@@ -107,10 +121,24 @@
         </p>
       </div>
     {:else}
-      <p class="px-3 py-2 text-[11px] text-muted-foreground">
-        {backlinks.length} note{backlinks.length !== 1 ? 's' : ''} link here
-      </p>
-      {#each backlinks as link (link.path + ':' + link.line)}
+      <div class="border-b border-border px-3 py-2">
+        <input
+          type="text"
+          aria-label="Filter backlinks"
+          placeholder="Filter backlinks..."
+          bind:value={backlinkQuery}
+          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+      {#if backlinkQuery.trim()}
+        <p class="px-3 py-2 text-[11px] text-muted-foreground">{filteredBacklinks.length} of {backlinks.length} note{backlinks.length !== 1 ? 's' : ''} match</p>
+      {:else}
+        <p class="px-3 py-2 text-[11px] text-muted-foreground">{backlinks.length} note{backlinks.length !== 1 ? 's' : ''} link here</p>
+      {/if}
+      {#if filteredBacklinks.length === 0 && backlinkQuery.trim()}
+        <p class="px-3 py-4 text-center text-xs text-muted-foreground">No backlinks match your filter.</p>
+      {:else}
+        {#each filteredBacklinks as link (link.path + ':' + link.line)}
         <button
           class="w-full border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-accent"
           onclick={() => onNavigate(link.path, link.line, link.lineText)}
@@ -124,7 +152,8 @@
             {link.context}
           </p>
         </button>
-      {/each}
+        {/each}
+      {/if}
     {/if}
   </div>
 </aside>
