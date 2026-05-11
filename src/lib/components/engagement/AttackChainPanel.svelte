@@ -1,8 +1,9 @@
 <script lang="ts">
   import { Network, Plus, X, RefreshCw, Trash2, Save } from '@lucide/svelte';
-  import { fly } from 'svelte/transition';
+  import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import Select from '$lib/components/ui/Select.svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
   import {
     SvelteFlow,
     Controls,
@@ -48,10 +49,13 @@
   const nodeTypes: NodeTypes = { attackNode: AttackChainNodeComponent };
 
   // SvelteFlow state
-  let nodes = $state<Node[]>([]);
-  let edges = $state<Edge[]>([]);
+  let nodes = $state.raw<Node[]>([]);
+  let edges = $state.raw<Edge[]>([]);
   let loading = $state(false);
   let addingNode = $state(false);
+  let confirmDeleteOpen = $state(false);
+  let pendingDeleteNodeId = $state<string | null>(null);
+  let pendingDeleteNodeLabel = $state('');
 
   // Add node form
   let newLabel = $state('');
@@ -186,6 +190,26 @@
     }
   }
 
+  function requestDeleteNode(nodeId: string, label: string): void {
+    pendingDeleteNodeId = nodeId;
+    pendingDeleteNodeLabel = label;
+    confirmDeleteOpen = true;
+  }
+
+  async function confirmDeleteNode(): Promise<void> {
+    if (!pendingDeleteNodeId) return;
+    await deleteNode(pendingDeleteNodeId);
+    confirmDeleteOpen = false;
+    pendingDeleteNodeId = null;
+    pendingDeleteNodeLabel = '';
+  }
+
+  function cancelDeleteNode(): void {
+    confirmDeleteOpen = false;
+    pendingDeleteNodeId = null;
+    pendingDeleteNodeLabel = '';
+  }
+
   /** Persist node position after a drag. */
   async function handleNodeDragStop({ targetNode }: { targetNode: Node | null; nodes: Node[]; event: MouseEvent | TouchEvent }): Promise<void> {
     if (!workspaceId || !targetNode) return;
@@ -262,20 +286,58 @@
   }
 
   function handleKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      if (selectedNodeId) { closeDrawer(); return; }
-      onClose();
+    if (e.defaultPrevented) return;
+    if (e.key !== 'Escape') return;
+
+    if (addingNode && uiMode === 'modal') {
+      addingNode = false;
+      e.preventDefault();
+      return;
     }
+
+    if (confirmDeleteOpen) {
+      cancelDeleteNode();
+      e.preventDefault();
+      return;
+    }
+
+    if (selectedNodeId) {
+      closeDrawer();
+      e.preventDefault();
+      return;
+    }
+
+    onClose();
+  }
+
+  function closeAddNodeModalFromEscape(e: KeyboardEvent): void {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    addingNode = false;
+  }
+
+  function handleAddNodeModalKeydown(e: KeyboardEvent): void {
+    closeAddNodeModalFromEscape(e);
   }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- Full-screen overlay for the attack chain -->
 <div
-  class="fixed inset-0 z-50 flex flex-col bg-background"
-  transition:fly={{ y: 20, duration: 200, easing: cubicOut }}
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+  role="presentation"
+  onclick={(e) => {
+    if (e.target === e.currentTarget) onClose();
+  }}
 >
+  <div
+    class="relative flex h-[80vh] w-[85vw] max-w-[1400px] flex-col overflow-hidden rounded-lg border border-border bg-background shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Attack Chain"
+    transition:fly={{ y: 20, duration: 200, easing: cubicOut }}
+  >
   <!-- Header -->
   <div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-4">
     <div class="flex items-center gap-2">
@@ -303,6 +365,7 @@
       </button>
       <button
         onclick={onClose}
+        aria-label="Close attack chain panel"
         class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent"
       >
         <X size={13} />
@@ -329,7 +392,14 @@
           placeholder="Node label *"
           bind:value={newLabel}
           class="flex-1 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          onkeydown={(e) => { if (e.key === 'Enter') addNode(); if (e.key === 'Escape') addingNode = false; }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') addNode();
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              addingNode = false;
+            }
+          }}
         />
         <button
           onclick={addNode}
@@ -372,7 +442,7 @@
           </SvelteFlow>
 
           <!-- Node-type legend -->
-          <div class="absolute bottom-12 left-4 flex flex-col gap-1 rounded border border-border bg-card p-2 text-[10px] leading-tight">
+          <div class="absolute bottom-4 right-4 z-10 flex flex-col gap-1 rounded border border-border bg-card p-2 text-[10px] leading-tight">
             {#each NODE_TYPE_LIST as t}
               <div class="flex items-center gap-1.5">
                 <span class="h-2.5 w-2.5 shrink-0 rounded-sm" style="background:{NODE_COLORS[t]};"></span>
@@ -404,6 +474,7 @@
             </span>
             <button
               onclick={closeDrawer}
+              aria-label="Close node details"
               class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent"
             >
               <X size={12} />
@@ -500,7 +571,11 @@
           <div class="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs">
             <span class="h-2 w-2 shrink-0 rounded-sm" style="background:{NODE_COLORS[(node.data as unknown as NodeData).type] ?? '#8b5cf6'};"></span>
             <span>{(node.data as unknown as NodeData).label}</span>
-            <button onclick={() => deleteNode(node.id)} class="text-muted-foreground hover:text-destructive">
+            <button
+              onclick={() => requestDeleteNode(node.id, (node.data as unknown as NodeData).label)}
+              class="text-muted-foreground hover:text-destructive"
+              aria-label="Delete node"
+            >
               <Trash2 size={10} />
             </button>
           </div>
@@ -509,31 +584,55 @@
     {/if}
   {/if}
 </div>
+</div>
+
+{#if confirmDeleteOpen}
+  <ConfirmDialog
+    title="Delete Attack Step"
+    message={pendingDeleteNodeLabel
+      ? `Delete "${pendingDeleteNodeLabel}"? This cannot be undone.`
+      : 'Delete this attack step? This cannot be undone.'}
+    confirmLabel="Delete"
+    onConfirm={confirmDeleteNode}
+    onCancel={cancelDeleteNode}
+  />
+{/if}
 
 {#if addingNode && uiMode === 'modal'}
   <!-- Backdrop -->
   <div
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-    role="button"
-    tabindex="-1"
+    class="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
+    role="presentation"
     onclick={() => (addingNode = false)}
-    onkeydown={(e) => { if (e.key === 'Escape') addingNode = false; }}
-    aria-label="Close form"
+    transition:fade={{ duration: 150 }}
   ></div>
   <!-- Modal -->
   <div
-    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+    class="fixed left-1/2 top-1/2 z-[60] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-2xl"
     role="dialog"
     aria-modal="true"
     aria-label="Add Attack Step"
+    tabindex="-1"
+    onkeydown={handleAddNodeModalKeydown}
+    transition:fade={{ duration: 150 }}
   >
     <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
       <Network size={16} class="shrink-0 text-muted-foreground" />
       <h2 class="flex-1 text-sm font-semibold">Add Attack Step</h2>
-      <button onclick={() => (addingNode = false)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"><X size={14} /></button>
+      <button onclick={() => (addingNode = false)} aria-label="Close add attack step dialog" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"><X size={14} /></button>
     </div>
-    <div class="space-y-3 px-5 py-4 max-h-[60vh] overflow-y-auto">
-      <div class="space-y-1">
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <form
+      class="space-y-3 px-5 py-4"
+      onsubmit={(e) => {
+        e.preventDefault();
+        addNode();
+      }}
+      onkeydown={(e) => {
+        closeAddNodeModalFromEscape(e);
+      }}
+    >
+      <div class="relative z-20 space-y-1">
         <label for="step-type" class="text-xs font-medium text-foreground">Type</label>
         <Select
           size="sm"
@@ -550,13 +649,20 @@
           placeholder="Node label *"
           bind:value={newLabel}
           class="w-full rounded border border-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          onkeydown={(e) => { if (e.key === 'Enter') addNode(); if (e.key === 'Escape') addingNode = false; }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addNode();
+              return;
+            }
+            closeAddNodeModalFromEscape(e);
+          }}
         />
       </div>
-    </div>
-    <div class="flex gap-2 border-t border-border px-5 py-3">
-      <button onclick={addNode} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Step</button>
-      <button onclick={() => (addingNode = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
-    </div>
+      <div class="flex gap-2 border-t border-border px-5 py-3">
+        <button type="submit" class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Step</button>
+        <button type="button" onclick={() => (addingNode = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
+      </div>
+    </form>
   </div>
 {/if}
