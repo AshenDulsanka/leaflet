@@ -226,16 +226,6 @@
       <Terminal size={15} />
     </button>
 
-    <!-- Engagement: Attack Chain -->
-    <button
-      title="Attack chain"
-      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
-      onclick={onOpenAttackChain}
-      disabled={!hasWorkspace}
-    >
-      <Network size={15} />
-    </button>
-
     <!-- Engagement: Operation Log -->
     <button
       title="Operation log"
@@ -244,6 +234,16 @@
       disabled={!hasWorkspace}
     >
       <ScrollText size={15} />
+    </button>
+
+    <!-- Engagement: Findings Tracker -->
+    <button
+      title="Findings Tracker (Ctrl+Shift+F)"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenFindingsTracker}
+      disabled={!hasWorkspace}
+    >
+      <Bug size={15} />
     </button>
 
     <!-- Engagement: CVSS Calculator -->
@@ -256,14 +256,14 @@
       <ShieldAlert size={15} />
     </button>
 
-    <!-- Engagement: Findings Tracker -->
+    <!-- Engagement: Attack Chain -->
     <button
-      title="Findings Tracker (Ctrl+Shift+F)"
+      title="Attack chain"
       class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
-      onclick={onOpenFindingsTracker}
+      onclick={onOpenAttackChain}
       disabled={!hasWorkspace}
     >
-      <Bug size={15} />
+      <Network size={15} />
     </button>
 
     <!-- Engagement: Network Topology -->
