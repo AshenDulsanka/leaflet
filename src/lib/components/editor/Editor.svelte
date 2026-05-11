@@ -1,28 +1,47 @@
 ﻿<script lang="ts">
-  import '@milkdown/crepe/theme/common/style.css';
-  import '@milkdown/crepe/theme/frame.css';
-  import { onMount, onDestroy, untrack } from 'svelte';
-  import { Crepe } from '@milkdown/crepe';
-  import { editorViewCtx, parserCtx } from '@milkdown/core';
-  import ImageToolbar from '$lib/components/editor/ImageToolbar.svelte';
+  import "@milkdown/crepe/theme/common/style.css";
+  import "@milkdown/crepe/theme/frame.css";
+  import { onMount, onDestroy, untrack } from "svelte";
+  import { Crepe } from "@milkdown/crepe";
+  import { editorViewCtx, parserCtx } from "@milkdown/core";
+  import {
+    Plugin,
+    PluginKey,
+    type EditorState,
+    type Transaction,
+  } from "@milkdown/kit/prose/state";
+  import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
+  import type { Node as ProseMirrorNode } from "@milkdown/kit/prose/model";
+  import ImageToolbar from "$lib/components/editor/ImageToolbar.svelte";
+  // Module-scoped regex for [[wikilinks]] — shared by all wikilink helpers.
+  const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
+
   // Builds a DecorationSet that highlights all [[note]] spans in the document.
-  // Receives ProseMirror classes as parameters (dynamic import - bypasses pnpm isolation).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function buildWikilinkDecorations(doc: any, Decoration: any, DecorationSet: any): any {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const decorations: any[] = [];
-    const WIKI_RE = /\[\[([^\]]+)\]\]/g;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    doc.descendants((node: any, pos: number) => {
+  function buildWikilinkDecorations(doc: ProseMirrorNode): DecorationSet {
+    const decorations: Decoration[] = [];
+    doc.descendants((node: ProseMirrorNode, pos: number) => {
       if (!node.isText || !node.text) return;
-      WIKI_RE.lastIndex = 0;
+      WIKILINK_RE.lastIndex = 0;
       let m: RegExpExecArray | null;
-      while ((m = WIKI_RE.exec(node.text)) !== null) {
+      while ((m = WIKILINK_RE.exec(node.text)) !== null) {
+        const start = pos + m.index;
+        const end = start + m[0].length;
+        const nameStart = start + 2;
+        const nameEnd = end - 2;
         decorations.push(
-          Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
-            class: 'wikilink-highlight',
-            nodeName: 'span'
-          })
+          Decoration.inline(start, nameStart, {
+            class: "wikilink-bracket",
+            style: "font-size:0;line-height:0;opacity:0;color:transparent",
+          }),
+        );
+        decorations.push(
+          Decoration.inline(nameStart, nameEnd, { class: "wikilink-name" }),
+        );
+        decorations.push(
+          Decoration.inline(nameEnd, end, {
+            class: "wikilink-bracket",
+            style: "font-size:0;line-height:0;opacity:0;color:transparent",
+          }),
         );
       }
     });
@@ -38,15 +57,23 @@
   interface EditorApi {
     insertText: (text: string) => void;
     findOccurrenceCount: (query: string, opts: FindOptions) => number;
-    scrollToOccurrence: (query: string, opts: FindOptions, index: number) => void;
-    setFindHighlights: (query: string, opts: FindOptions, currentIndex: number) => void;
+    scrollToOccurrence: (
+      query: string,
+      opts: FindOptions,
+      index: number,
+    ) => void;
+    setFindHighlights: (
+      query: string,
+      opts: FindOptions,
+      currentIndex: number,
+    ) => void;
     clearFindHighlights: () => void;
     getHtml: () => string;
     resetContent: (content: string) => void;
   }
 
   interface Props {
-    mode: 'wysiwyg' | 'source';
+    mode: "wysiwyg" | "source";
     content: string;
     filePath: string;
     scrollTarget?: { line: number; lineText: string } | null;
@@ -60,7 +87,20 @@
     onImageUploaded?: () => void;
   }
 
-  let { mode, content, filePath, scrollTarget = $bindable(null), onContentChange, onWordCountChange, onReady, onImageClick, onWikilinkClick, noteSuggestions = [], workspaceId = null, onImageUploaded }: Props = $props();
+  let {
+    mode,
+    content,
+    filePath,
+    scrollTarget = $bindable(null),
+    onContentChange,
+    onWordCountChange,
+    onReady,
+    onImageClick,
+    onWikilinkClick,
+    noteSuggestions = [],
+    workspaceId = null,
+    onImageUploaded,
+  }: Props = $props();
 
   // Editor container ref
   let milkdownContainer = $state<HTMLDivElement | null>(null);
@@ -68,7 +108,12 @@
   let lineNumberGutterEl = $state<HTMLDivElement | null>(null);
 
   // Image toolbar state - set when user clicks an image in WYSIWYG mode
-  interface ImageToolbarState { rect: DOMRect; src: string; alt: string; pmPos: number }
+  interface ImageToolbarState {
+    rect: DOMRect;
+    src: string;
+    alt: string;
+    pmPos: number;
+  }
   let imageToolbarState = $state<ImageToolbarState | null>(null);
 
   // Wikilink autocomplete dropdown state
@@ -80,14 +125,16 @@
     selectedIndex: number;
   }
   let wikilinkDropdown = $state<WikilinkDropdownState | null>(null);
-  let dropdownSearchText = $state('');
+  let dropdownSearchText = $state("");
   const wikilinkFiltered = $derived.by(() => {
     if (!wikilinkDropdown) return [] as string[];
     // Use explicit search box text if provided; otherwise use query from typed [[...text
-    const q = (dropdownSearchText.trim() || wikilinkDropdown.query).toLowerCase();
+    const q = (
+      dropdownSearchText.trim() || wikilinkDropdown.query
+    ).toLowerCase();
     return noteSuggestions
       .filter((p) => {
-        const name = p.split('/').pop()!.replace(/\.md$/i, '').toLowerCase();
+        const name = p.split("/").pop()!.replace(/\.md$/i, "").toLowerCase();
         return name.includes(q) || p.toLowerCase().includes(q);
       })
       .slice(0, 50);
@@ -103,20 +150,31 @@
   // onpointerdown|stopPropagation to absorb events directed at itself).
   $effect(() => {
     if (!imageToolbarState) return;
-    function close() { imageToolbarState = null; }
-    const tid = setTimeout(() => window.addEventListener('pointerdown', close), 10);
-    return () => { clearTimeout(tid); window.removeEventListener('pointerdown', close); };
+    function close() {
+      imageToolbarState = null;
+    }
+    const tid = setTimeout(
+      () => window.addEventListener("pointerdown", close),
+      10,
+    );
+    return () => {
+      clearTimeout(tid);
+      window.removeEventListener("pointerdown", close);
+    };
   });
 
   // Internal content state - syncs between modes
   let internalContent = $state(untrack(() => content));
 
   // Derived line numbers for source mode gutter (one entry per line)
-  const sourceLineNumbers = $derived(internalContent.split('\n').map((_, i) => i + 1));
+  const sourceLineNumbers = $derived(
+    internalContent.split("\n").map((_, i) => i + 1),
+  );
 
   // Keep line number gutter scroll in sync with the textarea
   function syncGutterScroll() {
-    if (lineNumberGutterEl && textareaEl) lineNumberGutterEl.scrollTop = textareaEl.scrollTop;
+    if (lineNumberGutterEl && textareaEl)
+      lineNumberGutterEl.scrollTop = textareaEl.scrollTop;
   }
 
   let crepeEditor: InstanceType<typeof Crepe> | null = null;
@@ -145,10 +203,10 @@
   // Recount words from raw markdown
   function countWords(md: string): number {
     return md
-      .replace(/```[\s\S]*?```/g, '')  // strip code blocks
-      .replace(/`[^`]*`/g, '')          // strip inline code
-      .replace(/#+\s/g, '')             // strip headings
-      .replace(/[*_~[\]()#>`\-+]/g, '') // strip md syntax
+      .replace(/```[\s\S]*?```/g, "") // strip code blocks
+      .replace(/`[^`]*`/g, "") // strip inline code
+      .replace(/#+\s/g, "") // strip headings
+      .replace(/[*_~[\]()#>`\-+]/g, "") // strip md syntax
       .trim()
       .split(/\s+/)
       .filter(Boolean).length;
@@ -178,7 +236,7 @@
 
   async function initEditor() {
     if (!milkdownContainer) return;
-    milkdownContainer.innerHTML = '';
+    milkdownContainer.innerHTML = "";
 
     editorReady = false;
 
@@ -186,44 +244,48 @@
       root: milkdownContainer,
       defaultValue: internalContent,
       featureConfigs: {
-        'block-edit': {
+        "block-edit": {
           // Add a custom "Navigation" group to the slash (/) menu with a Wiki Link item.
           // buildMenu receives the internal GroupBuilder before it is finalised.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           buildMenu: (groupBuilder: any) => {
-            groupBuilder
-              .addGroup('wiki', 'Navigation')
-              .addItem('wikilink', {
-                label: 'Wiki Link',
-                // Lucide Link2 icon as inline SVG
-                icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>`,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                onRun: () => {
-                  // Double-rAF: yields two browser frames so block-edit's cleanup
-                  // transaction has been dispatched AND committed before we read the
-                  // cursor position. setTimeout(50) was unreliable depending on CPU speed.
+            groupBuilder.addGroup("wiki", "Navigation").addItem("wikilink", {
+              label: "Wiki Link",
+              // Lucide Link2 icon as inline SVG
+              icon: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg>`,
+              onRun: () => {
+                // Double-rAF: yields two browser frames so block-edit's cleanup
+                // transaction has been dispatched AND committed before we read the
+                // cursor position. setTimeout(50) was unreliable depending on CPU speed.
+                requestAnimationFrame(() => {
                   requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                      if (!crepeEditor || !editorReady) return;
-                      try {
-                        const v = crepeEditor.editor.ctx.get(editorViewCtx);
-                        const { from } = v.state.selection;
-                        const resolvedPos = v.state.doc.resolve(from);
-                        const textBefore = resolvedPos.parent.textContent.slice(0, resolvedPos.parentOffset);
-                        // If block-edit left a slash command remnant (e.g. "/w"), remove it ourselves
-                        const slashRemnant = textBefore.match(/\/\w+$/);
-                        const deleteFrom = slashRemnant ? from - slashRemnant[0].length : from;
-                        v.dispatch(v.state.tr.insertText('[[', deleteFrom, from));
-                        v.focus();
-                        checkAndUpdateWikilinkDropdown();
-                      } catch { /* ignore */ }
-                    });
+                    if (!crepeEditor || !editorReady) return;
+                    try {
+                      const v = crepeEditor.editor.ctx.get(editorViewCtx);
+                      const { from } = v.state.selection;
+                      const resolvedPos = v.state.doc.resolve(from);
+                      const textBefore = resolvedPos.parent.textContent.slice(
+                        0,
+                        resolvedPos.parentOffset,
+                      );
+                      // If block-edit left a slash command remnant (e.g. "/w"), remove it ourselves
+                      const slashRemnant = textBefore.match(/\/\w+$/);
+                      const deleteFrom = slashRemnant
+                        ? from - slashRemnant[0].length
+                        : from;
+                      v.dispatch(v.state.tr.insertText("[[", deleteFrom, from));
+                      v.focus();
+                      checkAndUpdateWikilinkDropdown();
+                    } catch {
+                      /* ignore */
+                    }
                   });
-                }
-              });
-          }
-        }
-      }
+                });
+              },
+            });
+          },
+        },
+      },
     });
 
     // Listen for content changes before create()
@@ -235,7 +297,7 @@
         if (!editorReady) return;
         // CommonMark serializer escapes both [ in [[wikilinks]] as \[\[.
         // Replace \[\[ (both escaped) or \[[ (one escaped) back to [[.
-        const fixed = markdown.replace(/\\\[\\\[|\\\[(?=\[)/g, '[[');
+        const fixed = markdown.replace(/\\\[\\\[|\\\[(?=\[)/g, "[[");
         internalContent = fixed;
         onContentChange(fixed);
       });
@@ -251,50 +313,40 @@
       viewKeyupRef = () => checkAndUpdateWikilinkDropdown();
       viewInputRef = () => checkAndUpdateWikilinkDropdown();
       viewKeydownRef = (e: KeyboardEvent) => handleWikilinkDropdownKey(e);
-      viewListenerDom.addEventListener('keyup', viewKeyupRef);
-      viewListenerDom.addEventListener('input', viewInputRef);
-      viewListenerDom.addEventListener('keydown', viewKeydownRef, { capture: true });
-    } catch { /* ignore */ }
-
-    // Inject wikilink decoration plugin via ProseMirror state.reconfigure().
-    // Dynamic import bypasses pnpm module isolation for transitive dependencies.
-    // 'as string' prevents TypeScript from statically resolving the module path,
-    // yielding Promise<any> so strict mode does not error on inaccessible types.
-    try {
-      const pmv = crepeEditor.editor.ctx.get(editorViewCtx);
-      const pmStateMod = 'prosemirror-state' as string;
-      const pmViewMod = 'prosemirror-view' as string;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const [pmState, pmView]: [any, any] = await Promise.all([
-        import(/* @vite-ignore */ pmStateMod),
-        import(/* @vite-ignore */ pmViewMod)
-      ]);
-      const { Plugin, PluginKey } = pmState;
-      const { Decoration, DecorationSet } = pmView;
-      const wikilinkKey = new PluginKey('wikilink-highlight');
-      const wikilinkPlugin = new Plugin({
-        key: wikilinkKey,
-        state: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          init(_: unknown, state: any) {
-            return buildWikilinkDecorations(state.doc, Decoration, DecorationSet);
-          },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          apply(tr: any, old: any) {
-            if (!tr.docChanged) return old;
-            return buildWikilinkDecorations(tr.doc, Decoration, DecorationSet);
-          },
-        },
-        props: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          decorations(state: any) {
-            return wikilinkKey.getState(state);
-          },
-        },
+      viewListenerDom.addEventListener("keyup", viewKeyupRef);
+      viewListenerDom.addEventListener("input", viewInputRef);
+      viewListenerDom.addEventListener("keydown", viewKeydownRef, {
+        capture: true,
       });
-      const newState = pmv.state.reconfigure({ plugins: [...pmv.state.plugins, wikilinkPlugin] });
-      pmv.updateState(newState);
-    } catch { /* prosemirror packages not accessible - wikilink highlighting disabled, click nav still works */ }
+    } catch {
+      /* ignore */
+    }
+
+    // Inject wikilink decoration plugin via ProseMirror state.reconfigure()
+    // using Milkdown's own ProseMirror re-export surface.
+    const pmv = crepeEditor.editor.ctx.get(editorViewCtx);
+    const wikilinkKey = new PluginKey<DecorationSet>("wikilink-highlight");
+    const wikilinkPlugin = new Plugin({
+      key: wikilinkKey,
+      state: {
+        init(_: unknown, state: EditorState) {
+          return buildWikilinkDecorations(state.doc);
+        },
+        apply(tr: Transaction, old: DecorationSet) {
+          if (!tr.docChanged) return old;
+          return buildWikilinkDecorations(tr.doc);
+        },
+      },
+      props: {
+        decorations(state: EditorState) {
+          return wikilinkKey.getState(state) ?? null;
+        },
+      },
+    });
+    const newState = pmv.state.reconfigure({
+      plugins: [...pmv.state.plugins, wikilinkPlugin],
+    });
+    pmv.updateState(newState);
   }
 
   async function recreateEditor() {
@@ -309,9 +361,14 @@
     clearFindHighlights(); // remove stale ranges before DOM is torn down
     wikilinkDropdown = null;
     if (viewListenerDom) {
-      if (viewKeyupRef) viewListenerDom.removeEventListener('keyup', viewKeyupRef);
-      if (viewInputRef) viewListenerDom.removeEventListener('input', viewInputRef);
-      if (viewKeydownRef) viewListenerDom.removeEventListener('keydown', viewKeydownRef, { capture: true });
+      if (viewKeyupRef)
+        viewListenerDom.removeEventListener("keyup", viewKeyupRef);
+      if (viewInputRef)
+        viewListenerDom.removeEventListener("input", viewInputRef);
+      if (viewKeydownRef)
+        viewListenerDom.removeEventListener("keydown", viewKeydownRef, {
+          capture: true,
+        });
       viewListenerDom = null;
       viewKeyupRef = null;
       viewInputRef = null;
@@ -337,7 +394,7 @@
   // immediately without needing tick() or any DOM-ready hacks.
   $effect(() => {
     if (untrack(() => !mounted)) return;
-    if (mode === 'wysiwyg') {
+    if (mode === "wysiwyg") {
       initEditor();
     } else {
       destroyEditor();
@@ -347,7 +404,11 @@
   // ─── Wiki-link click navigation ────────────────────────────────────────────
   // Tracks [[note-name]] spans for click navigation. Visual highlighting is
   // handled by the wikilinkHighlightPlugin ProseMirror Decoration plugin.
-  interface WikiRange { start: number; end: number; name: string }
+  interface WikiRange {
+    start: number;
+    end: number;
+    name: string;
+  }
   let wikilinkPositions: WikiRange[] = [];
 
   function updateWikilinkClickPositions() {
@@ -358,25 +419,26 @@
     const newPositions: WikiRange[] = [];
     try {
       const view = crepeEditor.editor.ctx.get(editorViewCtx);
-      const WIKI_RE = /\[\[([^\]]+)\]\]/g;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       view.state.doc.descendants((node: any, pos: number) => {
         if (!node.isText || !node.text) return;
-        WIKI_RE.lastIndex = 0;
+        WIKILINK_RE.lastIndex = 0;
         let m: RegExpExecArray | null;
-        while ((m = WIKI_RE.exec(node.text)) !== null) {
+        while ((m = WIKILINK_RE.exec(node.text)) !== null) {
           const start = pos + m.index;
           const end = start + m[0].length;
           newPositions.push({ start, end, name: m[1].trim() });
         }
       });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     wikilinkPositions = newPositions;
   }
 
   // Update click positions whenever content changes (editorReady ensures Crepe has rendered)
   $effect(() => {
-    if (editorReady && mode === 'wysiwyg') {
+    if (editorReady && mode === "wysiwyg") {
       // eslint-disable-next-line @typescript-eslint/no-unused-expressions
       internalContent; // track
       requestAnimationFrame(() => updateWikilinkClickPositions());
@@ -384,50 +446,77 @@
   });
 
   // ── Image operations ─────────────────────────────────────────────────────
-  function deleteImageAtPos(pmPos: number) {
+  function deleteImageAtPos(pmPos: number, imgSrc?: string): void {
     if (!crepeEditor || !editorReady) return;
     try {
       const view = crepeEditor.editor.ctx.get(editorViewCtx);
-      const node = view.state.doc.nodeAt(pmPos);
-      if (node && node.type.name === 'image') view.dispatch(view.state.tr.delete(pmPos, pmPos + node.nodeSize));
-    } catch { /* ignore stale state */ }
-  }
-
-  // Align an image by setting its ProseMirror node title attr to align-left/center/right.
-  // The style block maps those title values to CSS margin rules for visual alignment.
-  function alignImage(pmPos: number, direction: 'left' | 'center' | 'right') {
-    if (!crepeEditor || !editorReady || pmPos < 0) return;
-    try {
-      const view = crepeEditor.editor.ctx.get(editorViewCtx);
-      const node = view.state.doc.nodeAt(pmPos);
-      if (!node || node.type.name !== 'image') return;
-      const tr = view.state.tr.setNodeMarkup(pmPos, undefined, {
-        ...node.attrs,
-        title: `align-${direction}`,
-      });
-      view.dispatch(tr);
-    } catch { /* ignore */ }
+      // Scan entire document for any node with a matching src attribute.
+      // This handles both 'image' (inline markdown) and 'image-block' (Crepe upload)
+      // without depending on the node type name.
+      if (imgSrc) {
+        const imgFilename = imgSrc.split("/").pop() ?? "";
+        let deleted = false;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        view.state.doc.descendants((n: any, pos: number) => {
+          if (deleted) return false;
+          const nSrc: string = (n.attrs?.src as string) ?? "";
+          if (!nSrc) return; // no src attr — not an image node, continue traversal
+          if (
+            nSrc === imgSrc ||
+            nSrc.endsWith(imgFilename) ||
+            imgSrc.endsWith(nSrc) ||
+            imgSrc.includes(nSrc)
+          ) {
+            view.dispatch(view.state.tr.delete(pos, pos + n.nodeSize));
+            deleted = true;
+            return false;
+          }
+        });
+        if (deleted) return;
+      }
+      // Fallback: try direct position (less reliable inside NodeViews)
+      if (pmPos >= 0) {
+        const node = view.state.doc.nodeAt(pmPos);
+        if (
+          node &&
+          (node.type.name === "image" || node.type.name === "image-block")
+        ) {
+          view.dispatch(view.state.tr.delete(pmPos, pmPos + node.nodeSize));
+        }
+      }
+    } catch {
+      /* ignore stale state */
+    }
   }
 
   function getHtml(): string {
-    if (mode === 'wysiwyg' && milkdownContainer) {
-      return milkdownContainer.querySelector('.milkdown')?.innerHTML ?? '';
+    if (mode === "wysiwyg" && milkdownContainer) {
+      return milkdownContainer.querySelector(".milkdown")?.innerHTML ?? "";
     }
-    return '';
+    return "";
   }
 
   // ── Wikilink autocomplete ───────────────────────────────────────────────────────────────────
 
   function checkAndUpdateWikilinkDropdown() {
-    if (!crepeEditor || !editorReady) { wikilinkDropdown = null; return; }
+    if (!crepeEditor || !editorReady) {
+      wikilinkDropdown = null;
+      return;
+    }
     try {
       const view = crepeEditor.editor.ctx.get(editorViewCtx);
       const { from } = view.state.selection;
       const resolvedPos = view.state.doc.resolve(from);
-      const textBefore = resolvedPos.parent.textContent.slice(0, resolvedPos.parentOffset);
+      const textBefore = resolvedPos.parent.textContent.slice(
+        0,
+        resolvedPos.parentOffset,
+      );
       // Match an open [[ with optional partial note name before the cursor
       const match = textBefore.match(/\[\[([^\][\n]*)$/);
-      if (!match) { wikilinkDropdown = null; return; }
+      if (!match) {
+        wikilinkDropdown = null;
+        return;
+      }
       const query = match[1];
       const coords = view.coordsAtPos(from);
       const prev = wikilinkDropdown;
@@ -439,12 +528,14 @@
         y: coords.bottom,
         selectedIndex: sameQuery ? prev!.selectedIndex : 0,
       };
-    } catch { wikilinkDropdown = null; }
+    } catch {
+      wikilinkDropdown = null;
+    }
   }
 
   function selectWikilinkSuggestion(notePath: string) {
     if (!crepeEditor || !editorReady || !wikilinkDropdown) return;
-    const noteName = notePath.split('/').pop()!.replace(/\.md$/i, '');
+    const noteName = notePath.split("/").pop()!.replace(/\.md$/i, "");
     try {
       const view = crepeEditor.editor.ctx.get(editorViewCtx);
       const { from } = view.state.selection;
@@ -452,23 +543,72 @@
       const tr = view.state.tr.insertText(`[[${noteName}]]`, fromPos, from);
       view.dispatch(tr);
       view.focus();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     wikilinkDropdown = null;
   }
 
   function handleWikilinkDropdownKey(e: KeyboardEvent) {
+    if (
+      e.key === "Backspace" &&
+      !e.altKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.shiftKey &&
+      crepeEditor &&
+      editorReady
+    ) {
+      try {
+        const view = crepeEditor.editor.ctx.get(editorViewCtx);
+        const { from, to } = view.state.selection;
+        if (from === to) {
+          const hit = wikilinkPositions.find(
+            (r) => from > r.start && from <= r.end,
+          );
+          if (hit) {
+            e.preventDefault();
+            e.stopPropagation();
+            view.dispatch(view.state.tr.delete(hit.start, hit.end));
+            wikilinkDropdown = null;
+            return;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
     if (!wikilinkDropdown || wikilinkFiltered.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault(); e.stopPropagation();
-      wikilinkDropdown = { ...wikilinkDropdown, selectedIndex: Math.min(wikilinkDropdown.selectedIndex + 1, wikilinkFiltered.length - 1) };
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault(); e.stopPropagation();
-      wikilinkDropdown = { ...wikilinkDropdown, selectedIndex: Math.max(wikilinkDropdown.selectedIndex - 1, 0) };
-    } else if ((e.key === 'Enter' || e.key === 'Tab') && wikilinkFiltered[wikilinkDropdown.selectedIndex]) {
-      e.preventDefault(); e.stopPropagation();
-      selectWikilinkSuggestion(wikilinkFiltered[wikilinkDropdown.selectedIndex]);
-    } else if (e.key === 'Escape') {
-      e.preventDefault(); e.stopPropagation();
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      e.stopPropagation();
+      wikilinkDropdown = {
+        ...wikilinkDropdown,
+        selectedIndex: Math.min(
+          wikilinkDropdown.selectedIndex + 1,
+          wikilinkFiltered.length - 1,
+        ),
+      };
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      e.stopPropagation();
+      wikilinkDropdown = {
+        ...wikilinkDropdown,
+        selectedIndex: Math.max(wikilinkDropdown.selectedIndex - 1, 0),
+      };
+    } else if (
+      (e.key === "Enter" || e.key === "Tab") &&
+      wikilinkFiltered[wikilinkDropdown.selectedIndex]
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      selectWikilinkSuggestion(
+        wikilinkFiltered[wikilinkDropdown.selectedIndex],
+      );
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
       wikilinkDropdown = null;
     }
   }
@@ -476,32 +616,49 @@
   // Close dropdown when clicking outside the popup
   $effect(() => {
     if (!wikilinkDropdown) return;
-    function closeDropdown() { wikilinkDropdown = null; }
-    const tid = setTimeout(() => window.addEventListener('pointerdown', closeDropdown), 10);
-    return () => { clearTimeout(tid); window.removeEventListener('pointerdown', closeDropdown); };
+    function closeDropdown() {
+      wikilinkDropdown = null;
+    }
+    const tid = setTimeout(
+      () => window.addEventListener("pointerdown", closeDropdown),
+      10,
+    );
+    return () => {
+      clearTimeout(tid);
+      window.removeEventListener("pointerdown", closeDropdown);
+    };
   });
   // Reset the search input whenever the dropdown closes
   $effect(() => {
     if (!wikilinkDropdown) {
-      dropdownSearchText = '';
+      dropdownSearchText = "";
     }
   });
   // ─────────────────────────────────────────────────────────────────────────
 
   function handleEditorClick(e: MouseEvent) {
     // ── Wiki-link navigation ──────────────────────────────────────────────────
-    if (onWikilinkClick && wikilinkPositions.length > 0 && crepeEditor && editorReady) {
+    if (
+      onWikilinkClick &&
+      wikilinkPositions.length > 0 &&
+      crepeEditor &&
+      editorReady
+    ) {
       try {
         const view = crepeEditor.editor.ctx.get(editorViewCtx);
         const coords = view.posAtCoords({ left: e.clientX, top: e.clientY });
         if (coords) {
-          const hit = wikilinkPositions.find((r) => coords.pos >= r.start && coords.pos < r.end);
+          const hit = wikilinkPositions.find(
+            (r) => coords.pos >= r.start && coords.pos < r.end,
+          );
           if (hit) {
             e.preventDefault();
             onWikilinkClick(hit.name);
           }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -509,19 +666,26 @@
   // The toolbar stays visible until the user clicks elsewhere (handled by the
   // pointerdown $effect above). This avoids needing a click to reveal the toolbar.
   function handleEditorMouseOver(e: MouseEvent) {
-    if (mode !== 'wysiwyg') return;
+    if (mode !== "wysiwyg") return;
     const target = e.target as HTMLElement;
-    if (target.tagName !== 'IMG') return;
+    if (target.tagName !== "IMG") return;
     const img = target as HTMLImageElement;
     const r = img.getBoundingClientRect();
     // Guard: already showing toolbar for this exact image position - skip
-    if (imageToolbarState && Math.abs(imageToolbarState.rect.top - r.top) < 1 && imageToolbarState.src === img.src) return;
+    if (
+      imageToolbarState &&
+      Math.abs(imageToolbarState.rect.top - r.top) < 1 &&
+      imageToolbarState.src === img.src
+    )
+      return;
     let pmPos = -1;
     if (crepeEditor && editorReady) {
       try {
         const view = crepeEditor.editor.ctx.get(editorViewCtx);
         pmPos = view.posAtDOM(img, 0);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     imageToolbarState = { rect: r, src: img.src, alt: img.alt, pmPos };
   }
@@ -531,13 +695,21 @@
   // TypeScript DOM lib versions and we want zero-dependency type safety.
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cssHL = (CSS as any)?.highlights as { set(k: string, v: unknown): void; delete(k: string): void } | undefined;
+  const cssHL = (CSS as any)?.highlights as
+    | { set(k: string, v: unknown): void; delete(k: string): void }
+    | undefined;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const HighlightCtor = (globalThis as any).Highlight as (new (...r: Range[]) => unknown) | undefined;
+  const HighlightCtor = (globalThis as any).Highlight as
+    | (new (...r: Range[]) => unknown)
+    | undefined;
 
-  function setFindHighlights(query: string, opts: FindOptions, currentIndex: number) {
+  function setFindHighlights(
+    query: string,
+    opts: FindOptions,
+    currentIndex: number,
+  ) {
     clearFindHighlights();
-    if (!query || mode !== 'wysiwyg' || !crepeEditor || !editorReady) return;
+    if (!query || mode !== "wysiwyg" || !crepeEditor || !editorReady) return;
     if (!cssHL || !HighlightCtor) return;
     try {
       const view = crepeEditor.editor.ctx.get(editorViewCtx);
@@ -557,22 +729,28 @@
             allRanges.push(range);
             if (seen === currentIndex) curRange = range;
             seen++;
-          } catch { /* stale DOM - skip */ }
+          } catch {
+            /* stale DOM - skip */
+          }
         }
       });
       if (allRanges.length === 0) return;
-      cssHL.set('fd-all', new HighlightCtor(...allRanges));
-      if (curRange) cssHL.set('fd-cur', new HighlightCtor(curRange));
-    } catch { /* ignore */ }
+      cssHL.set("fd-all", new HighlightCtor(...allRanges));
+      if (curRange) cssHL.set("fd-cur", new HighlightCtor(curRange));
+    } catch {
+      /* ignore */
+    }
   }
 
   function clearFindHighlights() {
     if (!cssHL) return;
     try {
-      cssHL.delete('fd-all');
-      cssHL.delete('fd-cur');
-      cssHL.delete('fd-flash');
-    } catch { /* ignore */ }
+      cssHL.delete("fd-all");
+      cssHL.delete("fd-cur");
+      cssHL.delete("fd-flash");
+    } catch {
+      /* ignore */
+    }
   }
 
   /** Briefly highlight `lineText` in WYSIWYG mode after a search-panel navigation. */
@@ -593,14 +771,24 @@
           const range = new Range();
           range.setStart(s.node, s.offset);
           range.setEnd(e.node, e.offset);
-          cssHL.set('fd-flash', new HighlightCtor(range));
+          cssHL.set("fd-flash", new HighlightCtor(range));
           done = true;
           return false; // stop descendant walk
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       });
       if (!done) return;
-      setTimeout(() => { try { cssHL!.delete('fd-flash'); } catch { /* ignore */ } }, 1800);
-    } catch { /* ignore */ }
+      setTimeout(() => {
+        try {
+          cssHL!.delete("fd-flash");
+        } catch {
+          /* ignore */
+        }
+      }, 1800);
+    } catch {
+      /* ignore */
+    }
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -612,10 +800,12 @@
   ): Array<{ start: number; end: number }> {
     if (!query) return [];
     try {
-      let pattern = opts.useRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      let pattern = opts.useRegex
+        ? query
+        : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       if (opts.wholeWord) pattern = `\\b${pattern}\\b`;
       // 'gid' is not universally supported - fall back gracefully
-      const safeFlags = opts.caseSensitive ? 'g' : 'gi';
+      const safeFlags = opts.caseSensitive ? "g" : "gi";
       const regex = new RegExp(pattern, safeFlags);
       const matches: Array<{ start: number; end: number }> = [];
       let m: RegExpExecArray | null;
@@ -631,7 +821,7 @@
 
   function findOccurrenceCount(query: string, opts: FindOptions): number {
     if (!query) return 0;
-    if (mode === 'source') {
+    if (mode === "source") {
       return computeMatches(internalContent, query, opts).length;
     }
     // WYSIWYG: count across all ProseMirror text nodes
@@ -640,7 +830,8 @@
       const view = crepeEditor.editor.ctx.get(editorViewCtx);
       let count = 0;
       view.state.doc.descendants((node) => {
-        if (node.isText && node.text) count += computeMatches(node.text, query, opts).length;
+        if (node.isText && node.text)
+          count += computeMatches(node.text, query, opts).length;
       });
       return count;
     } catch {
@@ -649,13 +840,15 @@
   }
 
   function scrollToOccurrence(query: string, opts: FindOptions, index: number) {
-    if (mode === 'source') {
+    if (mode === "source") {
       const matches = computeMatches(internalContent, query, opts);
       const m = matches[index];
       if (!m || !textareaEl) return;
       textareaEl.focus();
       textareaEl.setSelectionRange(m.start, m.end);
-      const linesBeforeMatch = internalContent.slice(0, m.start).split('\n').length;
+      const linesBeforeMatch = internalContent
+        .slice(0, m.start)
+        .split("\n").length;
       const lh = parseFloat(getComputedStyle(textareaEl).lineHeight) || 21;
       textareaEl.scrollTop = Math.max(0, linesBeforeMatch - 4) * lh;
       return;
@@ -675,22 +868,28 @@
           try {
             const domInfo = view.domAtPos(pmPos);
             const el =
-              domInfo.node instanceof Element ? domInfo.node : domInfo.node.parentElement;
-            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          } catch { /* ignore */ }
+              domInfo.node instanceof Element
+                ? domInfo.node
+                : domInfo.node.parentElement;
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          } catch {
+            /* ignore */
+          }
           found = true;
           return false; // stop traversal
         }
         seen += segMatches.length;
       });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     // Update highlights so current match is visually distinct
     setFindHighlights(query, opts, index);
   }
 
   /** Scroll to a specific line (source mode) or matching text (WYSIWYG). */
   function performScroll(line: number, lineText: string) {
-    if (mode === 'wysiwyg') {
+    if (mode === "wysiwyg") {
       scrollWYSIWYG(lineText);
       flashWYSIWYG(lineText); // brief highlight so user can spot the result
     } else {
@@ -714,7 +913,7 @@
               domInfo.node instanceof Element
                 ? domInfo.node
                 : domInfo.node.parentElement;
-            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
           } catch {
             // ignore DOM errors
           }
@@ -729,7 +928,7 @@
 
   function scrollSource(line: number) {
     if (!textareaEl) return;
-    const lines = internalContent.split('\n');
+    const lines = internalContent.split("\n");
     let offset = 0;
     for (let i = 0; i < line - 1 && i < lines.length; i++) {
       offset += lines[i].length + 1; // +1 for the \n
@@ -738,22 +937,24 @@
     textareaEl.focus();
     textareaEl.setSelectionRange(offset, end);
     const lh = parseFloat(getComputedStyle(textareaEl).lineHeight) || 21;
-    textareaEl.scrollTop = Math.max(0, (line - 4)) * lh;
+    textareaEl.scrollTop = Math.max(0, line - 4) * lh;
   }
 
   /** Insert text at the current cursor position in either editor mode. */
   function insertText(text: string) {
-    if (mode === 'wysiwyg' && crepeEditor) {
+    if (mode === "wysiwyg" && crepeEditor) {
       try {
         const view = crepeEditor.editor.ctx.get(editorViewCtx);
         const parser = crepeEditor.editor.ctx.get(parserCtx);
         // Append the snippet to the current markdown and replace the whole
         // document so Milkdown parses blocks correctly (e.g. fenced code blocks).
-        const newMarkdown = internalContent + '\n\n' + text;
+        const newMarkdown = internalContent + "\n\n" + text;
         const newDoc = parser(newMarkdown);
         if (newDoc) {
           const { state } = view;
-          view.dispatch(state.tr.replaceWith(0, state.doc.content.size, newDoc.content));
+          view.dispatch(
+            state.tr.replaceWith(0, state.doc.content.size, newDoc.content),
+          );
         }
         return;
       } catch {
@@ -763,7 +964,8 @@
     if (textareaEl) {
       const start = textareaEl.selectionStart ?? internalContent.length;
       const end = textareaEl.selectionEnd ?? internalContent.length;
-      const newContent = internalContent.slice(0, start) + text + internalContent.slice(end);
+      const newContent =
+        internalContent.slice(0, start) + text + internalContent.slice(end);
       internalContent = newContent;
       onContentChange(newContent);
       requestAnimationFrame(() => {
@@ -777,33 +979,36 @@
   /** Force the editor to reload with new content (e.g. after Note Properties saves frontmatter). */
   function resetContent(newContent: string) {
     internalContent = newContent;
-    if (mode === 'wysiwyg' && crepeEditor && editorReady) {
+    if (mode === "wysiwyg" && crepeEditor && editorReady) {
       recreateEditor();
     }
   }
 
   async function uploadAndInsert(file: File, wsId: string | null = null) {
-    const rawExt = file.type.split('/')[1] ?? 'png';
-    const ext = rawExt === 'jpeg' ? 'jpg' : rawExt;
+    const rawExt = file.type.split("/")[1] ?? "png";
+    const ext = rawExt === "jpeg" ? "jpg" : rawExt;
     const formData = new FormData();
-    formData.append('image', file, `screenshot.${ext}`);
+    formData.append("image", file, `screenshot.${ext}`);
     if (wsId) {
-      formData.append('workspace_id', wsId);
+      formData.append("workspace_id", wsId);
     }
     try {
-      const res = await fetch('/api/screenshots', { method: 'POST', body: formData });
+      const res = await fetch("/api/screenshots", {
+        method: "POST",
+        body: formData,
+      });
       if (!res.ok) return;
       const { url } = (await res.json()) as { url: string };
       insertText(`![screenshot](${url})`);
       onImageUploaded?.();
     } catch {
-      console.error('Failed to upload screenshot');
+      console.error("Failed to upload screenshot");
     }
   }
 
   async function handlePaste(e: ClipboardEvent) {
     const items = Array.from(e.clipboardData?.items ?? []);
-    const imageItem = items.find((item) => item.type.startsWith('image/'));
+    const imageItem = items.find((item) => item.type.startsWith("image/"));
     if (!imageItem) return;
     e.preventDefault();
     const blob = imageItem.getAsFile();
@@ -811,14 +1016,14 @@
   }
 
   function handleDragover(e: DragEvent) {
-    if (Array.from(e.dataTransfer?.types ?? []).includes('Files')) {
+    if (Array.from(e.dataTransfer?.types ?? []).includes("Files")) {
       e.preventDefault();
     }
   }
 
   async function handleDrop(e: DragEvent) {
     const files = Array.from(e.dataTransfer?.files ?? []);
-    const imageFile = files.find((f) => f.type.startsWith('image/'));
+    const imageFile = files.find((f) => f.type.startsWith("image/"));
     if (!imageFile) return;
     e.preventDefault();
     await uploadAndInsert(imageFile, workspaceId);
@@ -826,10 +1031,18 @@
 
   onMount(async () => {
     mounted = true;
-    if (mode === 'wysiwyg') {
+    if (mode === "wysiwyg") {
       await initEditor();
     }
-    onReady?.({ insertText, findOccurrenceCount, scrollToOccurrence, setFindHighlights, clearFindHighlights, getHtml, resetContent });
+    onReady?.({
+      insertText,
+      findOccurrenceCount,
+      scrollToOccurrence,
+      setFindHighlights,
+      clearFindHighlights,
+      getHtml,
+      resetContent,
+    });
   });
 
   onDestroy(() => {
@@ -849,7 +1062,7 @@
   <!-- svelte-ignore a11y_mouse_events_have_key_events -->
   <div
     bind:this={milkdownContainer}
-    style:display={mode === 'wysiwyg' ? '' : 'none'}
+    style:display={mode === "wysiwyg" ? "" : "none"}
     class="milkdown-editor prose prose-sm dark:prose-invert max-w-none h-full w-full overflow-y-auto px-8 py-6
            text-foreground selection:bg-primary/20"
     onclick={handleEditorClick}
@@ -857,29 +1070,28 @@
     role="none"
   ></div>
   <!-- Image toolbar overlay - shown when user clicks an image in WYSIWYG mode -->
-  {#if imageToolbarState && mode === 'wysiwyg'}
+  {#if imageToolbarState && mode === "wysiwyg"}
     <ImageToolbar
       rect={imageToolbarState.rect}
       onOpenLightbox={() => {
-        const src = imageToolbarState!.src; const alt = imageToolbarState!.alt;
+        const src = imageToolbarState!.src;
+        const alt = imageToolbarState!.alt;
         imageToolbarState = null;
         onImageClick?.(src, alt);
       }}
       onDelete={() => {
         const pmPos = imageToolbarState!.pmPos;
+        const src = imageToolbarState!.src;
         imageToolbarState = null;
-        deleteImageAtPos(pmPos);
+        deleteImageAtPos(pmPos, src);
       }}
-      onAlignLeft={() => { const pmPos = imageToolbarState!.pmPos; imageToolbarState = null; alignImage(pmPos, 'left'); }}
-      onAlignCenter={() => { const pmPos = imageToolbarState!.pmPos; imageToolbarState = null; alignImage(pmPos, 'center'); }}
-      onAlignRight={() => { const pmPos = imageToolbarState!.pmPos; imageToolbarState = null; alignImage(pmPos, 'right'); }}
       onClose={() => (imageToolbarState = null)}
     />
   {/if}
 
   <!-- Source mode: line-number gutter + editable textarea -->
   <div
-    style:display={mode === 'source' ? 'flex' : 'none'}
+    style:display={mode === "source" ? "flex" : "none"}
     class="h-full w-full overflow-hidden font-mono text-sm leading-relaxed"
   >
     <!-- Gutter: line numbers, scrolled in sync with the textarea -->
@@ -908,7 +1120,7 @@
   </div>
 
   <!-- Wikilink autocomplete dropdown -->
-  {#if wikilinkDropdown && mode === 'wysiwyg'}
+  {#if wikilinkDropdown && mode === "wysiwyg"}
     <div
       class="fixed z-[100] min-w-64 max-w-sm overflow-hidden rounded-lg border border-border bg-card shadow-xl"
       style="left: {wikilinkDropdown.x}px; top: {wikilinkDropdown.y + 6}px;"
@@ -932,16 +1144,36 @@
           bind:value={dropdownSearchText}
           class="w-full rounded bg-transparent px-1 py-0.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
           onkeydown={(e) => {
-            if (e.key === 'ArrowDown') {
+            if (e.key === "ArrowDown") {
               e.preventDefault();
-              if (wikilinkDropdown) wikilinkDropdown = { ...wikilinkDropdown, selectedIndex: Math.min(wikilinkDropdown.selectedIndex + 1, wikilinkFiltered.length - 1) };
-            } else if (e.key === 'ArrowUp') {
+              if (wikilinkDropdown)
+                wikilinkDropdown = {
+                  ...wikilinkDropdown,
+                  selectedIndex: Math.min(
+                    wikilinkDropdown.selectedIndex + 1,
+                    wikilinkFiltered.length - 1,
+                  ),
+                };
+            } else if (e.key === "ArrowUp") {
               e.preventDefault();
-              if (wikilinkDropdown) wikilinkDropdown = { ...wikilinkDropdown, selectedIndex: Math.max(wikilinkDropdown.selectedIndex - 1, 0) };
-            } else if (e.key === 'Enter' || e.key === 'Tab') {
+              if (wikilinkDropdown)
+                wikilinkDropdown = {
+                  ...wikilinkDropdown,
+                  selectedIndex: Math.max(
+                    wikilinkDropdown.selectedIndex - 1,
+                    0,
+                  ),
+                };
+            } else if (e.key === "Enter" || e.key === "Tab") {
               e.preventDefault();
-              if (wikilinkDropdown && wikilinkFiltered[wikilinkDropdown.selectedIndex]) selectWikilinkSuggestion(wikilinkFiltered[wikilinkDropdown.selectedIndex]);
-            } else if (e.key === 'Escape') {
+              if (
+                wikilinkDropdown &&
+                wikilinkFiltered[wikilinkDropdown.selectedIndex]
+              )
+                selectWikilinkSuggestion(
+                  wikilinkFiltered[wikilinkDropdown.selectedIndex],
+                );
+            } else if (e.key === "Escape") {
               e.preventDefault();
               wikilinkDropdown = null;
             }
@@ -950,26 +1182,43 @@
       </div>
       <!-- Results -->
       {#if wikilinkFiltered.length > 0}
-        <div id="wikilink-listbox" class="max-h-64 overflow-y-auto py-1" role="listbox" aria-label="Note suggestions">
+        <div
+          id="wikilink-listbox"
+          class="max-h-64 overflow-y-auto py-1"
+          role="listbox"
+          aria-label="Note suggestions"
+        >
           {#each wikilinkFiltered as suggestion, i}
-            {@const name = suggestion.split('/').pop()!.replace(/\.md$/i, '')}
-            {@const folder = suggestion.includes('/') ? suggestion.split('/').slice(0, -1).join('/') : ''}
+            {@const name = suggestion.split("/").pop()!.replace(/\.md$/i, "")}
+            {@const folder = suggestion.includes("/")
+              ? suggestion.split("/").slice(0, -1).join("/")
+              : ""}
             <button
               id="wikilink-opt-{i}"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i === wikilinkDropdown.selectedIndex ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-accent/60'}"
+              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i ===
+              wikilinkDropdown.selectedIndex
+                ? 'bg-accent text-accent-foreground'
+                : 'text-foreground hover:bg-accent/60'}"
               role="option"
               aria-selected={i === wikilinkDropdown.selectedIndex}
-              onmousedown={(e) => { e.preventDefault(); selectWikilinkSuggestion(suggestion); }}
+              onmousedown={(e) => {
+                e.preventDefault();
+                selectWikilinkSuggestion(suggestion);
+              }}
             >
               <span class="truncate font-medium">{name}</span>
               {#if folder}
-                <span class="ml-auto shrink-0 text-xs text-muted-foreground">{folder}</span>
+                <span class="ml-auto shrink-0 text-xs text-muted-foreground"
+                  >{folder}</span
+                >
               {/if}
             </button>
           {/each}
         </div>
       {:else}
-        <div class="px-3 py-3 text-center text-xs text-muted-foreground">No notes found</div>
+        <div class="px-3 py-3 text-center text-xs text-muted-foreground">
+          No notes found
+        </div>
       {/if}
     </div>
   {/if}
@@ -1020,7 +1269,7 @@
   }
 
   /* Task list checkboxes */
-  :global(.milkdown-editor input[type='checkbox']) {
+  :global(.milkdown-editor input[type="checkbox"]) {
     cursor: pointer;
   }
 
@@ -1047,14 +1296,21 @@
     background-color: rgba(234, 179, 8, 0.5);
   }
 
-  /* Wiki-links: [[note-name]] decorated by ProseMirror Decoration.inline */
-  :global(.milkdown-editor .wikilink-highlight) {
-    background-color: rgba(99, 102, 241, 0.15);
+  /* Wiki-links: [[ and ]] brackets hidden via font-size:0; name styled as link */
+  :global(.milkdown-editor .wikilink-bracket) {
+    font-size: 0;
+    line-height: 0;
+  }
+  :global(.milkdown-editor .wikilink-name) {
     color: hsl(var(--primary));
     text-decoration: underline dashed;
     cursor: pointer;
     border-radius: 2px;
-    padding: 0 1px;
+    padding: 0 2px;
+  }
+  :global(.milkdown-editor .wikilink-name:hover) {
+    background-color: rgba(99, 102, 241, 0.12);
+    text-decoration: underline solid;
   }
 
   /* Images in WYSIWYG - show pointer so users know they're clickable */
