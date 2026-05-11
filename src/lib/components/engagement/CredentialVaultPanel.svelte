@@ -1,9 +1,14 @@
+<script module lang="ts">
+  const credentialCache = new Map<string, string>();
+</script>
+
 <script lang="ts">
-  import { KeyRound, Pencil, Plus, X, RefreshCw, Eye, EyeOff, Trash2, ShieldCheck } from '@lucide/svelte';
+  import { KeyRound, Pencil, Plus, X, RefreshCw, Eye, EyeOff, Trash2, ShieldCheck, ChevronDown, ChevronRight } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import ToolModal from '$lib/components/modals/ToolModal.svelte';
   import Select from '$lib/components/ui/Select.svelte';
-  import { fade, fly } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
   interface Credential {
@@ -31,6 +36,8 @@
   let addingCred = $state(false);
   let revealedIds = $state<Set<string>>(new Set());
   let confirmDelete = $state<{ id: string; label: string } | null>(null);
+  let expandedCredId = $state<string | null>(null);
+  let credentialQuery = $state('');
 
   // Add-cred form
   let newUsername = $state('');
@@ -50,33 +57,72 @@
   let editSource = $state('');
   let editStatus = $state<Credential['status']>('unknown');
   let editNotes = $state('');
+  let latestLoadRequest = 0;
+
+  function readCachedCredentials(id: string): Credential[] | null {
+    const cached = credentialCache.get(id);
+    if (!cached) return null;
+    try {
+      const parsed = JSON.parse(cached);
+      return Array.isArray(parsed) ? (parsed as Credential[]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeCachedCredentials(id: string, items: Credential[]): void {
+    credentialCache.set(id, JSON.stringify(items));
+  }
 
   $effect(() => {
-    if (workspaceId) loadCredentials();
+    if (!workspaceId) {
+      credentials = [];
+      loading = false;
+      return;
+    }
+
+    const currentWorkspaceId = workspaceId;
+    const cached = readCachedCredentials(currentWorkspaceId);
+    if (cached !== null) {
+      credentials = cached;
+    }
+
+    void loadCredentials(currentWorkspaceId, cached === null);
   });
 
-  async function loadCredentials(): Promise<void> {
-    if (!workspaceId) return;
-    credentials = [];
-    loading = true;
+  async function loadCredentials(targetWorkspaceId: string, blocking = false): Promise<void> {
+    const requestId = latestLoadRequest + 1;
+    latestLoadRequest = requestId;
+    loading = blocking;
+
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/credentials`);
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/credentials`);
       if (!res.ok) {
-        console.error('Failed to load credentials:', { workspaceId, status: res.status });
+        console.error('Failed to load credentials:', { workspaceId: targetWorkspaceId, status: res.status });
         return;
       }
-      credentials = await res.json();
+
+      const nextCredentials = await res.json() as Credential[];
+      if (requestId !== latestLoadRequest || workspaceId !== targetWorkspaceId) {
+        return;
+      }
+
+      credentials = nextCredentials;
+      writeCachedCredentials(targetWorkspaceId, nextCredentials);
     } catch (err) {
-      console.error('Failed to load credentials:', { workspaceId, error: err });
+      console.error('Failed to load credentials:', { workspaceId: targetWorkspaceId, error: err });
     } finally {
-      loading = false;
+      if (requestId === latestLoadRequest) {
+        loading = false;
+      }
     }
   }
 
   async function addCredential(): Promise<void> {
     if (!workspaceId) return;
+    const targetWorkspaceId = workspaceId;
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/credentials`, {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/credentials`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -95,6 +141,7 @@
       }
       const cred: Credential = await res.json();
       credentials = [...credentials, cred];
+      writeCachedCredentials(targetWorkspaceId, credentials);
       newUsername = '';
       newSecret = '';
       newCredType = 'password';
@@ -104,11 +151,12 @@
       newNotes = '';
       addingCred = false;
     } catch (err) {
-      console.error('Failed to add credential:', { workspaceId, error: err });
+      console.error('Failed to add credential:', { workspaceId: targetWorkspaceId, error: err });
     }
   }
 
   function startEditing(cred: Credential): void {
+    expandedCredId = null;
     editingCredId = cred.id;
     editUsername = cred.username;
     editSecret = cred.secret;
@@ -121,8 +169,10 @@
 
   async function updateCredential(): Promise<void> {
     if (!workspaceId || !editingCredId) return;
+    const targetWorkspaceId = workspaceId;
+    const targetCredId = editingCredId;
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/credentials/${editingCredId}`, {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/credentials/${targetCredId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -136,25 +186,31 @@
         })
       });
       if (!res.ok) {
-        console.error('Failed to update credential:', { workspaceId, credId: editingCredId, status: res.status });
+        console.error('Failed to update credential:', { workspaceId: targetWorkspaceId, credId: targetCredId, status: res.status });
         return;
       }
       const updated: Credential = await res.json();
-      credentials = credentials.map((c) => c.id === editingCredId ? updated : c);
-      editingCredId = null;
+      credentials = credentials.map((c) => c.id === targetCredId ? updated : c);
+      writeCachedCredentials(targetWorkspaceId, credentials);
+      if (editingCredId === targetCredId) {
+        editingCredId = null;
+      }
     } catch (err) {
-      console.error('Failed to update credential:', { workspaceId, error: err });
+      console.error('Failed to update credential:', { workspaceId: targetWorkspaceId, credId: targetCredId, error: err });
     }
   }
 
   async function deleteCredential(id: string): Promise<void> {
     if (!workspaceId) return;
+    const targetWorkspaceId = workspaceId;
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/credentials/${id}`, { method: 'DELETE' });
-      if (!res.ok) { console.error('Failed to delete credential:', { workspaceId, credentialId: id, status: res.status }); return; }
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/credentials/${id}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete credential:', { workspaceId: targetWorkspaceId, credentialId: id, status: res.status }); return; }
       credentials = credentials.filter((c) => c.id !== id);
+      writeCachedCredentials(targetWorkspaceId, credentials);
+      if (expandedCredId === id) expandedCredId = null;
     } catch (err) {
-      console.error('Failed to delete credential:', { workspaceId, credentialId: id, error: err });
+      console.error('Failed to delete credential:', { workspaceId: targetWorkspaceId, credentialId: id, error: err });
     }
   }
 
@@ -166,6 +222,22 @@
     revealedIds = next;
   }
 
+  const filteredCredentials = $derived.by(() => {
+    const query = credentialQuery.trim().toLowerCase();
+    if (!query) return credentials;
+
+    return credentials.filter((cred) =>
+      [
+        cred.username ?? '',
+        cred.domain ?? '',
+        cred.source ?? '',
+        cred.notes ?? '',
+        cred.credential_type ?? '',
+        cred.status ?? ''
+      ].some((value) => value.toLowerCase().includes(query))
+    );
+  });
+
   const typeLabels: Record<string, string> = {
     password: 'PW',
     hash: 'Hash',
@@ -175,21 +247,41 @@
     other: '?'
   };
 
-  const statusColors: Record<string, string> = {
-    unknown: 'text-muted-foreground border-muted-foreground/30',
-    valid: 'text-green-600 border-green-600/30',
-    invalid: 'text-destructive border-destructive/30',
-    expired: 'text-yellow-600 border-yellow-600/30'
+  const statusBadgeClass: Record<string, string> = {
+    unknown: 'bg-muted text-muted-foreground border border-border',
+    valid: 'bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/30',
+    invalid: 'bg-destructive/15 text-destructive border border-destructive/30',
+    expired: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30'
   };
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      if (editingCredId !== null) {
-        editingCredId = null;
-        return;
-      }
-      onClose();
+    if (e.defaultPrevented || e.key !== 'Escape') return;
+
+    if (confirmDelete !== null) {
+      e.preventDefault();
+      confirmDelete = null;
+      return;
     }
+
+    if (addingCred) {
+      e.preventDefault();
+      addingCred = false;
+      return;
+    }
+
+    if (expandedCredId !== null) {
+      e.preventDefault();
+      expandedCredId = null;
+      return;
+    }
+
+    if (editingCredId !== null) {
+      e.preventDefault();
+      editingCredId = null;
+      return;
+    }
+
+    onClose();
   }
 </script>
 
@@ -207,8 +299,12 @@
     </div>
     <div class="flex items-center gap-1">
       <button
-        onclick={loadCredentials}
+        onclick={() => {
+          if (!workspaceId) return;
+          void loadCredentials(workspaceId, true);
+        }}
         title="Refresh"
+        aria-label="Refresh credentials"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
@@ -216,6 +312,7 @@
       <button
         onclick={() => (addingCred = !addingCred)}
         title="Add credential"
+        aria-label="Add credential"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <Plus size={13} />
@@ -223,6 +320,7 @@
       <button
         onclick={onClose}
         title="Close"
+        aria-label="Close credential vault"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <X size={13} />
@@ -266,7 +364,14 @@
             placeholder="password / hash / key"
             bind:value={newSecret}
             class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            onkeydown={(e) => { if (e.key === 'Enter') addCredential(); if (e.key === 'Escape') addingCred = false; }}
+            onkeydown={(e) => {
+              if (e.key === 'Enter') addCredential();
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                addingCred = false;
+              }
+            }}
           />
         </label>
         <div class="flex gap-2">
@@ -336,9 +441,19 @@
       </div>
     {/if}
 
+    <div class="border-b border-border px-3 py-2">
+      <input
+        type="text"
+        placeholder="Search credentials..."
+        bind:value={credentialQuery}
+        aria-label="Search credentials"
+        class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </div>
+
     <!-- Credential list -->
     <div class="flex-1 overflow-y-auto">
-      {#if loading}
+      {#if loading && credentials.length === 0}
         <div class="flex items-center justify-center py-8">
           <RefreshCw size={16} class="animate-spin text-muted-foreground" />
         </div>
@@ -347,14 +462,22 @@
           <ShieldCheck size={24} class="text-muted-foreground/40" />
           <p class="text-xs text-muted-foreground">No credentials yet. Click + to add one.</p>
         </div>
+      {:else if filteredCredentials.length === 0}
+        <div class="flex flex-col items-center justify-center gap-2 py-12 text-center">
+          <ShieldCheck size={24} class="text-muted-foreground/40" />
+          <p class="text-xs text-muted-foreground">No credentials match your search.</p>
+        </div>
       {:else}
-        {#each credentials as cred (cred.id)}
+        {#each filteredCredentials as cred (cred.id)}
           <div class="group border-b border-border hover:bg-accent/30 last:border-b-0">
             <div class="px-3 py-2">
               <!-- Header row -->
               <div class="flex items-center gap-2">
-                <span class="rounded border px-1 py-0.5 text-[9px] font-medium uppercase {statusColors[cred.status] ?? statusColors.unknown}">
+                <span class="rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[9px] font-medium uppercase text-muted-foreground">
                   {typeLabels[cred.credential_type] ?? cred.credential_type}
+                </span>
+                <span class="rounded px-1.5 py-0.5 text-[9px] font-medium uppercase {statusBadgeClass[cred.status] ?? statusBadgeClass.unknown}">
+                  {cred.status}
                 </span>
                 <span class="min-w-0 flex-1 text-xs">
                   {#if cred.domain}
@@ -373,6 +496,7 @@
                     onclick={() => startEditing(cred)}
                     class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                     title="Edit credential"
+                    aria-label="Edit credential"
                   >
                     <Pencil size={11} />
                   </button>
@@ -380,6 +504,7 @@
                     onclick={() => confirmDelete = { id: cred.id, label: cred.username || 'Credential' }}
                     class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
                     title="Delete"
+                    aria-label="Delete credential"
                   >
                     <Trash2 size={10} />
                   </button>
@@ -393,6 +518,8 @@
                 <button
                   onclick={() => toggleReveal(cred.id)}
                   class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label={revealedIds.has(cred.id) ? 'Hide secret' : 'Show secret'}
+                  aria-pressed={revealedIds.has(cred.id)}
                 >
                   {#if revealedIds.has(cred.id)}
                     <EyeOff size={10} />
@@ -403,6 +530,27 @@
               </div>
               {#if cred.source}
                 <p class="mt-0.5 text-[10px] text-muted-foreground">via {cred.source}</p>
+              {/if}
+              {#if cred.notes}
+                <button
+                  onclick={() => (expandedCredId = expandedCredId === cred.id ? null : cred.id)}
+                  class="mt-0.5 flex h-5 items-center gap-0.5 rounded px-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-expanded={expandedCredId === cred.id}
+                  aria-controls="cred-notes-{cred.id}"
+                  title={expandedCredId === cred.id ? 'Hide notes' : 'Show notes'}
+                >
+                  {#if expandedCredId === cred.id}
+                    <ChevronDown size={10} />
+                  {:else}
+                    <ChevronRight size={10} />
+                  {/if}
+                  <span>notes</span>
+                </button>
+                {#if expandedCredId === cred.id}
+                  <div id="cred-notes-{cred.id}" class="mt-1 rounded bg-muted/40 px-2 py-1.5">
+                    <p class="whitespace-pre-wrap break-words text-[10px] text-muted-foreground italic">{cred.notes}</p>
+                  </div>
+                {/if}
               {/if}
             </div>
             {#if editingCredId === cred.id && uiMode === 'inline'}
@@ -431,7 +579,14 @@
                     type="text"
                     bind:value={editSecret}
                     class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                    onkeydown={(e) => { if (e.key === 'Enter') updateCredential(); if (e.key === 'Escape') editingCredId = null; }}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter') updateCredential();
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        editingCredId = null;
+                      }
+                    }}
                   />
                 </label>
                 <div class="flex gap-2">
@@ -502,28 +657,15 @@
 </div>
 
 {#if addingCred && uiMode === 'modal'}
-  <!-- Backdrop -->
-  <div
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-    role="button"
-    tabindex="-1"
-    onclick={() => (addingCred = false)}
-    onkeydown={(e) => { if (e.key === 'Escape') addingCred = false; }}
-    aria-label="Close form"
-    transition:fade={{ duration: 150 }}
-  ></div>
-  <!-- Modal -->
-  <div
-    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-2xl"
-    transition:fly={{ y: 8, duration: 200, easing: cubicOut }}
-    role="dialog"
-    aria-modal="true"
-    aria-label="Add Credential"
+  <ToolModal
+    ariaLabel="Add credential"
+    onClose={() => (addingCred = false)}
+    maxWidthClass="max-w-sm"
   >
     <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
       <KeyRound size={14} class="text-muted-foreground" />
       <h2 class="flex-1 text-sm font-semibold">Add Credential</h2>
-      <button onclick={() => (addingCred = false)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+      <button onclick={() => (addingCred = false)} aria-label="Close add credential modal" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
     </div>
     <div class="space-y-3 px-5 py-4">
       <div class="flex gap-2">
@@ -553,7 +695,14 @@
           placeholder="password / hash / key"
           bind:value={newSecret}
           class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          onkeydown={(e) => { if (e.key === 'Enter') addCredential(); if (e.key === 'Escape') addingCred = false; }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') addCredential();
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              addingCred = false;
+            }
+          }}
         />
       </label>
       <div class="flex gap-2">
@@ -611,7 +760,7 @@
       <button onclick={addCredential} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Credential</button>
       <button onclick={() => (addingCred = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
     </div>
-  </div>
+  </ToolModal>
 {/if}
 
 {#if confirmDelete !== null}
@@ -625,28 +774,15 @@
 {/if}
 
 {#if editingCredId !== null && uiMode === 'modal'}
-  <!-- Backdrop -->
-  <div
-    transition:fade={{ duration: 150 }}
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-    role="button"
-    tabindex="-1"
-    onclick={() => (editingCredId = null)}
-    onkeydown={(e) => { if (e.key === 'Escape') editingCredId = null; }}
-    aria-label="Close edit form"
-  ></div>
-  <!-- Modal -->
-  <div
-    transition:fly={{ y: 8, duration: 200, easing: cubicOut }}
-    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-2xl"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Edit Credential"
+  <ToolModal
+    ariaLabel="Edit credential"
+    onClose={() => (editingCredId = null)}
+    maxWidthClass="max-w-sm"
   >
     <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
       <KeyRound size={14} class="text-muted-foreground" />
       <h2 class="flex-1 text-sm font-semibold">Edit Credential</h2>
-      <button onclick={() => (editingCredId = null)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+      <button onclick={() => (editingCredId = null)} aria-label="Close edit credential modal" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
     </div>
     <div class="space-y-3 px-5 py-4">
       <div class="flex gap-2">
@@ -734,5 +870,5 @@
         class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent"
       >Cancel</button>
     </div>
-  </div>
+  </ToolModal>
 {/if}

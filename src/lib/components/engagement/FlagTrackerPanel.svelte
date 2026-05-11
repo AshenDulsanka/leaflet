@@ -1,9 +1,14 @@
+<script module lang="ts">
+  const flagCache = new Map<string, string>();
+</script>
+
 <script lang="ts">
   import { Flag, Plus, X, RefreshCw, CheckCircle2, Circle, Trash2, Pencil } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import ToolModal from '$lib/components/modals/ToolModal.svelte';
   import Select from '$lib/components/ui/Select.svelte';
-  import { fly, fade } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
   interface FlagEntry {
@@ -32,6 +37,7 @@
   let loading = $state(false);
   let addingFlag = $state(false);
   let confirmDelete = $state<{ id: string; label: string } | null>(null);
+  let flagQuery = $state('');
 
   // Add-flag form
   let newValue = $state('');
@@ -45,33 +51,72 @@
   let editFlagType = $state('user');
   let editCaptureMethod = $state('');
   let editNotes = $state('');
+  let latestLoadRequest = 0;
+
+  function readCachedFlags(id: string): FlagEntry[] | null {
+    const cached = flagCache.get(id);
+    if (!cached) return null;
+    try {
+      const parsed = JSON.parse(cached);
+      return Array.isArray(parsed) ? (parsed as FlagEntry[]) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeCachedFlags(id: string, items: FlagEntry[]): void {
+    flagCache.set(id, JSON.stringify(items));
+  }
 
   $effect(() => {
-    if (workspaceId) loadFlags();
+    if (!workspaceId) {
+      flags = [];
+      loading = false;
+      return;
+    }
+
+    const currentWorkspaceId = workspaceId;
+    const cached = readCachedFlags(currentWorkspaceId);
+    if (cached !== null) {
+      flags = cached;
+    }
+
+    void loadFlags(currentWorkspaceId, cached === null);
   });
 
-  async function loadFlags(): Promise<void> {
-    if (!workspaceId) return;
-    flags = [];
-    loading = true;
+  async function loadFlags(targetWorkspaceId: string, blocking = false): Promise<void> {
+    const requestId = latestLoadRequest + 1;
+    latestLoadRequest = requestId;
+    loading = blocking;
+
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/flags`);
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/flags`);
       if (!res.ok) {
-        console.error('Failed to load flags:', { workspaceId, status: res.status });
+        console.error('Failed to load flags:', { workspaceId: targetWorkspaceId, status: res.status });
         return;
       }
-      flags = await res.json();
+
+      const nextFlags = await res.json() as FlagEntry[];
+      if (requestId !== latestLoadRequest || workspaceId !== targetWorkspaceId) {
+        return;
+      }
+
+      flags = nextFlags;
+      writeCachedFlags(targetWorkspaceId, nextFlags);
     } catch (err) {
-      console.error('Failed to load flags:', { workspaceId, error: err });
+      console.error('Failed to load flags:', { workspaceId: targetWorkspaceId, error: err });
     } finally {
-      loading = false;
+      if (requestId === latestLoadRequest) {
+        loading = false;
+      }
     }
   }
 
   async function addFlag(): Promise<void> {
     if (!workspaceId) return;
+    const targetWorkspaceId = workspaceId;
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/flags`, {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/flags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,20 +132,23 @@
       }
       const flag: FlagEntry = await res.json();
       flags = [...flags, flag];
+      writeCachedFlags(targetWorkspaceId, flags);
       newValue = '';
       newFlagType = 'user';
       newCaptureMethod = '';
       newNotes = '';
       addingFlag = false;
     } catch (err) {
-      console.error('Failed to add flag:', { workspaceId, error: err });
+      console.error('Failed to add flag:', { workspaceId: targetWorkspaceId, error: err });
     }
   }
 
   async function updateFlag(): Promise<void> {
     if (!workspaceId || !editingFlagId) return;
+    const targetWorkspaceId = workspaceId;
+    const targetFlagId = editingFlagId;
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/flags/${editingFlagId}`, {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/flags/${targetFlagId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -111,14 +159,17 @@
         })
       });
       if (!res.ok) {
-        console.error('Failed to update flag:', { workspaceId, flagId: editingFlagId, status: res.status });
+        console.error('Failed to update flag:', { workspaceId: targetWorkspaceId, flagId: targetFlagId, status: res.status });
         return;
       }
       const updated: FlagEntry = await res.json();
-      flags = flags.map((f) => (f.id === editingFlagId ? updated : f));
-      editingFlagId = null;
+      flags = flags.map((f) => (f.id === targetFlagId ? updated : f));
+      writeCachedFlags(targetWorkspaceId, flags);
+      if (editingFlagId === targetFlagId) {
+        editingFlagId = null;
+      }
     } catch (err) {
-      console.error('Failed to update flag:', { workspaceId, error: err });
+      console.error('Failed to update flag:', { workspaceId: targetWorkspaceId, flagId: targetFlagId, error: err });
     }
   }
 
@@ -132,30 +183,47 @@
 
   async function toggleSubmitted(flag: FlagEntry): Promise<void> {
     if (!workspaceId) return;
+    const targetWorkspaceId = workspaceId;
     const submitted = flag.submitted ? 0 : 1;
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/flags/${flag.id}`, {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/flags/${flag.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ submitted })
       });
-      if (!res.ok) { console.error('Failed to toggle flag submitted:', { workspaceId, flagId: flag.id, status: res.status }); return; }
+      if (!res.ok) { console.error('Failed to toggle flag submitted:', { workspaceId: targetWorkspaceId, flagId: flag.id, status: res.status }); return; }
       flags = flags.map((f) => f.id === flag.id ? { ...f, submitted } : f);
+      writeCachedFlags(targetWorkspaceId, flags);
     } catch (err) {
-      console.error('Failed to toggle flag submitted:', { workspaceId, flagId: flag.id, error: err });
+      console.error('Failed to toggle flag submitted:', { workspaceId: targetWorkspaceId, flagId: flag.id, error: err });
     }
   }
 
   async function deleteFlag(id: string): Promise<void> {
     if (!workspaceId) return;
+    const targetWorkspaceId = workspaceId;
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/flags/${id}`, { method: 'DELETE' });
-      if (!res.ok) { console.error('Failed to delete flag:', { workspaceId, flagId: id, status: res.status }); return; }
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/flags/${id}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete flag:', { workspaceId: targetWorkspaceId, flagId: id, status: res.status }); return; }
       flags = flags.filter((f) => f.id !== id);
+      writeCachedFlags(targetWorkspaceId, flags);
     } catch (err) {
-      console.error('Failed to delete flag:', { workspaceId, flagId: id, error: err });
+      console.error('Failed to delete flag:', { workspaceId: targetWorkspaceId, flagId: id, error: err });
     }
   }
+
+  const filteredFlags = $derived(
+    flagQuery.trim()
+      ? flags.filter(
+          (f) =>
+            f.value.toLowerCase().includes(flagQuery.toLowerCase()) ||
+            f.flag_type.toLowerCase().includes(flagQuery.toLowerCase()) ||
+            f.capture_method.toLowerCase().includes(flagQuery.toLowerCase()) ||
+            (f.host_ip ?? '').toLowerCase().includes(flagQuery.toLowerCase()) ||
+            (f.host_hostname ?? '').toLowerCase().includes(flagQuery.toLowerCase())
+        )
+      : flags
+  );
 
   const submittedCount = $derived(flags.filter((f) => f.submitted).length);
   const userFlags = $derived(flags.filter((f) => f.flag_type === 'user'));
@@ -171,7 +239,27 @@
   };
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') onClose();
+    if (e.defaultPrevented || e.key !== 'Escape') return;
+
+    if (confirmDelete !== null) {
+      e.preventDefault();
+      confirmDelete = null;
+      return;
+    }
+
+    if (editingFlagId !== null) {
+      e.preventDefault();
+      editingFlagId = null;
+      return;
+    }
+
+    if (addingFlag) {
+      e.preventDefault();
+      addingFlag = false;
+      return;
+    }
+
+    onClose();
   }
 </script>
 
@@ -189,8 +277,12 @@
     </div>
     <div class="flex items-center gap-1">
       <button
-        onclick={loadFlags}
+        onclick={() => {
+          if (!workspaceId) return;
+          void loadFlags(workspaceId, true);
+        }}
         title="Refresh"
+        aria-label="Refresh flags"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
@@ -198,6 +290,7 @@
       <button
         onclick={() => (addingFlag = !addingFlag)}
         title="Add flag"
+        aria-label="Add flag"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <Plus size={13} />
@@ -205,6 +298,7 @@
       <button
         onclick={onClose}
         title="Close"
+        aria-label="Close flag tracker"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <X size={13} />
@@ -250,7 +344,14 @@
           placeholder="Flag value e.g. HTB&#123;...&#125;"
           bind:value={newValue}
           class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          onkeydown={(e) => { if (e.key === 'Enter') addFlag(); if (e.key === 'Escape') addingFlag = false; }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') addFlag();
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              addingFlag = false;
+            }
+          }}
         />
         <div class="flex gap-2">
           <Select
@@ -288,8 +389,17 @@
     {/if}
 
     <!-- Flag list -->
+    <div class="border-b border-border px-3 py-2">
+      <input
+        type="text"
+        aria-label="Filter flags"
+        placeholder="Filter flags..."
+        bind:value={flagQuery}
+        class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </div>
     <div class="flex-1 overflow-y-auto">
-      {#if loading}
+      {#if loading && flags.length === 0}
         <div class="flex items-center justify-center py-8">
           <RefreshCw size={16} class="animate-spin text-muted-foreground" />
         </div>
@@ -298,14 +408,18 @@
           <Flag size={24} class="text-muted-foreground/40" />
           <p class="text-xs text-muted-foreground">No flags yet. Click + to add one.</p>
         </div>
+      {:else if filteredFlags.length === 0}
+        <p class="px-3 py-4 text-center text-xs text-muted-foreground">No flags match your filter.</p>
       {:else}
-        {#each flags as flag (flag.id)}
+        {#each filteredFlags as flag (flag.id)}
           <div class="group border-b border-border hover:bg-accent/30 last:border-b-0">
             <div class="flex items-start gap-2 px-3 py-2">
               <button
                 onclick={() => toggleSubmitted(flag)}
                 class="mt-0.5 flex-shrink-0 {flag.submitted ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'}"
                 title={flag.submitted ? 'Mark unsubmitted' : 'Mark submitted'}
+                aria-label={flag.submitted ? `Mark flag ${flag.value || flag.id} as unsubmitted` : `Mark flag ${flag.value || flag.id} as submitted`}
+                aria-pressed={flag.submitted === 1}
               >
                 {#if flag.submitted}
                   <CheckCircle2 size={14} />
@@ -332,6 +446,7 @@
                     onclick={() => startEditing(flag)}
                     class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                     title="Edit flag"
+                    aria-label={`Edit flag ${flag.value || flag.id}`}
                   >
                     <Pencil size={12} />
                   </button>
@@ -339,6 +454,7 @@
                     onclick={() => confirmDelete = { id: flag.id, label: flag.value || flag.flag_type }}
                     class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
                     title="Delete flag"
+                    aria-label={`Delete flag ${flag.value || flag.id}`}
                   >
                     <Trash2 size={12} />
                   </button>
@@ -355,7 +471,14 @@
                   placeholder="Flag value"
                   bind:value={editValue}
                   class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                  onkeydown={(e) => { if (e.key === 'Enter') updateFlag(); if (e.key === 'Escape') editingFlagId = null; }}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter') updateFlag();
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      editingFlagId = null;
+                    }
+                  }}
                 />
                 <div class="flex gap-2">
                   <Select
@@ -395,28 +518,15 @@
 </div>
 
 {#if addingFlag && uiMode === 'modal'}
-  <!-- Backdrop -->
-  <div
-    transition:fade={{ duration: 150 }}
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-    role="button"
-    tabindex="-1"
-    onclick={() => (addingFlag = false)}
-    onkeydown={(e) => { if (e.key === 'Escape') addingFlag = false; }}
-    aria-label="Close form"
-  ></div>
-  <!-- Modal -->
-  <div
-    transition:fly={{ y: 8, duration: 200, easing: cubicOut }}
-    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-2xl"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Add Flag"
+  <ToolModal
+    ariaLabel="Add flag"
+    onClose={() => (addingFlag = false)}
+    maxWidthClass="max-w-sm"
   >
     <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
       <Flag size={14} class="text-muted-foreground" />
       <h2 class="flex-1 text-sm font-semibold">Add Flag</h2>
-      <button onclick={() => (addingFlag = false)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+      <button onclick={() => (addingFlag = false)} aria-label="Close add flag modal" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
     </div>
     <div class="space-y-3 px-5 py-4">
       <input
@@ -424,7 +534,14 @@
         placeholder="Flag value e.g. HTB&#123;...&#125;"
         bind:value={newValue}
         class="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        onkeydown={(e) => { if (e.key === 'Enter') addFlag(); if (e.key === 'Escape') addingFlag = false; }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') addFlag();
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              addingFlag = false;
+            }
+          }}
       />
       <div class="flex gap-2">
         <Select
@@ -445,36 +562,23 @@
         />
       </div>
     </div>
-    <div class="flex gap-2 border-t border-border px-5 py-3 bg-muted/30">
+    <div class="flex gap-2 border-t border-border bg-muted/30 px-5 py-3">
       <button onclick={addFlag} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Flag</button>
       <button onclick={() => (addingFlag = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
     </div>
-  </div>
+  </ToolModal>
 {/if}
 
 {#if editingFlagId !== null && uiMode === 'modal'}
-  <!-- Backdrop -->
-  <div
-    transition:fade={{ duration: 150 }}
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-    role="button"
-    tabindex="-1"
-    onclick={() => (editingFlagId = null)}
-    onkeydown={(e) => { if (e.key === 'Escape') editingFlagId = null; }}
-    aria-label="Close edit form"
-  ></div>
-  <!-- Modal -->
-  <div
-    transition:fly={{ y: 8, duration: 200, easing: cubicOut }}
-    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card shadow-2xl"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Edit Flag"
+  <ToolModal
+    ariaLabel="Edit flag"
+    onClose={() => (editingFlagId = null)}
+    maxWidthClass="max-w-sm"
   >
     <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
       <Flag size={14} class="text-muted-foreground" />
       <h2 class="flex-1 text-sm font-semibold">Edit Flag</h2>
-      <button onclick={() => (editingFlagId = null)} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+      <button onclick={() => (editingFlagId = null)} aria-label="Close edit flag modal" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
     </div>
     <div class="space-y-3 px-5 py-4">
       <input
@@ -482,7 +586,14 @@
         placeholder="Flag value e.g. HTB&#123;...&#125;"
         bind:value={editValue}
         class="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        onkeydown={(e) => { if (e.key === 'Enter') updateFlag(); if (e.key === 'Escape') editingFlagId = null; }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') updateFlag();
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              editingFlagId = null;
+            }
+          }}
       />
       <div class="flex gap-2">
         <Select
@@ -503,11 +614,11 @@
         />
       </div>
     </div>
-    <div class="flex gap-2 border-t border-border px-5 py-3 bg-muted/30">
+    <div class="flex gap-2 border-t border-border bg-muted/30 px-5 py-3">
       <button onclick={updateFlag} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Save Changes</button>
       <button onclick={() => (editingFlagId = null)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
     </div>
-  </div>
+  </ToolModal>
 {/if}
 
 {#if confirmDelete !== null}

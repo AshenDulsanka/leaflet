@@ -43,12 +43,15 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    if (e.defaultPrevented) return;
+
     if (e.key === 'Enter') {
       e.preventDefault();
       submit();
     }
     if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation();
       onCancel();
     }
   }

@@ -1,9 +1,10 @@
 <script lang="ts">
   import { Terminal, Plus, X, RefreshCw, Copy, ChevronDown, ChevronRight, Trash2, Pencil } from '@lucide/svelte';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import ToolModal from '$lib/components/modals/ToolModal.svelte';
   import Select from '$lib/components/ui/Select.svelte';
   import { extractSnippetVarNames } from '$lib/data/commands';
-  import { fly, fade } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
   interface Snippet {
@@ -44,6 +45,7 @@
   let expandedCategories = $state<Set<string>>(new Set(['general', 'recon']));
   let addingSnippet = $state(false);
   let searchQuery = $state('');
+  let varSearchQuery = $state('');
   let editingSnippet = $state<Snippet | null>(null);
   let editTitle = $state('');
   let editCommand = $state('');
@@ -60,13 +62,12 @@
   let newDescription = $state('');
   let isGlobal = $state(false);
 
-  // Variable editing - inline with debounced autosave
+  // Variable modals
   let newVarName = $state('');
   let newVarValue = $state('');
-  // Local input state: name → current typed value (pre-save)
-  let editValues = $state<Record<string, string>>({});
-  // Non-reactive debounce timers
-  const debounceMap = new Map<string, ReturnType<typeof setTimeout>>();
+  let addVarError = $state('');
+  let editingVar = $state<SnippetVar | null>(null);
+  let editVarValue = $state('');
 
   $effect(() => {
     if (workspaceId) {
@@ -80,6 +81,10 @@
     loading = true;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/snippets`);
+      if (!res.ok) {
+        console.error('Failed to load snippets:', res.status);
+        return;
+      }
       const raw = await res.json() as Array<Snippet & { tags: string | string[] }>;
       snippets = raw.map((s) => ({
         ...s,
@@ -98,10 +103,6 @@
       const res = await fetch(`/api/workspaces/${workspaceId}/variables`);
       const data: SnippetVar[] = await res.json();
       variables = data;
-      // Seed local edit state from persisted values
-      const vals: Record<string, string> = {};
-      for (const v of data) vals[v.name] = v.value;
-      editValues = vals;
     } catch {
       console.error('Failed to load variables');
     }
@@ -140,16 +141,20 @@
     snippetToDelete = id;
   }
 
-  async function confirmDeleteSnippet() {
+  async function confirmDeleteSnippet(): Promise<void> {
     if (!workspaceId || !snippetToDelete) return;
-    const res = await fetch(`/api/workspaces/${workspaceId}/snippets/${snippetToDelete}`, { method: 'DELETE' });
-    if (!res.ok) {
-      console.error('Failed to delete snippet:', { workspaceId, snippetId: snippetToDelete, status: res.status });
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/snippets/${snippetToDelete}`, { method: 'DELETE' });
+      if (!res.ok) {
+        console.error('Failed to delete snippet:', res.status);
+        return;
+      }
+      snippets = snippets.filter((s) => s.id !== snippetToDelete);
+    } catch (err) {
+      console.error('Failed to delete snippet:', err);
+    } finally {
       snippetToDelete = null;
-      return;
     }
-    snippets = snippets.filter((s) => s.id !== snippetToDelete);
-    snippetToDelete = null;
   }
 
   function startEditSnippet(snippet: Snippet) {
@@ -203,49 +208,58 @@
 
   async function saveVariable(name: string, value: string) {
     if (!workspaceId) return;
-    const res = await fetch(`/api/workspaces/${workspaceId}/variables`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, value })
-    });
-    if (res.ok) {
-      const updated: SnippetVar = await res.json();
-      const exists = variables.find((v) => v.id === updated.id || v.name === updated.name);
-      if (exists) {
-        variables = variables.map((v) => v.id === updated.id ? updated : v);
-      } else {
-        variables = [...variables, updated];
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/variables`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, value })
+      });
+      if (res.ok) {
+        const updated: SnippetVar = await res.json();
+        const exists = variables.find((v) => v.id === updated.id || v.name === updated.name);
+        if (exists) {
+          variables = variables.map((v) => v.id === updated.id ? updated : v);
+        } else {
+          variables = [...variables, updated];
+        }
       }
-      editValues = { ...editValues, [name]: value };
+    } catch (err) {
+      console.error('Failed to save variable:', err);
     }
-  }
-
-  /** Trigger debounced autosave when a variable value is typed */
-  function handleVarInput(name: string, value: string) {
-    editValues = { ...editValues, [name]: value };
-    const existing = debounceMap.get(name);
-    if (existing !== undefined) clearTimeout(existing);
-    debounceMap.set(name, setTimeout(() => {
-      void saveVariable(name, editValues[name] ?? value);
-      debounceMap.delete(name);
-    }, 500));
   }
 
   function deleteVariable(id: string) {
     varToDelete = id;
   }
 
-  async function confirmDeleteVariable() {
+  async function confirmDeleteVariable(): Promise<void> {
     if (!workspaceId || !varToDelete) return;
-    const toDelete = variables.find((v) => v.id === varToDelete);
-    await fetch(`/api/workspaces/${workspaceId}/variables/${varToDelete}`, { method: 'DELETE' });
-    variables = variables.filter((v) => v.id !== varToDelete);
-    if (toDelete) {
-      editValues = Object.fromEntries(
-        Object.entries(editValues).filter(([key]) => key !== toDelete.name)
-      );
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/variables/${varToDelete}`, { method: 'DELETE' });
+      if (!res.ok) {
+        console.error('Failed to delete variable:', res.status);
+        return;
+      }
+      variables = variables.filter((v) => v.id !== varToDelete);
+    } catch (err) {
+      console.error('Failed to delete variable:', err);
+    } finally {
+      varToDelete = null;
     }
-    varToDelete = null;
+  }
+
+  function openEditVar(v: MergedVar) {
+    if (!v.id) return;
+    const persisted = variables.find((sv) => sv.id === v.id);
+    if (!persisted) return;
+    editingVar = persisted;
+    editVarValue = persisted.value;
+  }
+
+  async function saveEditVar() {
+    if (!editingVar || !workspaceId) return;
+    await saveVariable(editingVar.name, editVarValue.trim());
+    editingVar = null;
   }
 
   function toggleCategory(cat: string) {
@@ -291,6 +305,16 @@
     return result.sort((a, b) => a.name.localeCompare(b.name));
   });
 
+  const filteredVars = $derived(
+    varSearchQuery.trim()
+      ? mergedVars.filter(
+          (v) =>
+            v.name.toLowerCase().includes(varSearchQuery.toLowerCase()) ||
+            v.value.toLowerCase().includes(varSearchQuery.toLowerCase())
+        )
+      : mergedVars
+  );
+
   const CATEGORIES = [
     'general', 'recon', 'exploitation', 'privesc-linux', 'privesc-windows',
     'pivoting', 'ad-attacks', 'file-transfer', 'credential-attacks'
@@ -298,8 +322,47 @@
 
   const categoryOptions = CATEGORIES.map((category) => ({ value: category, label: category }));
 
+  function closeAddVarModal(): void {
+    showAddVar = false;
+    newVarName = '';
+    newVarValue = '';
+    addVarError = '';
+  }
+
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') onClose();
+    if (e.defaultPrevented || e.key !== 'Escape') return;
+
+    if (editingSnippet) {
+      editingSnippet = null;
+      return;
+    }
+
+    if (addingSnippet) {
+      addingSnippet = false;
+      return;
+    }
+
+    if (editingVar) {
+      editingVar = null;
+      return;
+    }
+
+    if (showAddVar) {
+      closeAddVarModal();
+      return;
+    }
+
+    if (snippetToDelete) {
+      snippetToDelete = null;
+      return;
+    }
+
+    if (varToDelete) {
+      varToDelete = null;
+      return;
+    }
+
+    onClose();
   }
 </script>
 
@@ -318,13 +381,15 @@
     <div class="flex items-center gap-1">
       <button
         onclick={loadSnippets}
+        aria-label="Refresh snippets"
         title="Refresh"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
       </button>
       <button
-        onclick={() => (addingSnippet = !addingSnippet)}
+        onclick={() => (addingSnippet = true)}
+        aria-label="Add snippet"
         title="Add snippet"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
@@ -332,6 +397,7 @@
       </button>
       <button
         onclick={onClose}
+        aria-label="Close command snippets panel"
         title="Close"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
@@ -366,55 +432,12 @@
       <div class="border-b border-border px-3 py-2">
         <input
           type="text"
+          aria-label="Filter snippets"
           placeholder="Filter snippets..."
           bind:value={searchQuery}
           class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </div>
-
-      <!-- Add snippet form -->
-      {#if addingSnippet}
-        <div class="border-b border-border bg-muted/40 p-3 space-y-2">
-          <input
-            type="text"
-            placeholder="Title *"
-            bind:value={newTitle}
-            class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-          <textarea
-            placeholder="Command (use &#123;VARIABLE&#125; for substitution) *"
-            bind:value={newCommand}
-            rows={3}
-            class="w-full resize-none rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          ></textarea>
-          <div class="flex gap-2">
-            <Select
-              options={categoryOptions}
-              value={newCategory}
-              onchange={(value) => { newCategory = value; }}
-              class="flex-1"
-            />
-            <label class="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <input type="checkbox" bind:checked={isGlobal} class="rounded" />
-              Global
-            </label>
-          </div>
-          <div class="flex gap-2">
-            <button
-              onclick={addSnippet}
-              class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Add
-            </button>
-            <button
-              onclick={() => (addingSnippet = false)}
-              class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      {/if}
 
       <!-- Snippet groups -->
       <div class="flex-1 overflow-y-auto">
@@ -458,6 +481,7 @@
                         {#if onInsert}
                           <button
                             onclick={() => onInsert(resolveCommand(snippet.command))}
+                            aria-label="Insert snippet into editor"
                             title="Insert into editor"
                             class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                           >
@@ -466,6 +490,7 @@
                         {/if}
                         <button
                           onclick={() => copySnippet(snippet)}
+                          aria-label="Copy snippet"
                           title="Copy (with variable substitution)"
                           class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                         >
@@ -473,6 +498,7 @@
                         </button>
                         <button
                           onclick={() => startEditSnippet(snippet)}
+                          aria-label="Edit snippet"
                           title="Edit"
                           class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                         >
@@ -480,6 +506,7 @@
                         </button>
                         <button
                           onclick={() => deleteSnippet(snippet.id)}
+                          aria-label="Delete snippet"
                           title="Delete"
                           class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
                         >
@@ -505,33 +532,47 @@
       <!-- Variables tab -->
       <div class="flex-1 overflow-y-auto">
         <!-- Toolbar row -->
-        <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
-          <p class="text-[10px] text-muted-foreground">
+        <div class="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+          <p class="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">
             Use <code class="font-mono">&#123;NAME&#125;</code> in commands. Values auto-save.
           </p>
           <button
-            onclick={() => (showAddVar = !showAddVar)}
+            onclick={() => (showAddVar = true)}
+            aria-label="Add variable"
             title="Add variable"
-            class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+            class="flex-shrink-0 flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <Plus size={11} />
           </button>
         </div>
 
+        <div class="border-b border-border px-3 py-2">
+          <input
+            type="text"
+            aria-label="Filter variables"
+            placeholder="Filter variables..."
+            bind:value={varSearchQuery}
+            class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
         <div class="p-3 space-y-1.5">
-          {#each mergedVars as v (v.name)}
+          {#each filteredVars as v (v.name)}
             <div class="flex items-center gap-1.5 rounded border border-border px-2 py-1 hover:bg-accent/20">
               <code class="w-28 flex-shrink-0 truncate text-[10px] font-mono text-primary" title={'{' + v.name + '}'}>{'{' + v.name + '}'}</code>
-              <input
-                type="text"
-                value={editValues[v.name] ?? v.value}
-                placeholder={v.persisted ? '' : 'unset'}
-                oninput={(e) => handleVarInput(v.name, (e.currentTarget as HTMLInputElement).value)}
-                class="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary {!v.persisted ? 'placeholder:text-muted-foreground/50 italic' : ''}"
-              />
+              <span class="min-w-0 flex-1 truncate text-xs {!v.value ? 'italic text-muted-foreground/50' : ''}">{v.value || 'unset'}</span>
               {#if v.id}
                 <button
+                  onclick={() => openEditVar(v)}
+                  aria-label="Edit variable"
+                  title="Edit variable"
+                  class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <Pencil size={10} />
+                </button>
+                <button
                   onclick={() => deleteVariable(v.id!)}
+                  aria-label="Delete variable"
                   title="Delete variable"
                   class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-destructive hover:bg-destructive/10"
                 >
@@ -539,49 +580,15 @@
                 </button>
               {:else}
                 <!-- Placeholder to keep row height consistent -->
-                <span class="w-5 flex-shrink-0"></span>
+                <span class="w-10 flex-shrink-0"></span>
               {/if}
             </div>
           {/each}
 
-          {#if mergedVars.length === 0}
+          {#if filteredVars.length === 0}
             <p class="py-4 text-center text-[10px] text-muted-foreground">
-              No variables yet. Add snippets with &#123;VARIABLE&#125; placeholders or add one below.
+              {varSearchQuery.trim() ? 'No variables match your filter.' : 'No variables defined yet. Add snippets with &#123;VARIABLE&#125; placeholders or add one via the + button.'}
             </p>
-          {/if}
-
-          {#if showAddVar}
-          <!-- Add new variable manually -->
-          <div class="rounded border border-dashed border-border p-2 space-y-1 mt-2">
-            <div class="flex gap-1">
-              <input
-                type="text"
-                placeholder="NAME"
-                bind:value={newVarName}
-                class="w-24 rounded border border-border bg-background px-2 py-0.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-              <input
-                type="text"
-                placeholder="value"
-                bind:value={newVarValue}
-                class="flex-1 rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                onkeydown={(e) => { if (e.key === 'Enter' && newVarName.trim()) { if (!/^[A-Z0-9_-]+$/.test(newVarName.trim().toUpperCase())) return; void saveVariable(newVarName.trim().toUpperCase(), newVarValue); newVarName = ''; newVarValue = ''; showAddVar = false; } }}
-              />
-              <button
-                onclick={() => { if (newVarName.trim()) { if (!/^[A-Z0-9_-]+$/.test(newVarName.trim().toUpperCase())) return; void saveVariable(newVarName.trim().toUpperCase(), newVarValue); newVarName = ''; newVarValue = ''; showAddVar = false; } }}
-                class="rounded bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                Add
-              </button>
-              <button
-                onclick={() => { newVarName = ''; newVarValue = ''; showAddVar = false; }}
-                title="Cancel"
-                class="flex h-6 w-6 items-center justify-center rounded border border-border text-muted-foreground hover:bg-accent"
-              >
-                <X size={10} />
-              </button>
-            </div>
-          </div>
           {/if}
         </div>
       </div>
@@ -610,25 +617,18 @@
 {/if}
 
 {#if editingSnippet}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-    onclick={(e) => { if (e.target === e.currentTarget) { editingSnippet = null; } }}
-    role="presentation"
-    transition:fade={{ duration: 150 }}
+  <ToolModal
+    ariaLabel="Edit snippet"
+    onClose={() => (editingSnippet = null)}
+    maxWidthClass="max-w-sm"
   >
-    <div
-      class="w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-2xl"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="edit-snippet-title"
-      transition:fly={{ y: 10, duration: 200, easing: cubicOut }}
-    >
+    <div class="p-5">
       <div class="mb-4 flex items-center justify-between">
         <h2 id="edit-snippet-title" class="text-sm font-semibold">Edit Snippet</h2>
         <button
           onclick={() => (editingSnippet = null)}
           class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          aria-label="Close"
+          aria-label="Close edit snippet modal"
         >
           <X size={14} />
         </button>
@@ -638,13 +638,13 @@
           type="text"
           placeholder="Title *"
           bind:value={editTitle}
-          class="w-full rounded border border-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
         />
         <textarea
           placeholder="Command *"
           bind:value={editCommand}
           rows={4}
-          class="w-full resize-none rounded border border-border bg-background px-2 py-1.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+          class="w-full resize-none rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
         ></textarea>
         <Select
           options={categoryOptions}
@@ -655,23 +655,201 @@
           type="text"
           placeholder="Description"
           bind:value={editDescription}
-          class="w-full rounded border border-border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </div>
       <div class="mt-4 flex justify-end gap-2">
         <button
           onclick={() => (editingSnippet = null)}
-          class="rounded border border-border px-3 py-1.5 text-xs hover:bg-accent"
+          class="rounded border border-border px-3 py-1.5 text-sm hover:bg-accent"
         >
           Cancel
         </button>
         <button
           onclick={saveEditSnippet}
-          class="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+          class="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           Save
         </button>
       </div>
     </div>
-  </div>
+  </ToolModal>
+{/if}
+
+{#if addingSnippet}
+  <ToolModal
+    ariaLabel="Add snippet"
+    onClose={() => (addingSnippet = false)}
+    maxWidthClass="max-w-sm"
+  >
+    <div class="p-5">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 id="create-snippet-title" class="text-sm font-semibold">Add Snippet</h2>
+        <button
+          onclick={() => (addingSnippet = false)}
+          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label="Close add snippet modal"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <div class="space-y-2">
+        <input
+          type="text"
+          placeholder="Title *"
+          bind:value={newTitle}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <textarea
+          placeholder="Command (use &#123;VARIABLE&#125; for substitution) *"
+          bind:value={newCommand}
+          rows={4}
+          class="w-full resize-none rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        ></textarea>
+        <Select
+          options={categoryOptions}
+          value={newCategory}
+          onchange={(value) => { newCategory = value; }}
+        />
+        <input
+          type="text"
+          placeholder="Description"
+          bind:value={newDescription}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <label class="flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" bind:checked={isGlobal} class="rounded" />
+          Global (available in all workspaces)
+        </label>
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button
+          onclick={() => (addingSnippet = false)}
+          class="rounded border border-border px-3 py-1.5 text-sm hover:bg-accent"
+        >
+          Cancel
+        </button>
+        <button
+          onclick={addSnippet}
+          class="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Add Snippet
+        </button>
+      </div>
+    </div>
+  </ToolModal>
+{/if}
+
+{#if showAddVar}
+  <ToolModal
+    ariaLabel="Add variable"
+    onClose={closeAddVarModal}
+    maxWidthClass="max-w-xs"
+  >
+    <div class="p-5">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 id="add-var-title" class="text-sm font-semibold">Add Variable</h2>
+        <button
+          onclick={closeAddVarModal}
+          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label="Close add variable modal"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <div class="space-y-2">
+        <div>
+          <input
+            type="text"
+            placeholder="NAME (uppercase, e.g. TARGET_IP)"
+            bind:value={newVarName}
+            class="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          {#if addVarError}
+            <p class="mt-1 text-[10px] text-destructive">{addVarError}</p>
+          {/if}
+        </div>
+        <input
+          type="text"
+          placeholder="Value (optional)"
+          bind:value={newVarValue}
+          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button
+          onclick={closeAddVarModal}
+          class="rounded border border-border px-3 py-1.5 text-sm hover:bg-accent"
+        >
+          Cancel
+        </button>
+        <button
+          onclick={() => {
+            const name = newVarName.trim().toUpperCase();
+            if (!name) { addVarError = 'Name is required.'; return; }
+            if (!/^[A-Z][A-Z0-9_-]*$/.test(name)) { addVarError = 'Must start with a letter and contain only A-Z, 0-9, _ or -.'; return; }
+            addVarError = '';
+            void saveVariable(name, newVarValue.trim());
+            newVarName = '';
+            newVarValue = '';
+            closeAddVarModal();
+          }}
+          class="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Add Variable
+        </button>
+      </div>
+    </div>
+  </ToolModal>
+{/if}
+
+{#if editingVar}
+  <ToolModal
+    ariaLabel="Edit variable"
+    onClose={() => (editingVar = null)}
+    maxWidthClass="max-w-xs"
+  >
+    <div class="p-5">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 id="edit-var-title" class="text-sm font-semibold">Edit Variable</h2>
+        <button
+          onclick={() => (editingVar = null)}
+          class="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label="Close edit variable modal"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <div class="space-y-2">
+        <div>
+          <p class="text-[10px] text-muted-foreground">Name</p>
+          <p class="mt-0.5 rounded border border-border bg-muted px-2 py-1.5 font-mono text-sm text-muted-foreground">{'{' + editingVar.name + '}'}</p>
+        </div>
+        <div>
+          <label class="text-sm text-muted-foreground" for="edit-var-value">Value</label>
+          <input
+            id="edit-var-value"
+            type="text"
+            placeholder="Enter value"
+            bind:value={editVarValue}
+            class="mt-0.5 w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button
+          onclick={() => (editingVar = null)}
+          class="rounded border border-border px-3 py-1.5 text-sm hover:bg-accent"
+        >
+          Cancel
+        </button>
+        <button
+          onclick={saveEditVar}
+          class="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  </ToolModal>
 {/if}

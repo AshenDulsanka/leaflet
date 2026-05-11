@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Bug, X, Plus, RefreshCw, Pencil, Trash2, Check, Tag, BookOpen, ChevronDown, Upload } from '@lucide/svelte';
+  import ToolModal from '$lib/components/modals/ToolModal.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import Select from '$lib/components/ui/Select.svelte';
@@ -35,6 +36,7 @@
   let loading = $state(false);
   let addingFinding = $state(false);
   let importStatus = $state<{ imported: number; skipped: number } | null>(null);
+  let deleteError = $state<string | null>(null);
   let importing = $state(false);
   let fileInputEl = $state<HTMLInputElement | null>(null);
   let mitreData = $state<MitreTechnique[]>([]);
@@ -103,6 +105,7 @@
   // ─── Filters ───────────────────────────────────────────────────────────────
   let severityFilter = $state<'all' | FindingSeverity>('all');
   let statusFilter = $state<'all' | FindingStatus>('all');
+  let findingQuery = $state('');
 
   // ─── Constants ─────────────────────────────────────────────────────────────
   const SEVERITIES: { value: FindingSeverity; label: string; color: string; bg: string }[] = [
@@ -167,13 +170,33 @@
           .slice(0, 10)
   );
 
-  const filteredFindings = $derived(
-    findings.filter(
-      (f) =>
+  const filteredFindings = $derived.by(() => {
+    const query = findingQuery.trim().toLowerCase();
+
+    return findings.filter((f) => {
+      const matchesFilters =
         (severityFilter === 'all' || f.severity === severityFilter) &&
-        (statusFilter   === 'all' || f.status   === statusFilter)
-    )
-  );
+        (statusFilter === 'all' || f.status === statusFilter);
+
+      if (!matchesFilters) return false;
+      if (!query) return true;
+
+      const mitreTactic = 'mitre_tactic' in f
+        ? String((f as Finding & { mitre_tactic?: string }).mitre_tactic ?? '')
+        : '';
+
+      return [
+        f.title ?? '',
+        f.description ?? '',
+        f.note_path ?? '',
+        f.severity ?? '',
+        f.status ?? '',
+        f.mitre_technique_id ?? '',
+        f.mitre_technique_name ?? '',
+        mitreTactic
+      ].some((value) => value.toLowerCase().includes(query));
+    });
+  });
 
   const filteredTemplates = $derived.by(() => {
     let list = FINDING_TEMPLATES;
@@ -451,16 +474,37 @@
 
   async function deleteFinding(id: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/findings/${id}`, { method: 'DELETE' });
-    findings = findings.filter((f) => f.id !== id);
+    deleteError = null;
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/findings/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        deleteError = 'Failed to delete finding. Please try again.';
+        console.error('Failed to delete finding:', { workspaceId, status: res.status });
+        return;
+      }
+      findings = findings.filter((f) => f.id !== id);
+    } catch {
+      deleteError = 'Failed to delete finding. Please try again.';
+      console.error('Failed to delete finding');
+    }
   }
 
   function handleKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      if (editingId)    { editingId = null; return; }
-      if (addingFinding){ resetAddForm(); return; }
-      onClose();
+    if (e.defaultPrevented || e.key !== 'Escape') return;
+
+    if (editingId) {
+      e.preventDefault();
+      editingId = null;
+      return;
     }
+
+    if (addingFinding) {
+      e.preventDefault();
+      resetAddForm();
+      return;
+    }
+
+    onClose();
   }
 </script>
 
@@ -480,6 +524,7 @@
       <button
         onclick={loadFindings}
         title="Refresh"
+        aria-label="Refresh findings"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
@@ -487,6 +532,7 @@
       <button
         onclick={openAddForm}
         title="Add finding"
+        aria-label="Add finding"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <Plus size={13} />
@@ -503,6 +549,7 @@
         title="Import from Nessus / Burp Suite XML"
         onclick={() => fileInputEl?.click()}
         disabled={importing}
+        aria-label="Import findings from XML"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
       >
         <Upload size={13} />
@@ -510,6 +557,7 @@
       <button
         onclick={onClose}
         title="Close"
+        aria-label="Close findings tracker"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <X size={13} />
@@ -558,11 +606,31 @@
           </button>
         {/each}
       </div>
+
+      <div class="border-t border-border pt-1.5">
+        <input
+          type="text"
+          placeholder="Search findings..."
+          bind:value={findingQuery}
+          aria-label="Search findings"
+          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </div>
     </div>
 
     {#if importStatus}
       <div class="mx-2 mb-1 mt-1 rounded border border-border bg-muted px-2 py-1 text-[10px] text-muted-foreground">
         Imported {importStatus.imported} finding{importStatus.imported === 1 ? '' : 's'}{importStatus.skipped > 0 ? `, skipped ${importStatus.skipped} duplicate${importStatus.skipped === 1 ? '' : 's'}` : ''}.
+      </div>
+    {/if}
+    {#if deleteError}
+      <div
+        class="mx-2 mb-1 mt-1 rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-[10px] text-destructive"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+      >
+        {deleteError}
       </div>
     {/if}
 
@@ -743,6 +811,7 @@
                   onclick={() => { newMitreTechId = ''; newMitreTechName = ''; newMitreQuery = ''; }}
                   class="ml-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
                   title="Remove MITRE tag"
+                  aria-label="Remove MITRE tag"
                 >
                   <X size={10} />
                 </button>
@@ -800,8 +869,8 @@
       {:else if filteredFindings.length === 0}
         <div class="flex items-center justify-center py-8">
           <p class="text-center text-xs text-muted-foreground">
-            {severityFilter !== 'all' || statusFilter !== 'all'
-              ? 'No findings match the active filters'
+            {severityFilter !== 'all' || statusFilter !== 'all' || findingQuery.trim().length > 0
+              ? 'No findings match the active filters or search'
               : 'No findings yet'}
           </p>
         </div>
@@ -809,7 +878,7 @@
         <ul class="divide-y divide-border">
           {#each filteredFindings as finding (finding.id)}
             <li class="group px-3 py-2.5">
-              {#if editingId === finding.id}
+              {#if editingId === finding.id && uiMode === 'inline'}
                 <!-- Inline edit form -->
                 <div class="space-y-1.5">
                   <input
@@ -915,6 +984,7 @@
                           onclick={() => { editMitreTechId = ''; editMitreTechName = ''; editMitreQuery = ''; }}
                           class="ml-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
                           title="Remove MITRE tag"
+                          aria-label="Remove MITRE tag"
                         >
                           <X size={10} />
                         </button>
@@ -982,6 +1052,7 @@
                       <button
                         onclick={() => startEdit(finding)}
                         title="Edit"
+                        aria-label="Edit finding"
                         class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                       >
                         <Pencil size={10} />
@@ -989,7 +1060,8 @@
                       <button
                         onclick={() => deleteFinding(finding.id)}
                         title="Delete"
-                        class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
+                        aria-label="Delete finding"
+                        class="flex h-5 w-5 items-center justify-center rounded text-destructive dark:text-red-400 hover:bg-destructive/20 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
                       >
                         <Trash2 size={10} />
                       </button>
@@ -1031,26 +1103,15 @@
 </div>
 
 {#if addingFinding && uiMode === 'modal'}
-  <!-- Backdrop -->
-  <div
-    class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-    role="button"
-    tabindex="-1"
-    onclick={resetAddForm}
-    onkeydown={(e) => { if (e.key === 'Escape') resetAddForm(); }}
-    aria-label="Close form"
-  ></div>
-  <!-- Modal -->
-  <div
-    class="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
-    role="dialog"
-    aria-modal="true"
-    aria-label="Add Finding"
+  <ToolModal
+    ariaLabel="Add Finding"
+    onClose={resetAddForm}
+    dialogClass="overflow-hidden"
   >
     <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
       <Bug size={16} class="shrink-0 text-muted-foreground" />
       <h2 class="flex-1 text-sm font-semibold">Add Finding</h2>
-      <button onclick={resetAddForm} class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+      <button onclick={resetAddForm} aria-label="Close add finding form" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
     </div>
     <div class="space-y-3 px-5 py-4 max-h-[60vh] overflow-y-auto">
       <!-- Template picker (collapsible) -->
@@ -1076,7 +1137,7 @@
               type="text"
               placeholder="Search templates..."
               bind:value={templateQuery}
-              class="w-full rounded border border-border bg-muted px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              class="w-full rounded border border-border bg-muted px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               autocomplete="off"
               spellcheck="false"
             />
@@ -1120,14 +1181,14 @@
         type="text"
         placeholder="Finding title (required)"
         bind:value={newTitle}
-        class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
       />
       <!-- Description -->
       <textarea
         placeholder="Description (optional)"
         bind:value={newDescription}
         rows={2}
-        class="w-full resize-none rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        class="w-full resize-none rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
       ></textarea>
 
       <!-- CVSS Metric Pickers -->
@@ -1208,7 +1269,7 @@
         type="text"
         placeholder="Note path (optional)"
         bind:value={newNotePath}
-        class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
       />
 
       <!-- MITRE ATT&CK technique -->
@@ -1224,6 +1285,7 @@
               onclick={() => { newMitreTechId = ''; newMitreTechName = ''; newMitreQuery = ''; }}
               class="ml-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
               title="Remove MITRE tag"
+              aria-label="Remove MITRE tag"
             >
               <X size={10} />
             </button>
@@ -1234,7 +1296,7 @@
             placeholder={mitreLoading ? 'Loading MITRE data...' : mitreData.length === 0 ? 'No MITRE data' : 'Search MITRE ATT&CK technique...'}
             bind:value={newMitreQuery}
             disabled={mitreLoading}
-            class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
+            class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
           />
           {#if newMitreSuggestions.length > 0}
             <ul class="absolute left-0 right-0 top-full z-10 mt-0.5 max-h-40 overflow-y-auto rounded border border-border bg-popover shadow-md">
@@ -1260,6 +1322,168 @@
       <button onclick={addFinding} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Finding</button>
       <button onclick={resetAddForm} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
     </div>
-  </div>
+  </ToolModal>
+{/if}
+
+{#if editingId !== null && uiMode === 'modal'}
+  <ToolModal
+    ariaLabel="Edit Finding"
+    onClose={() => (editingId = null)}
+    dialogClass="overflow-hidden"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <Bug size={16} class="shrink-0 text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Edit Finding</h2>
+      <button onclick={() => (editingId = null)} aria-label="Close edit finding form" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
+    </div>
+    <div class="space-y-3 px-5 py-4 max-h-[60vh] overflow-y-auto">
+      <input
+        type="text"
+        placeholder="Finding title (required)"
+        bind:value={editTitle}
+        class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+      <textarea
+        placeholder="Description (optional)"
+        bind:value={editDescription}
+        rows={2}
+        class="w-full resize-none rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+      ></textarea>
+
+      <div class="space-y-1.5 rounded border border-border bg-background p-2">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          CVSS 3.1 Metrics
+        </p>
+        {#each METRIC_OPTIONS as metric (metric.key)}
+          <div>
+            <p class="mb-1 text-[10px] text-muted-foreground">{metric.label}</p>
+            <div class="flex flex-wrap gap-1">
+              {#each metric.options as opt (opt.value)}
+                <button
+                  type="button"
+                  onclick={() => {
+                    editMetrics = { ...editMetrics, [metric.key]: opt.value };
+                    editCvssAutoFilled = true;
+                  }}
+                  class="rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors {editMetrics[metric.key] === opt.value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:bg-accent'}"
+                >
+                  {opt.abbr} - {opt.label}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/each}
+        {#if editCvssResult}
+          <div class="mt-1 flex items-center gap-2">
+            <span class="text-sm font-bold tabular-nums">{editCvssResult.score.toFixed(1)}</span>
+            <span class="text-[10px] text-muted-foreground">/ 10.0 · {editCvssResult.severity}</span>
+          </div>
+        {:else if editCvssScore > 0}
+          <div class="mt-1 flex items-center gap-2">
+            <span class="text-sm font-bold tabular-nums">{editCvssScore.toFixed(1)}</span>
+            <span class="text-[10px] text-muted-foreground">/ 10.0</span>
+          </div>
+        {/if}
+      </div>
+
+      <div class="flex gap-2">
+        <Select
+          size="sm"
+          value={editSeverity}
+          onchange={(v) => {
+            editSeverity = v as FindingSeverity;
+            editCvssAutoFilled = false;
+          }}
+          class="flex-1"
+          options={SEVERITIES.map((sev) => ({ value: sev.value, label: sev.label }))}
+        />
+        <Select
+          size="sm"
+          value={editStatus}
+          onchange={(v) => (editStatus = v as FindingStatus)}
+          class="flex-1"
+          options={STATUSES.map((st) => ({ value: st.value, label: st.label }))}
+        />
+      </div>
+      <Select
+        size="sm"
+        value={editHostId}
+        onchange={(v) => (editHostId = v)}
+        class="w-full"
+        options={[
+          { value: '', label: 'No host' },
+          ...hosts.map((h) => ({
+            value: h.id,
+            label: h.hostname ? `${h.ip} (${h.hostname})` : h.ip
+          }))
+        ]}
+      />
+      <input
+        type="text"
+        placeholder="Note path (optional)"
+        bind:value={editNotePath}
+        class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+
+      <div class="relative">
+        {#if editMitreTechId}
+          <div class="flex items-center justify-between rounded border border-border bg-background px-2 py-1">
+            <div class="flex min-w-0 flex-col">
+              <span class="font-mono text-[10px] font-semibold text-primary">{editMitreTechId}</span>
+              <span class="truncate text-[10px] text-muted-foreground">{editMitreTechName}</span>
+            </div>
+            <button
+              type="button"
+              onclick={() => { editMitreTechId = ''; editMitreTechName = ''; editMitreQuery = ''; }}
+              class="ml-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
+              title="Remove MITRE tag"
+              aria-label="Remove MITRE tag"
+            >
+              <X size={10} />
+            </button>
+          </div>
+        {:else}
+          <input
+            type="text"
+            placeholder={mitreLoading ? 'Loading MITRE data...' : mitreData.length === 0 ? 'No MITRE data' : 'Search MITRE ATT&CK technique...'}
+            bind:value={editMitreQuery}
+            disabled={mitreLoading}
+            class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
+          />
+          {#if editMitreSuggestions.length > 0}
+            <ul class="absolute left-0 right-0 top-full z-10 mt-0.5 max-h-40 overflow-y-auto rounded border border-border bg-popover shadow-md">
+              {#each editMitreSuggestions as technique (technique.external_id)}
+                <li>
+                  <button
+                    type="button"
+                    onclick={() => { editMitreTechId = technique.external_id; editMitreTechName = technique.name; editMitreQuery = ''; }}
+                    class="flex w-full flex-col px-2 py-1.5 text-left hover:bg-accent"
+                  >
+                    <span class="font-mono text-[10px] font-semibold text-primary">{technique.external_id}</span>
+                    <span class="text-[10px] text-foreground">{technique.name}</span>
+                    <span class="text-[10px] text-muted-foreground">{technique.tactic}</span>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        {/if}
+      </div>
+    </div>
+    <div class="flex gap-2 border-t border-border px-5 py-3 bg-muted/30">
+      <button
+        onclick={() => {
+          if (!editingId) return;
+          saveEdit(editingId);
+        }}
+        class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+      >
+        Save Changes
+      </button>
+      <button onclick={() => (editingId = null)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
+    </div>
+  </ToolModal>
 {/if}
 
