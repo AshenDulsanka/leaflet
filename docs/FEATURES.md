@@ -73,11 +73,15 @@ The current UI uses a few consistent patterns across the app:
 - destructive actions use `ConfirmDialog`, including Command Snippets clear-all
 - major panels are mutually exclusive so the interface does not stack competing tools on top of each other
 - engagement and panel dropdowns consistently use the shared `Select` component
-- date/time entry uses `DateTimePicker` for consistent UI while keeping native `datetime-local` behavior under the hood
+- date/time entry uses shared `DateTimePicker` (custom calendar + time picker) while preserving local `YYYY-MM-DDTHH:MM` values
 - pentest-only tools are hidden in general workspaces rather than shown in a disabled state
+- operation log add/edit modal close paths prompt before discarding unsaved form changes
 
 ## Sync
 
 - notes and the database are git-backed for local device sync
-- the sync button performs the push/pull workflow from the toolbar
+- the sync button calls `POST /api/sync` with `action: status | pull | push`
+- status refresh runs on initial mount, window focus, and after sync actions
+- toolbar shows a persistent badge (`In Sync`, `Pull N`, `Push N`, `Diverged`, `Ready to Push`, `Stale Status`) and enables actions from server recommendation/ahead-behind state
+- notification pills provide sync start/success/info/error feedback
 - WAL checkpointing keeps the committed database current before sync pushes

@@ -8,6 +8,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+- Drizzle ORM infrastructure: `drizzle-orm` + `drizzle-kit` installed, `drizzle.config.ts` configured, `src/lib/server/db/schema.ts` mirrors all 15 tables, `src/lib/server/db/index.ts` exposes `getDrizzle()` singleton
+- `event.locals.drizzle` wired in `src/hooks.server.ts` and typed in `src/app.d.ts` — type-safe Drizzle client available in all routes
+- `pnpm db:generate` and `pnpm db:studio` scripts added to `package.json`
+- Screenshot rename modal: fade/fly transitions added for consistent open/close animation
+- Shared `ToolModal` component for engagement tools to standardize overlay/dialog animation and container styling
+- Operation Log and Findings Tracker now include dedicated edit modals in `uiMode='modal'` (inline edit remains for `uiMode='inline'`)
+- Regression component tests added for Attack Chain, Network Topology, and AttackChainNode UX flows (Escape precedence, destructive confirms, node-type visual fallback)
+
+### Removed
+
+- ImageLightbox zoom button removed — zoom was non-functional; lightbox now shows Download + Close only
+- Dead `svelte-ignore` comments in `ImageLightbox` cleaned up after zoom removal
+
+### Fixed
+
+- File tree visual hierarchy: folder children now render with consistent 16px per-level indentation (up from 14px), with a unified padding formula applied directly on buttons/rows so children sit clearly inside their parent.
+- Folder drag-and-drop reorder reliability: same-sibling folder drags now always reorder (top 50% = before, bottom 50% = after) — no more dead center zone that randomly did nothing.
+- Folder self-move guard: dragging a folder onto a file inside itself no longer triggers an invalid self-move call.
+
+### Removed
+
+- Dedicated root drop boxes (top/bottom indicators) removed: any file or folder can now be moved to workspace root by dragging to the very top or bottom edge of the root list — no UI boxes needed.
+- Dead `getFolderDropReorderPosition` helper and `FOLDER_REORDER_EDGE_RATIO` constant removed from `FileTree.svelte`.
+
+### Fixed
+
+- Operation Log modal widened to improve readability and reduce cramped add/edit form layout at typical desktop widths.
+- File-tree reorder/move restore hardened after stale full-tree validation blocked valid drag-drop operations.
+- Invalid URL handling now returns 404 through catch-all route validation instead of surfacing ambiguous route failures.
+- Small-screen desktop warning now opens as a centered modal for clearer constrained-width guidance.
+- Drag/reorder regression hardening: restored stable cross-level note moves and tightened drop-zone handling to reduce missed drops and accidental no-op drags.
+- Workspace selector rollback polish: workspace row action controls now sit adjacent to labels with reliable hit-areas, and reorder interactions no longer interfere with those controls.
+- Calendar/date-time modal usability rebalanced: picker interaction and modal behavior tuned to reduce friction during operation-log add/edit flows.
+- Error handling hardening: dedicated route-level `+error` surfaces and safer user-facing error messages now prevent leaking internal failure details.
+- Added a small-screen desktop warning so constrained desktop widths show a clearer guidance state instead of degraded panel UX.
+
+- Regressions restored: file/folder tree drag-drop now supports cross-level moves (including root top/bottom zones and file-row center-to-parent drop), workspace dropdown regained card-style container with always-visible edit/delete controls, file-row drag dots removed, and destructive delete icons now use stronger red styling in Sidebar workspace rows, Screenshot manager, Operation Log, Findings Tracker, plus improved dark-mode destructive token contrast.
+- Tool-panel loading loop regression: Host Tracker, Credential Vault, and Flag Tracker loaders now depend on workspace changes only, keep cached-first rendering, and avoid reactive self-trigger recursion during background refresh.
+- Workspace rename now performs safe name+slug migration: updates `notes_folder`, renames workspace notes directory, rewrites workspace-scoped path metadata (`note_sort_order`, screenshot links, finding note paths), and rolls back folder move on DB failure.
+- Workspace rename in the editor route now preserves the open note context across slug migration when the active note belongs to the renamed workspace, only falling back to workspace root when there is no migratable active note.
+- Right panel container no longer intercepts interactions when closed (`pointer-events-none` in collapsed state).
+
+- Test hardening pass: AttackChainNode assertions now target observable node chip/label + accent mappings (including initial-access, privesc, lateral-movement, data-exfil + unknown fallback), screenshot filename route test now narrows unknown thrown errors before status assertions, and flow-panel addEdge mocks now avoid unconstrained generics
+- Sidebar regression fixes: sync controls are compact icon-only in the sidebar header (GitBranch icon removed), file open clicks are no longer swallowed by drag/reorder interactions (drag handle introduced), sidebar resize now enforces min/max bounds in both drag logic and CSS, and Host/Credential/Flag panels now use cached-first background refresh with stale-response guards so cached opens do not show blocking spinners
+- Sync notifications now reuse the floating pill system with clearer start/success/info/error feedback for status, pull, and push flows
+- Operation Log modal add/edit close paths now guard against unsaved data loss via discard confirmation
+
+- Attack Chain and Network Topology now open in centered windowed dialogs (Note Graph style) instead of full-screen overlays; both legends were repositioned to avoid overlap with left-side flow controls
+- Attack Chain now uses `$state.raw` flow arrays for nodes/edges to avoid SvelteFlow proxy-performance warnings, and node deletion from the footer list now requires `ConfirmDialog` confirmation
+- Network Topology edge deletion now requires `ConfirmDialog` confirmation before removal
+- Attack Chain nodes now use attack-type-specific visual treatments for faster graph scanability
+- Attack Chain add-step modal now uses fade transitions for smoother open/close and no longer clips the node type dropdown options
+- WYSIWYG wikilink rendering now loads reliably via Milkdown's ProseMirror re-export surface (`@milkdown/kit/prose/*`), removing the fragile direct import path and dynamic-import fallback risk
+- WYSIWYG wikilinks now stay rendered as links during caret movement (before/inside/after `[[...]]`) instead of temporarily showing raw tokens
+- Backspace at/inside a wikilink in WYSIWYG now removes the full `[[...]]` token atomically instead of deleting one character at a time
+- Screenshot rename 400 error — filename init now strips extension before sending; server strips extension defensively before regex validation
+- Escape key in rename forms no longer closes the panel when rename modal is open (`stopPropagation` + early guard added)
+- HostTrackerPanel: host notes field now displayed in the expanded host detail view
+- HostTrackerPanel: Nmap import modal now auto-closes after 2.5 seconds on successful import; skipped when parse errors are present (requiring manual dismiss)
+- Operation Log and Findings Tracker create/edit modal overlays now use smooth fade/fly transitions for consistent open/close behavior
+- Command Snippets modal input typography normalized to match other tool modals (create/edit snippet and variable dialogs)
+- Tool modal consistency pass: Host Tracker Nmap import now uses shared `ToolModal`; Escape handling was hardened across ToolModal/Dialog and key engagement panels with `defaultPrevented` guards plus explicit modal/confirm precedence to reduce parent-panel closes during nested dialogs
+- Workspace rename now uses a modal dialog instead of inline dropdown editing
+- Workspace rename updates local workspace state optimistically
+- File tree workspace-root drop target restored so notes can be moved back to root
+- Workspace switch autosave race fixed by cancelling stale save targets during workspace changes to prevent cross-workspace writes
+- Sync buttons now retry failed or missing status fetches from the existing pull/push controls, without restoring a separate refresh button
+
+### Changed
+
+- File tree drag UX rollback: intrusive root-drop textbox removed from sidebar, subtle top/bottom root drop zones restored in tree, note rows remain draggable from the row body, and file-row drag grip/dots UI was removed.
+- Sync button now matches waypoint pull/push-first UX: manual refresh control removed, status initializes on mount, and status refresh runs after pull/push completion.
+
+- Sync API remains a single `POST /api/sync` endpoint with `action: status | pull | push`; status checks are now local-only (no remote fetch/ahead-behind recommendation pass)
+- Sync button now follows simplified local dirty/not-dirty behavior with local-only status checks, and the sidebar header no longer shows the GitBranch icon
+- Shared `DateTimePicker` now uses a custom calendar + time picker UI while preserving local `YYYY-MM-DDTHH:MM` value contracts for operation log create/edit forms
+
+- `PATCH /api/screenshots/[filename]` now accepts `newFilename` — renames file on disk, updates DB filename column, returns updated `{ filename, url, caption }`
+- ScreenshotPanel: rename action now renames the physical file via PATCH; modal stays open on failure for retry
+- ScreenshotPanel: `uiMode: 'modal' | 'inline'` prop added; rename form renders as centered overlay dialog in modal mode
+- `ScreenshotPanel` in main page now receives `uiMode` prop
+- **Credential Vault:** notes field is now collapsible — hidden by default, revealed via a chevron toggle per credential row; supports multi-line notes with `whitespace-pre-wrap` rendering
+
+### Fixed (continued)
+
+- ImageLightbox: zoomed image now centers in viewport via inner flex centering div; no longer snaps to top-left corner
+- ImageLightbox: download button appends anchor to DOM before triggering click (cross-browser fix)
+
+### Security
+
+- Tree API path-boundary validation hardened to reject out-of-workspace traversal attempts before filesystem or tree operations run.
+- `renameScreenshotFile()` validates `oldFilename` for path traversal, checks workspace ownership, and performs atomic DB-first rename with filesystem rollback on failure
+- `deleteScreenshotMetadata()` now scoped to workspace when `workspaceId` is provided
+- Screenshot `DELETE` handler now distinguishes `404` (file not found / `ENOENT`) from `500` (other I/O errors)
+
+### Added (continued)
+
 - CommandSnippetsPanel: snippet edit — Pencil icon per row opens a pre-populated edit modal; changes saved via `PATCH /api/workspaces/[id]/snippets/[snippetId]`
 - CommandSnippetsPanel: snippet delete now requires `ConfirmDialog` confirmation before removing
 - CommandSnippetsPanel: Variables tab — add-variable form is hidden by default behind a `+` button; per-variable delete styled as destructive red with confirmation; bulk "Clear All" button removed
@@ -23,7 +121,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `GET /api/ai/config` endpoint returning the active AI provider and model name
 - File tree drag-and-drop reordering — drag notes within a folder to reorder them; order persists to SQLite (`note_sort_order` table, migration v13)
 
-### Fixed
+### Fixed (continued 1)
+
 - FileTree drag-reorder dead zones — top-level folder-to-folder reorder, sibling folder-to-folder reorder within the same parent, and file drop between two sibling folders now all register correctly; drop zones are split by position: top 30% = insert before, bottom 30% = insert after, center 40% = move into folder
 - Editor image toolbar: replaced `posAtCoords` with `posAtDOM` for accurate image-node targeting; type guards added to delete and align handlers to prevent operating on non-image nodes
 - HostTrackerPanel: removed stale inline status dropdown from host row, scope dropdown, screenshot edit input, and add-port form from the expanded view; edit form now opens as a centered modal overlay (or inline when `uiMode==='inline'`)
@@ -36,7 +135,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix AiChat `renderMarkdown()` to HTML-escape all user/AI content before injecting into `{@html}`, preventing XSS via crafted AI responses
 - Add `try/catch` error handling to `toggleSubmitted`, `deleteFlag` (FlagTracker), `deleteHost`, `updateHostStatus`, `updateHostScope`, `saveScreenshotFilename`, `deletePort` (HostTracker), `deleteCredential`, `updateStatus` (CredentialVault)
 
-### Added
+### Added (continued 1)
+
 - `WorkspaceCreateModal` CPTS preset toggle — when creating a pentest workspace a checkbox enables the `cpts` preset; the selected preset is stored as `preset = 'cpts'` in the DB and returned on workspace load
 - Methodology toolbar button (`ListChecks`) is now gated to `activeWorkspace.preset === 'cpts'`; pentest workspaces without the CPTS preset no longer show the methodology checklist button
 - Workspace drag-to-reorder in Sidebar — drag a workspace tab to reorder; new position is persisted immediately via `PATCH /api/workspaces/reorder`
@@ -47,15 +147,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Engagement panel modal mode: all 6 engagement panels (`HostTracker`, `CredVault`, `FlagTracker`, `OperationLog`, `FindingsTracker`, `AttackChain`) accept a `uiMode: 'modal' | 'inline'` prop (default `'modal'`); in modal mode, add forms open as centered overlay dialogs instead of inline expanding sections
 - Interaction mode setting in Settings modal — new "Interaction" section toggles between `modal` (default) and `inline` form mode for all engagement panels; preference persisted in `localStorage`
 
-### Fixed
+### Fixed (continued 2)
+
 - Screenshot panel "Click to Insert" overlay is now hover-only (was always visible)
 - Screenshot panel delete `ConfirmDialog` moved outside the `overflow-hidden` aside element so it renders without clipping
 - Dialog button order: confirm/action button is now on the LEFT, cancel on the RIGHT (platform convention)
 - Right panel width no longer flashes when toggling between panels — controlled-width wrapper maintains stable layout
 - Credential Vault: domain and username are now fully visible; source field is shown under the credential row
 - Flag Tracker: delete button is now in the same flex row as the copy button
+- Note Graph: hover highlight now works for connected nodes — hovering a node highlights all direct neighbors and fades unconnected nodes/edges (matches Obsidian interactive graph behavior)
+- Screenshots panel: view, rename, and delete action buttons moved to persistent row below thumbnail; no longer clipped or unclickable at narrow panel widths
+- Host Tracker — create modal: added Notes field; Status and Scope dropdowns moved to same row for consistency with edit modal
+- Host Tracker — edit modal: screenshot field replaced with dropdown populated from uploaded screenshots (with image preview); Add port form added so new ports can be created without closing the modal
+- Host Tracker — expanded view: port rows no longer show delete button (port deletion is edit-modal-only); screenshot filename replaced with clickable image preview that opens lightbox
+- Credential Vault: credential notes now displayed in list view below source; status (valid/invalid/expired/unknown) shown as color-coded badge for instant recognition
+- Command Snippets — Variables tab: header description truncated so Add button is always visible at narrow widths; variable values no longer inline-editable — Pencil/edit and Trash/delete buttons open proper modals instead
+- Command Snippets — Snippets tab: inline add form replaced with proper create modal including Title, Command, Category, Description, and Global fields; description field shown in snippet list view
+- Editor: image delete in hover toolbar now correctly removes the image node (fixes accidental text-line deletion caused by incorrect ProseMirror position lookup)
 
-### Security
+### Security (continued 1)
+
 - FileTree drop handler validates the dragged source path against known in-memory tree paths before processing; in-memory `draggedPath` state is preferred over the `dataTransfer` string fallback to prevent spoofed drag payloads from operating on arbitrary paths
 - Snippet `PATCH` and `DELETE` endpoints: added `workspace_id` ownership check; maximum field length validation on all string inputs; `category` field validated against an allowlist on both `POST /api/workspaces/[id]/snippets` and `PATCH /api/workspaces/[id]/snippets/[snippetId]`
 - Workspace folder creation now routes through `safePath()` instead of direct `path.join` (path traversal prevention)
@@ -63,18 +174,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PATCH /api/workspaces/reorder` hardened: array length capped at 200, IDs deduplicated before processing, workspace-not-found error no longer echoes the supplied ID
 - `GET /api/mitre` error response returns a generic message instead of the upstream HTTP status code
 
-### Added
+### Added (continued 2)
+
 - DB migration v12: `preset TEXT` and `sort_order INTEGER NOT NULL DEFAULT 0` columns on `workspaces` table; default seeded workspace now sets `preset = 'cpts'`; `preset` and `sort_order` fields added to the `Workspace` interface in `src/lib/types.ts`
 - `PATCH /api/workspaces/reorder` — accepts `{ order: string[] }` (workspace IDs in desired display order) and updates each workspace's `sort_order` in a single transaction; validates all IDs exist before committing
 - `GET /api/mitre` — proxies the MITRE Enterprise ATT&CK STIX bundle from GitHub raw, extracts `attack-pattern` objects into a typed `MitreTechnique` array (external_id, name, tactic, description, url), caches in-memory for 24 hours, returns 503 on upstream failure
 - `workspaceId` prop on `Editor` component; when set, screenshot uploads via paste/drag-drop include `workspace_id` in the FormData so screenshots are workspace-scoped in the DB
 
-### Changed
+### Changed (continued 1)
+
 - `GET /api/workspaces` now orders results by `sort_order ASC, created_at ASC` (previously `created_at DESC`)
 - `POST /api/workspaces` accepts optional `preset` field; validated against `['cpts']` allowlist (400 on invalid value)
 - `PATCH /api/workspaces/[id]` allows `sort_order` as an updatable field
 
-### Added
+### Added (continued 3)
+
 - Test coverage for templates API validation/list/delete flows, screenshot upload and filename metadata routes, workspace-scoped screenshot behaviors, and command search helper matching
 - Nessus and Burp Suite XML import for vulnerability findings — upload scanner exports via the Import button in the Findings Tracker panel; auto-deduplicates by title, maps scanner severity to FindingSeverity, and links findings to tracked hosts by IP (Issue #32)
 - Network Topology Diagram panel for pentest workspaces — interactive canvas with host nodes (colour-coded by status: up/down/rooted/unknown), drag-to-connect edges, position persistence, and Ctrl+Shift+T shortcut (Issue #31, migration v10)
@@ -106,7 +220,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Note templates via Command Palette — five pentest-oriented templates (Recon, Vulnerability Finding, Exploit Log, Post-Exploitation Checklist, Active Directory) accessible from a new **Templates** tab in the Command Palette; inserting a template writes raw markdown directly into the editor (no bash code-block wrapper); template search filters by title and description; `NoteTemplate` type added to `src/lib/types.ts`; data module at `src/lib/data/templates.ts` with `searchTemplates` helper covered by unit tests ([#19](https://github.com/AshenDulsanka/leaflet/issues/19))
 - Copy-to-clipboard buttons on all engagement panel values (HostTracker IP/hostname/ports, CredentialVault username/secret, FlagTracker flag values) via shared `CopyButton` component with 1.5 s green-check confirmation state ([#18](https://github.com/AshenDulsanka/leaflet/issues/18))
 
-### Changed
+### Changed (continued 2)
+
 - Screenshot listing is workspace-scoped when `workspaceId` is supplied, and empty workspace IDs are rejected
 - Screenshot manager cards now use filename labels with preview/insert/delete actions; caption and linked-note controls are no longer exposed in that UI
 - Destructive actions now use `ConfirmDialog` instead of native `confirm()` dialogs
@@ -119,13 +234,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Date/time fields now use `DateTimePicker`, a wrapper around native `datetime-local`
 - Engagement tool action icons are always visible instead of hover-only
 
-### Removed
+### Removed (continued)
+
 - Markdown report generator panel (`ReportGeneratorPanel.svelte`), its API route (`/api/workspaces/[id]/report`), and all references (toolbar button, `reportOpen` state, mutual-exclusion effect). A standalone report service will be built separately and integrated via API in the future. ([#17](https://github.com/AshenDulsanka/leaflet/issues/17))
 
-### Security
+### Security (continued 2)
+
 - Fix path traversal bypass in `safePath()`: replaced `startsWith` check with `relative()` comparison to prevent sibling-directory escape (e.g. `/data/notes-evil` bypassing `/data/notes` prefix check)
 
-### Added
+### Added (continued 4)
+
 - Logo and wordmark SVGs (`logo.svg`, `typo.svg`) displayed as combined brand mark in the app toolbar; SVGs use `currentColor` and `hsl(var(--background))` for theme-adaptive rendering in both light and dark mode
 - Favicon (`static/favicon.svg`) created from the logo mark with brand-blue fill (`#3b82f6`) — visible on all browser tab backgrounds
 - Dynamic page title: browser tab shows the current note name (without `.md` extension), falling back to "Leaflet"
@@ -134,11 +252,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Note Graph: converted from full-screen overlay to centered popup modal (`85vw × 80vh`) with click-outside-to-close
 - Note Graph: theme-aware canvas colors — background, links, labels, and highlight colors resolved from live Tailwind CSS and update automatically on dark/light toggle
 
-### Changed
+### Changed (continued 4)
+
 - Agent description fields shortened to single-sentence summaries across all 8 `.github/agents/*.agent.md` files
 - Note Graph API (`/api/notes/graph`) now accepts optional `workspace` query parameter for workspace scoping, validated through `safePath()` with outer error boundary
 
-### Fixed
+### Fixed (continued 3)
 
 - Resolved lint/compile regressions in Note Graph, toolbar trusted SVG rendering, Host Tracker click handlers, Screenshot panel, Command Snippets variable cleanup, Findings Tracker imports, and route test import paths
 
@@ -151,7 +270,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - XSS in Note Graph tooltip — `nodeLabel` template injected `n.name` and `n.folder` directly into HTML without escaping; added `escapeHtml()` helper applied to all interpolated values
 - Note Graph memory leak on close — `onDestroy` called `_destructor()` which does not exist in force-graph; replaced with `pauseAnimation()` to stop the animation RAF loop
 
-### Added
+### Added (continued 5)
 
 - Auto-manage `.gitkeep` for empty workspace folders — placeholder is written on directory creation and removed when the first note is saved ([#6](https://github.com/AshenDulsanka/leaflet/issues/6))
 - Floating pill notification system replaces inline sync status — success/warning/error pills appear bottom-right with 4 s auto-dismiss and a draining progress bar ([#7](https://github.com/AshenDulsanka/leaflet/issues/7))
@@ -159,7 +278,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI pipeline: `pnpm check` → `pnpm lint` → `pnpm build` → `pnpm test` on every PR to `main` and push to `development` ([#9](https://github.com/AshenDulsanka/leaflet/issues/9))
 - Vitest unit test suite covering path-safety helpers, notes directory resolution, DB singleton lifecycle, WAL checkpoint, and connection reload
 
-### Changed
+### Changed (continued 3)
 
 - Wikilink autocomplete dropdown: added search input at top for filtering notes in large workspaces; results list now shows up to 50 items (was 8); "No notes found" empty state shown when search has no matches
 - Wikilink autocomplete dropdown: improved accessibility — `role="combobox"` on search input with `aria-controls`, `aria-activedescendant`, `aria-autocomplete`; Tab key accepts highlighted suggestion (same as Enter)
@@ -169,6 +288,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-04-08
 
 ### Added
+
 - WYSIWYG editor (Milkdown) with source mode toggle (CodeMirror)
 - LaTeX math rendering (inline and block)
 - Syntax-highlighted code blocks
@@ -187,6 +307,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker setup for development and production
 
 ### Fixed
+
 - Sync API now detects the Git repo root instead of checking the data directory directly
 - Git cross-filesystem boundary discovery enabled so the repo root is found correctly inside Docker
 - SSL certificates, Git identity env vars, and GitHub token auth added to Docker sync environment

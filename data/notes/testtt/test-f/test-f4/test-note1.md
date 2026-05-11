@@ -1,3 +1,1 @@
-<br />
-
 [[test-note]]

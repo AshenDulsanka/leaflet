@@ -59,7 +59,8 @@ This project also serves as a reference for **agent orchestration** and open-sou
 
 **Sync**
 - One-click git push and pull
-- Status indicator: up-to-date, unpushed changes, behind remote
+- Persistent sync badge with recommendation-driven pull/push actions and stale/error states
+- Status refresh on load, window focus, and after pull/push actions
 
 ## Screenshots
 
@@ -76,6 +77,7 @@ This project also serves as a reference for **agent orchestration** and open-sou
 | Editor (Source) | CodeMirror 6 (svelte-codemirror-editor) |
 | Math | @milkdown/plugin-math + KaTeX |
 | Database | SQLite via better-sqlite3 |
+| ORM | drizzle-orm (better-sqlite3 dialect, synchronous) |
 | Icons | @lucide/svelte |
 | Package Manager | pnpm |
 | Runtime | Node.js 22 LTS |
@@ -104,6 +106,13 @@ cd leaflet
 cp .env.example .env
 pnpm install
 pnpm dev
+```
+
+Optional database tooling:
+
+```bash
+pnpm db:generate   # regenerate Drizzle migration files from schema
+pnpm db:studio     # open Drizzle Studio (visual DB browser)
 ```
 
 ## Production
@@ -136,6 +145,13 @@ AI features are silently disabled when no API key is configured.
 Notes are `.md` files in `data/notes/`. The database (`data/notes.db`) stores workspace and engagement metadata. Both are tracked by Git.
 
 Use the Sync button in the app toolbar, or manually:
+
+Toolbar sync behavior:
+
+- Calls `POST /api/sync` with `action: status | pull | push`
+- Keeps a persistent badge (In Sync, Pull N, Push N, Diverged, Ready to Push, Stale Status)
+- Enables pull/push buttons from server recommendation and ahead/behind counts
+- Reuses the notification pill system for start/success/info/error feedback
 
 ```bash
 # On device A (after working)

@@ -28,7 +28,7 @@ Leaflet exposes JSON routes for notes, workspaces, screenshots, user templates, 
 | GET, PATCH, DELETE | `/api/screenshots/[filename]` | Read, update, or delete a screenshot |
 | GET, POST | `/api/ai/chat` and `/api/ai/summarize` | AI assistant endpoints |
 | GET | `/api/ai/status` | Provider availability |
-| GET, POST | `/api/sync/status`, `/api/sync/push`, `/api/sync/pull` | Git sync |
+| POST | `/api/sync` | Git sync (`action: status | pull | push`) |
 
 ## Templates API
 
@@ -180,6 +180,45 @@ Deletes the file and its metadata row.
 - returns `204` on success
 - returns `404` if the file does not exist
 
+## Sync API
+
+### POST `/api/sync`
+
+Single sync endpoint for status checks and git actions.
+
+Request body:
+
+```json
+{
+  "action": "status"
+}
+```
+
+Allowed actions:
+
+- `status` - returns repository sync status
+- `pull` - pulls latest remote changes
+- `push` - stages `data/`, commits with an auto message, and pushes
+
+`status` response fields:
+
+- `initialized` (`boolean`) - git repo detected
+- `branch` (`string`) - current branch name
+- `hasRemote` (`boolean`) - `origin` exists
+- `dirty` (`boolean`) - local unstaged/staged changes exist
+- `changes` (`string | null`) - raw porcelain status summary
+- `ahead` (`number`) - local commits ahead of upstream
+- `behind` (`number`) - commits behind upstream
+- `recommendation` (`'push' | 'pull' | 'both' | 'none'`) - server suggestion used by toolbar UI
+
+Common responses:
+
+- `200` for successful status/pull/push
+- `400` for invalid JSON, invalid `action`, missing repo, or missing remote
+- `401` for auth/authorization failures
+- `409` when push is rejected because remote is ahead
+- `500` for unexpected git/runtime failures
+
 ## Notes, Workspaces, AI, and Sync
 
 The remaining route families are intentionally summarized here because their behavior is broader and documented in the product pages:
@@ -187,4 +226,4 @@ The remaining route families are intentionally summarized here because their beh
 - notes routes validate paths before filesystem access and only operate on Markdown files
 - workspace routes provide list, create, read, update, and delete behavior for the active workspace model
 - AI routes expose assistant, summary, and status endpoints
-- sync routes wrap git status, pull, and push actions for the local repository
+- sync route wraps git status, pull, and push actions through `POST /api/sync`

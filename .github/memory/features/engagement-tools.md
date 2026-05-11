@@ -26,3 +26,7 @@ in-progress
 - All DB queries must scope by `workspace_id`. See [[patterns/workspace-scoped-queries]].
 - Some panels are incomplete; all are in-progress toward v1 release.
 - File size goal: each panel should be ≤ 500 lines. Currently many exceed 1000 lines.
+- Attack Chain and Network Topology flow tools now use centered windowed dialogs (Note Graph style), with legends positioned away from left-side flow controls.
+- Attack Chain add-step modal uses fade transitions and hardened Escape behavior to avoid parent dialog close conflicts.
+- Attack Chain nodes use attack-type-specific visual styling for quicker at-a-glance differentiation.
+- Network Topology edge deletion and Attack Chain node deletion are both guarded by ConfirmDialog before destructive action.

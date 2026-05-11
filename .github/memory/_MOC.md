@@ -11,7 +11,9 @@ tags:
 > Graph view: color-coded by type — blue=decisions, green=patterns, yellow=learnings, purple=sessions, red=reviews.
 
 ## Sessions
-- [[sessions/2026-04-27-analyze-codebase]] — Initial vault population from analyze-codebase skill
+- [[sessions/2025-07-15-analyze-codebase]] — Initial vault population from analyze-codebase skill
+- [[sessions/2026-04-29-flow-panels-doc-sync]] — Document flow-panel UX updates and refresh memory links
+- [[sessions/2026-04-30-regression-fix-doc-finalization]] — Finalize regression-fix changelog + memory coverage
 
 ## Decisions
 - [[decisions/ADR-001-sveltekit-framework]] — SvelteKit 5 as Application Framework
@@ -22,6 +24,7 @@ tags:
 - [[decisions/ADR-006-ai-optional]] — AI Features Are Optional and Provider-Agnostic
 - [[decisions/ADR-007-uimode-prop]] — uiMode Prop Convention for Engagement Panels
 - [[decisions/ADR-008-component-size-limit]] — 500-Line Component File Limit
+- [[decisions/ADR-009-flow-canvas-dialog-behavior]] — Windowed Dialog + ConfirmDialog Standard for Flow Canvases
 
 ## Active Patterns
 - [[patterns/safe-path-validation]] — safePath() for All Filesystem Operations
@@ -38,7 +41,7 @@ tags:
 - [[learnings/sveltekit-import-extensions]] — No .js Extension in SvelteKit TypeScript Imports
 
 ## Reviews
-<!-- Code-reviewer/Security-auditor/UX-reviewer append here -->
+- [[reviews/2026-04-29-flow-panels-doc-review]] — Docs-only review of flow-panel UX changelog and memory consistency
 
 ## Features
 - [[features/editor]] — Milkdown WYSIWYG + CodeMirror dual editor
