@@ -1,9 +1,10 @@
 {
-  "version": "1.2.3",
-  "installedAt": "2026-04-27T05:02:39.589Z",
+  "version": "1.3.2",
+  "installedAt": "2026-05-25T19:40:08.623Z",
   "source": "AshenDulsanka/agent-arche",
   "sourceType": "npm",
+  "scope": "orchestration",
   "platform": "copilot",
   "subscription": "pro",
-  "hash": "sha512-71YcNn9zBNTwcDYs/W3D+N8XNfdlcEUgxUKmSOkAxTOrUXEAyl4BnxBf0N407NiUMc4z5O74qROjRy95njBZOA=="
+  "hash": "sha512-powXobdEK9FN1llyJ8eMl+a3T0ZOSsAnk676K0vw0xB3FekJ5lQSaLc9S17e8gbyoGnHD8uYwh4CfcYR+07WlA=="
 }

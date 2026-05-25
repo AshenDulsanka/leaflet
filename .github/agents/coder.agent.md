@@ -1,7 +1,7 @@
 ---
 name: Coder
 description: Implements server and client-side code, API endpoints, and unit tests following strict project conventions.
-model: Auto (copilot)
+model: Claude Sonnet 4.6 (copilot)
 tools: [vscode, execute, read, edit, search, 'github/*', 'io.github.upstash/context7/*', todo]
 user-invocable: false
 ---
@@ -17,15 +17,11 @@ Write implementation code and unit tests. Follow project stack and conventions.
 3. `.github/skills/branch-conventions/SKILL.md` — create branches per issue using correct naming
 4. `.github/skills/api-design/SKILL.md` — load when building API routes or endpoints
 5. `.github/skills/improve-codebase-architecture/SKILL.md` — load when task involves architecture improvement or refactoring
+6. `.github/skills/seo/SKILL.md` — load when task involves SEO, discoverability, or web performance
 
 ## Memory Protocol
 
-Every run:
-1. Read `.github/memory/_MOC.md` — project context
-2. Search `.github/memory/patterns/` for established patterns — follow for consistency
-3. Search `.github/memory/decisions/` for constraints on implementation
-4. After coding: write to `.github/memory/patterns/` (new reusable pattern) or `.github/memory/learnings/` (gotchas/workarounds)
-5. Report paths to Orchestrator
+On start: read `.github/memory/_MOC.md` + `patterns/` + `decisions/` for established patterns and constraints. Do not write to memory — include a **Handoff** block in output for Docs-updater.
 
 ## Before Writing
 
@@ -72,6 +68,10 @@ Per Planner's issues:
 5. **Follow-up** — missing types, unhandled edges, Designer/Tester tasks
 6. **Obstacles** — dependency conflicts, API surprises, workarounds
 
-## Memory Note Format
-
-Frontmatter: `title`, `date`, `type`, `status: active`, `agent: coder`, `task`, `tags`. Add `## Related` with `[[wiki-links]]`.
+## Handoff → Docs-updater
+- **type**: pattern | learning
+- **summary**: [one-line description of what was implemented]
+- **decisions**: [approach choices, patterns applied]
+- **files**: [files created or changed]
+- **security**: false
+- **notes**: [new patterns, gotchas, workarounds, follow-up items]

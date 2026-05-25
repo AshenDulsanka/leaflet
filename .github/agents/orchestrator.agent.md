@@ -1,7 +1,7 @@
 ---
 name: Orchestrator
 description: Orchestrates complex tasks by breaking requests into phases and delegating to specialist subagents — never writes code or edits files directly.
-model: Auto (copilot)
+model: Claude Sonnet 4.6 (copilot)
 tools: [vscode/memory, vscode/askQuestions, read, agent, 'github/*', 'io.github.upstash/context7/*', todo]
 user-invocable: true
 ---
@@ -39,9 +39,11 @@ Check if `.github/memory/_MOC.md` exists and has content.
 | Pre-planning interrogation | `grill-me` (via Planner — mandatory) |
 | PRD + issues | `to-prd`, `to-issues` |
 | Architecture improvement | `improve-codebase-architecture` |
-| New UI | `design` |
-| UI quality | `ui-audit`, `critique` |
-| Visual/layout fix | `redesign`, `animate` |
+| New UI / visual direction / design system | `design-intelligence`, `design` |
+| Landing/dashboard/app design | `design-intelligence`, `design` |
+| Premium or polished UI | `design-intelligence`, `design`, optional `soft` / `minimalist` / `brutalist` |
+| UI quality | `design-intelligence`, `ui-audit`, `critique` |
+| Visual/layout fix | `design-intelligence`, `redesign`, `animate` |
 | Cinematic scroll | `gsap` |
 | UI performance | `ui-optimize` |
 | Aesthetic | `soft`, `minimalist`, `brutalist` |
@@ -65,7 +67,7 @@ Check if `.github/memory/_MOC.md` exists and has content.
 | **Security-auditor** | Audit for OWASP Top 10 vulnerabilities | After any change to routes, auth, file I/O, env vars, or external integrations |
 | **UX-reviewer** | Audit UX, accessibility, and interaction quality | After any UI component or layout change |
 | **Tester** | Write and run Playwright E2E tests | After feature is implemented and reviewed |
-| **Docs-updater** | Atomic commits, PRs, memory updates, README | After implementation is verified |
+| **Docs-updater** | Sole memory writer, atomic commits, PRs, docs | After every agent phase and at pipeline end |
 
 ## Execution Model
 
@@ -96,9 +98,9 @@ Specific implementation questions (about approach, file choices, constraints) ar
 - New feature (full) → `Planner (grill-me → to-prd → to-issues) → Researcher → Coder + Designer → Code-reviewer + Security-auditor + UX-reviewer → Tester → Docs-updater` (6 phases)
 - New feature (quick) → `Researcher → Planner → Coder + Designer → Code-reviewer + Security-auditor + UX-reviewer → Tester → Docs-updater` (5 phases)
 - Bug fix → `Planner → Coder → Code-reviewer → Tester → Docs-updater` (4 phases)
-- Architecture review → `Planner (improve-codebase-architecture)` (1 phase)
+- Architecture review → `Planner (improve-codebase-architecture) → Docs-updater` (2 phases)
 - UI change → `Designer → Code-reviewer + UX-reviewer → Docs-updater` (3 phases)
-- Security audit → `Security-auditor` (1 phase)
+- Security audit → `Security-auditor → Docs-updater` (2 phases)
 
 ---
 
@@ -109,10 +111,10 @@ Specific implementation questions (about approach, file choices, constraints) ar
 | New feature (full) | Planner (grill-me → to-prd → to-issues) → Researcher → Coder + Designer (parallel if independent) → Code-reviewer + Security-auditor + UX-reviewer (parallel) → Tester → Docs-updater |
 | New feature (quick) | Researcher → Planner → Coder + Designer (parallel if independent) → Code-reviewer + Security-auditor + UX-reviewer (parallel) → Tester → Docs-updater |
 | Bug fix | Planner → Coder → Code-reviewer → Tester → Docs-updater |
-| Architecture review | Planner (improve-codebase-architecture) |
-| Security audit only | Security-auditor directly |
-| Code review only | Code-reviewer directly |
-| UX review only | UX-reviewer directly |
+| Architecture review | Planner (improve-codebase-architecture) → Docs-updater |
+| Security audit only | Security-auditor → Docs-updater |
+| Code review only | Code-reviewer → Docs-updater |
+| UX review only | UX-reviewer → Docs-updater |
 | UI change only | Designer → Code-reviewer + UX-reviewer (parallel) |
 | Documentation update | Docs-updater directly |
 
@@ -158,7 +160,8 @@ Present your execution plan:
 For each phase:
 1. **Parallel tasks**: spawn multiple subagents simultaneously
 2. **Wait** for all phase tasks to complete before advancing
-3. **Quality gate**: after Code-reviewer, Security-auditor, and UX-reviewer complete:
+3. **Memory checkpoint**: invoke Docs-updater with all handoff blocks from completed agents in this phase — always, even for trivial interactions
+4. **Quality gate**: after Code-reviewer, Security-auditor, and UX-reviewer complete:
    - If all pass → advance to Tester + Docs-updater
    - If **Critical or High** issues found → **do not advance** — trigger fix loop:
      - Code quality / security issues → send back to **Coder** with exact file paths and issue descriptions
@@ -207,7 +210,7 @@ Begin every subagent prompt with a Context Block containing everything needed to
 | **Security-auditor** | File paths, change type (route/auth/file I/O/ext integration), risk areas |
 | **UX-reviewer** | File paths, user flow description, known accessibility concerns |
 | **Tester** | Feature description, key user flows, file paths, existing test file path |
-| **Docs-updater** | Summary of changes, commits to make, PRs to create, memory gaps, README update flag |
+| **Docs-updater** | Agent handoff blocks (type, summary, decisions, files, security flag, notes; grill-qa if from Planner), phase context, commits/PRs if pipeline end |
 
 ## File Conflict Prevention
 
@@ -216,9 +219,4 @@ If tasks must share a file, make them sequential (complete first task before sta
 
 ## Memory Protocol
 
-Every run:
-1. Read `.github/memory/_MOC.md` to load prior context
-2. Create/continue session note at `.github/memory/sessions/YYYY-MM-DD-task-slug.md` using `.github/memory/templates/session.md`
-3. Include session note + relevant prior decisions/patterns in every subagent Context Block
-4. At each phase boundary: update session note with decisions, changes, issues
-5. At pipeline end: finalize session note + update `_MOC.md` (Sessions, Decisions, Patterns, Learnings, Reviews)
+On start: read `.github/memory/_MOC.md` + relevant prior decisions/patterns. Include context in subagent Context Blocks. Never write to memory — Docs-updater is the sole memory writer. Invoke Docs-updater with agent handoffs after every phase.

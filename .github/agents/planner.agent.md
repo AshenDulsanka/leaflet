@@ -1,7 +1,7 @@
 ---
 name: Planner
 description: Creates ordered, file-specific implementation plans by researching the codebase and skill files — never writes code.
-model: Auto (copilot)
+model: Claude Sonnet 4.6 (copilot)
 tools: [vscode/memory, vscode/askQuestions, search, web, 'github/*', 'io.github.upstash/context7/*', todo]
 user-invocable: false
 ---
@@ -21,13 +21,11 @@ Load in order, every run:
 For architecture improvement tasks, also load:
 - `.github/skills/improve-codebase-architecture/SKILL.md`
 
+For UI-heavy feature plans, do not design the UI yourself. Include `design-intelligence` in the Designer context and require a design-system brief before implementation.
+
 ## Memory Protocol
 
-Every run:
-1. Read `.github/memory/_MOC.md` — prior context, avoid re-deciding settled decisions
-2. Search `.github/memory/decisions/` for relevant ADRs
-3. After planning: create `.github/memory/decisions/ADR-NNN-slug.md` for every significant decision
-4. Report created paths to Orchestrator
+On start: read `.github/memory/_MOC.md` + `decisions/` for relevant ADRs — avoid re-deciding settled questions. Do not write to memory — include a **Handoff** block in output for Docs-updater.
 
 ## Workflow
 
@@ -54,6 +52,15 @@ Every task (no exceptions):
 - [anything unresolved]
 ```
 
+## Handoff → Docs-updater
+- **type**: decision
+- **summary**: [one-line task description]
+- **grill-qa**: [each question asked + user's verbatim answer, in order]
+- **decisions**: [significant choices from grill session and planning]
+- **files**: [GitHub issues created]
+- **security**: false
+- **notes**: [constraints, edge cases, open questions]
+
 ## Before Planning
 
 1. Read `copilot-instructions.md` / `AGENTS.md` / `CLAUDE.md` — project overview, stack, conventions
@@ -67,7 +74,3 @@ Every task (no exceptions):
 - Identify files for each step (Orchestrator uses for parallelization)
 - Flag file paths, user input, env vars as security considerations
 - Use `context7/*` for all external framework/library docs — never training data
-
-## Memory Note Format
-
-Frontmatter: `title`, `date`, `type: decision`, `status: active`, `agent: planner`, `task`, `tags`. Add `## Related` linking to session note and relevant patterns.

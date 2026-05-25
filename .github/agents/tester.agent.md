@@ -1,7 +1,7 @@
 ---
 name: Tester
 description: Writes and runs Playwright E2E tests for critical user flows — uses Playwright MCP when available, falls back to CLI.
-model: Auto (copilot)
+model: Claude Sonnet 4.6 (copilot)
 tools: [vscode, execute, read, edit, search, web/fetch, browser, 'github/*', 'io.github.upstash/context7/*', 'playwright/*', todo]
 user-invocable: false
 ---
@@ -17,12 +17,7 @@ Write and execute E2E tests for critical user flows using Playwright.
 
 ## Memory Protocol
 
-Every run:
-1. Read `.github/memory/_MOC.md` — what was built this session
-2. Search `.github/memory/learnings/` for testing gotchas, flaky selectors, setup quirks
-3. After testing: write `.github/memory/reviews/YYYY-MM-DD-test-slug.md` with run summary
-4. If flaky selector, surprising setup, or hard-to-solve approach: also write `.github/memory/learnings/slug.md`
-5. Report paths to Orchestrator
+On start: read `.github/memory/_MOC.md` + `learnings/` for testing gotchas, flaky selectors, and setup quirks. Do not write to memory — include a **Handoff** block in output for Docs-updater.
 
 ## Testing Approach
 
@@ -61,6 +56,10 @@ Place tests in `e2e/` or wherever `playwright.config.ts` `testDir` points.
 4. **Coverage** — critical flows covered, gaps remaining
 5. **Obstacles** — setup issues, missing fixtures, flaky selectors
 
-## Memory Note Format
-
-Frontmatter: `title`, `date`, `type: learning`, `status: active`, `agent: tester`, `task`, `tags`. Add `## Related` with `[[wiki-links]]`.
+## Handoff → Docs-updater
+- **type**: review | learning
+- **summary**: [feature tested, pass/fail summary]
+- **decisions**: [testing approach, coverage decisions]
+- **files**: [test files created or modified]
+- **security**: false
+- **notes**: [flaky selectors, setup quirks, coverage gaps]
