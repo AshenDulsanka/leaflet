@@ -67,7 +67,7 @@
     "bits-ui": "^2.3.0",
     "clsx": "^2.1.1",
     "d3": "^7.9.0",
-    "drizzle-orm": "^0.43.0",
+    "drizzle-orm": "^0.43.1",
     "force-graph": "^1.51.1",
     "katex": "^0.16.22",
     "svelte-codemirror-editor": "^2.1.0",
@@ -79,5 +79,6 @@
       "better-sqlite3",
       "esbuild"
     ]
-  }
+  },
+  "packageManager": "pnpm@11.0.9+sha512.34ce82e6780233cf9cad8685029a8f81d2e06196c5a9bad98879f7424940c6817c4e4524fb7d38b8553ceed48b9758b8ebaf1abd3600c232c4c8cf7366086f38"
 }
