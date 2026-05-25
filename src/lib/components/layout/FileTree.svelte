@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { FileText, Folder, FolderOpen, ChevronRight, FilePlus, FolderPlus, Pencil, Trash2, Pin, PinOff } from '@lucide/svelte';
+  import { FileText, Folder, FolderOpen, ChevronRight, FilePlus, FolderPlus, Pencil, Trash2, Pin, PinOff, FolderInput, Home } from '@lucide/svelte';
   import type { FileNode } from '$lib/types';
   import FileTree from './FileTree.svelte';
   import Dialog from '$lib/components/modals/Dialog.svelte';
+  import { fly, fade } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
 
   interface Props {
     nodes: FileNode[];
@@ -36,12 +38,17 @@
   // Drag-and-drop: highlight folder target or root zones while dragging
   let dropTargetPath = $state<string | null>(null);
 
+  // Edge drop zone indicator (top/bottom of the list)
+  let edgeDropActive = $state<'top' | 'bottom' | null>(null);
 
   // Sibling reorder drag indicator
   let reorderDragOver = $state<{ path: string; position: 'before' | 'after' } | null>(null);
 
   // Module-level dragged path — avoids browser protected-mode getData() restriction during dragover
   let draggedPath = $state<string | null>(null);
+
+  // Move dialog: currently selected target folder path ('' = root)
+  let moveTo = $state<string>('');
 
   // Flat set of all known paths (including children) for drag validation
   function flattenPathTypeMap(ns: FileNode[]): Map<string, FileNode['type']> {
@@ -108,6 +115,7 @@
     document.body.classList.remove(DRAG_BODY_CLASS);
     reorderDragOver = null;
     dropTargetPath = null;
+    edgeDropActive = null;
   }
 
   function getFileDropReorderPosition(pct: number): 'before' | 'after' {
@@ -316,6 +324,71 @@
     }
   }
 
+  // Build a flat list of all folder options from the tree, excluding a subtree
+  function getFolderOptions(
+    ns: FileNode[],
+    excludePath: string
+  ): Array<{ path: string; name: string; depth: number }> {
+    const result: Array<{ path: string; name: string; depth: number }> = [];
+    function traverse(items: FileNode[], d: number) {
+      for (const n of items) {
+        if (n.type === 'folder') {
+          if (n.path === excludePath || n.path.startsWith(excludePath + '/')) continue;
+          result.push({ path: n.path, name: n.name, depth: d });
+          if (n.children) traverse(n.children, d + 1);
+        }
+      }
+    }
+    traverse(ns, 0);
+    return result;
+  }
+
+  // Edge drop zone handlers
+  function handleEdgeDragOver(e: DragEvent, position: 'top' | 'bottom') {
+    const fromPath = getDragSourcePath();
+    if (!fromPath || !knownPaths.has(fromPath)) return;
+    if (isInvalidFolderDropTarget(fromPath, nodes[0]?.path ?? '')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    edgeDropActive = position;
+  }
+
+  function handleEdgeDragLeave(e: DragEvent) {
+    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+      edgeDropActive = null;
+    }
+  }
+
+  function handleEdgeDrop(e: DragEvent, position: 'top' | 'bottom') {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const fromPath = getDragSourcePathFromEvent(e);
+      if (!fromPath || !knownPaths.has(fromPath)) return;
+      if (nodes.length === 0) return;
+
+      const parentPath = getDirname(nodes[0].path);
+      const fromParentPath = getDirname(fromPath);
+
+      if (fromParentPath === parentPath && onReorderNotes) {
+        // Same-level reorder: place before first or after last
+        const allPaths = nodes.map((n) => n.path);
+        const newPaths = allPaths.filter((p) => p !== fromPath);
+        if (position === 'top') {
+          newPaths.unshift(fromPath);
+        } else {
+          newPaths.push(fromPath);
+        }
+        onReorderNotes(newPaths);
+      } else {
+        // Cross-parent: move into this list's parent folder
+        onMoveItem?.(fromPath, parentPath);
+      }
+    } finally {
+      clearDragState();
+    }
+  }
+
   let contextMenu = $state<{ x: number; y: number; node: FileNode } | null>(null);
 
   // Dialog state
@@ -323,7 +396,8 @@
     | { type: 'rename'; node: FileNode }
     | { type: 'delete'; node: FileNode }
     | { type: 'newFile'; parent: FileNode }
-    | { type: 'newFolder'; parent: FileNode };
+    | { type: 'newFolder'; parent: FileNode }
+    | { type: 'move'; node: FileNode };
   let activeDialog = $state<DialogKind | null>(null);
 
   function toggleFolder(path: string) {
@@ -365,6 +439,12 @@
     closeContextMenu();
     expanded[node.path] = true;
     activeDialog = { type: 'newFolder', parent: node };
+  }
+
+  function handleMove(node: FileNode) {
+    closeContextMenu();
+    moveTo = getDirname(node.path);
+    activeDialog = { type: 'move', node };
   }
 </script>
 
@@ -445,11 +525,88 @@
   {/if}
 {/if}
 
+{#if activeDialog?.type === 'move'}
+  {@const d = activeDialog}
+  {@const excludePath = d.node.type === 'folder' ? d.node.path : '__no_exclude__'}
+  {@const folderOptions = getFolderOptions(dragValidationNodes, excludePath)}
+  <div
+    transition:fade={{ duration: 150 }}
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    onclick={(e) => { if (e.target === e.currentTarget) activeDialog = null; }}
+    role="presentation"
+  >
+    <div
+      transition:fly={{ y: 10, duration: 200, easing: cubicOut }}
+      tabindex="-1"
+      class="w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-2xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="move-dialog-title"
+      onkeydown={(e) => { if (e.key === 'Escape') activeDialog = null; }}
+    >
+      <h2 id="move-dialog-title" class="mb-1 text-sm font-semibold text-foreground">Move "{d.node.name}"</h2>
+      <p class="mb-3 text-xs text-muted-foreground">Select a destination folder</p>
+      <div class="max-h-60 overflow-y-auto rounded-md border border-border">
+        <button
+          class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent
+                 {moveTo === '' ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}"
+          onclick={() => (moveTo = '')}
+        >
+          <Home size={13} class="shrink-0" />
+          <span>/ (root)</span>
+        </button>
+        {#each folderOptions as opt (opt.path)}
+          <button
+            class="flex w-full items-center gap-2 py-1.5 pr-3 text-left text-sm hover:bg-accent
+                   {moveTo === opt.path ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}"
+            style="padding-left: {opt.depth * 12 + 12}px"
+            onclick={() => (moveTo = opt.path)}
+          >
+            <Folder size={13} class="shrink-0 text-yellow-500 dark:text-yellow-400" />
+            <span class="truncate">{opt.name}</span>
+          </button>
+        {/each}
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button
+          class="rounded-md px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+          onclick={() => (activeDialog = null)}
+        >
+          Cancel
+        </button>
+        <button
+          class="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90
+                 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={moveTo === getDirname(d.node.path)}
+          onclick={() => {
+            const fromPath = d.node.path;
+            const dest = moveTo;
+            activeDialog = null;
+            onMoveItem?.(fromPath, dest);
+          }}
+        >
+          Move Here
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <div
   class="filetree-list-root relative"
   data-testid={depth === 0 ? 'filetree-root-list' : undefined}
   role="presentation"
 >
+<!-- Top edge drop zone: drop here to place before the first item -->
+{#if draggedPath !== null && nodes.length > 0}
+  <div
+    class="rounded transition-colors {edgeDropActive === 'top' ? 'h-2 bg-primary/40' : 'h-1'}"
+    ondragover={(e) => handleEdgeDragOver(e, 'top')}
+    ondragleave={handleEdgeDragLeave}
+    ondrop={(e) => handleEdgeDrop(e, 'top')}
+    role="presentation"
+  ></div>
+{/if}
 {#each nodes as node (node.path)}
   <div>
     {#if node.type === 'folder'}
@@ -543,6 +700,16 @@
     {/if}
   </div>
 {/each}
+<!-- Bottom edge drop zone: drop here to place after the last item -->
+{#if draggedPath !== null && nodes.length > 0}
+  <div
+    class="rounded transition-colors {edgeDropActive === 'bottom' ? 'h-2 bg-primary/40' : 'h-1'}"
+    ondragover={(e) => handleEdgeDragOver(e, 'bottom')}
+    ondragleave={handleEdgeDragLeave}
+    ondrop={(e) => handleEdgeDrop(e, 'bottom')}
+    role="presentation"
+  ></div>
+{/if}
 </div>
 
 <style>
@@ -594,6 +761,12 @@
         {/if}
       </button>
     {/if}
+    <button
+      class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+      onclick={() => handleMove(menuNode)}
+    >
+      <FolderInput size={13} /> Move to...
+    </button>
     <button
       class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-accent"
       onclick={() => handleDelete(menuNode)}
