@@ -464,6 +464,11 @@
     // Load workspaces first so we can scope the tree to the active workspace
     await loadWorkspaces();
     const urlPath = $page.params.path;
+    if (!urlPath && activeWorkspace) {
+      await loadTree(activeWorkspace.notes_folder ?? '');
+      await goto(workspaceRootUrl(activeWorkspace), { replaceState: true, noScroll: true, keepFocus: true });
+      return;
+    }
     if (urlPath) {
       const matchedWorkspace = workspaces.find(
         (ws) => urlPath === ws.notes_folder || urlPath.startsWith(`${ws.notes_folder}/`)

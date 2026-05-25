@@ -17,7 +17,7 @@ function encodePathForUrl(path: string): string {
 export const load: PageLoad = async ({ fetch, params }) => {
 	const rawPath = (params.path ?? '').replace(/^\/+|\/+$/g, '');
 
-	// Root path remains valid and workspace selection logic on page handles it.
+	// Root path: the page's onMount will redirect to the active workspace.
 	if (!rawPath) {
 		return {};
 	}
