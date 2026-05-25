@@ -110,17 +110,19 @@
     </button>
   </div>
 
-  <div class={`grid lg:grid-cols-[minmax(0,1.45fr)_minmax(12rem,1fr)] ${isCompact ? 'gap-2.5 p-3' : 'gap-3 p-4'}`}>
+  <div class={isCompact ? 'flex flex-col gap-2.5 p-3' : 'grid lg:grid-cols-[minmax(0,1.45fr)_minmax(12rem,1fr)] gap-3 p-4'}>
     <CalendarGrid
       month={visibleMonth}
       selectedDate={selectedKey}
       onchangeMonth={handleMonthChange}
       onselectDate={handleSelectDate}
+      {density}
     />
 
     <TimeField
       value={internalValue}
       onchange={updateValue}
+      {density}
     />
   </div>
 </div>

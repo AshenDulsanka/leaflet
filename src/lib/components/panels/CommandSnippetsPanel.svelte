@@ -34,9 +34,10 @@
     workspaceId: string | null;
     onInsert?: (text: string) => void;
     onClose: () => void;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { workspaceId, onInsert, onClose }: Props = $props();
+  let { workspaceId, onInsert, onClose, uiMode = 'modal' }: Props = $props();
 
   let snippets = $state<Snippet[]>([]);
   let variables = $state<SnippetVar[]>([]);
@@ -68,6 +69,7 @@
   let addVarError = $state('');
   let editingVar = $state<SnippetVar | null>(null);
   let editVarValue = $state('');
+  let editVarName = $state('');
 
   $effect(() => {
     if (workspaceId) {
@@ -253,12 +255,19 @@
     const persisted = variables.find((sv) => sv.id === v.id);
     if (!persisted) return;
     editingVar = persisted;
+    editVarName = persisted.name;
     editVarValue = persisted.value;
   }
 
   async function saveEditVar() {
     if (!editingVar || !workspaceId) return;
-    await saveVariable(editingVar.name, editVarValue.trim());
+    const newName = editVarName.trim().toUpperCase();
+    if (!newName || !/^[A-Z][A-Z0-9_-]*$/.test(newName)) return;
+    if (newName !== editingVar.name) {
+      await fetch(`/api/workspaces/${workspaceId}/variables/${editingVar.id}`, { method: 'DELETE' });
+      variables = variables.filter((v) => v.id !== editingVar!.id);
+    }
+    await saveVariable(newName, editVarValue.trim());
     editingVar = null;
   }
 
@@ -441,6 +450,55 @@
 
       <!-- Snippet groups -->
       <div class="flex-1 overflow-y-auto">
+        {#if addingSnippet && uiMode === 'inline'}
+          <div class="border-b border-border bg-muted/40 p-3 space-y-2">
+            <label class="block space-y-0.5">
+              <span class="text-[10px] text-muted-foreground">Title <span class="text-destructive">*</span></span>
+              <input
+                type="text"
+                placeholder="Title"
+                bind:value={newTitle}
+                class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+            <label class="block space-y-0.5">
+              <span class="text-[10px] text-muted-foreground">Command <span class="text-destructive">*</span></span>
+              <textarea
+                placeholder="Command (use &#123;VARIABLE&#125; for substitution)"
+                bind:value={newCommand}
+                rows={3}
+                class="w-full resize-none rounded border border-border bg-background px-2 py-1 font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
+              ></textarea>
+            </label>
+            <div class="space-y-0.5">
+              <span class="block text-[10px] text-muted-foreground">Category</span>
+              <Select size="sm" options={categoryOptions} value={newCategory} onchange={(v) => { newCategory = v; }} />
+            </div>
+            <label class="block space-y-0.5">
+              <span class="text-[10px] text-muted-foreground">Description</span>
+              <input
+                type="text"
+                placeholder="Description"
+                bind:value={newDescription}
+                class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+            <label class="flex items-center gap-2 text-[10px] text-muted-foreground">
+              <input type="checkbox" bind:checked={isGlobal} class="rounded" />
+              Global (all workspaces)
+            </label>
+            <div class="flex gap-2">
+              <button
+                onclick={addSnippet}
+                class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+              >Add</button>
+              <button
+                onclick={() => (addingSnippet = false)}
+                class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
+              >Cancel</button>
+            </div>
+          </div>
+        {/if}
         {#if loading}
           <div class="flex items-center justify-center py-8">
             <RefreshCw size={16} class="animate-spin text-muted-foreground" />
@@ -521,6 +579,48 @@
                       <span class="text-[9px] text-muted-foreground/60">global</span>
                     {/if}
                   </div>
+                  {#if editingSnippet?.id === snippet.id && uiMode === 'inline'}
+                    <div class="border-t border-border bg-muted/40 px-3 pb-3 pt-2 space-y-2">
+                      <label class="block space-y-0.5">
+                        <span class="text-[10px] text-muted-foreground">Title <span class="text-destructive">*</span></span>
+                        <input
+                          type="text"
+                          bind:value={editTitle}
+                          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </label>
+                      <label class="block space-y-0.5">
+                        <span class="text-[10px] text-muted-foreground">Command <span class="text-destructive">*</span></span>
+                        <textarea
+                          bind:value={editCommand}
+                          rows={3}
+                          class="w-full resize-none rounded border border-border bg-background px-2 py-1 font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
+                        ></textarea>
+                      </label>
+                      <div class="space-y-0.5">
+                        <span class="block text-[10px] text-muted-foreground">Category</span>
+                        <Select size="sm" options={categoryOptions} value={editCategory} onchange={(v) => { editCategory = v; }} />
+                      </div>
+                      <label class="block space-y-0.5">
+                        <span class="text-[10px] text-muted-foreground">Description</span>
+                        <input
+                          type="text"
+                          bind:value={editDescription}
+                          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </label>
+                      <div class="flex gap-2">
+                        <button
+                          onclick={saveEditSnippet}
+                          class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                        >Save</button>
+                        <button
+                          onclick={() => (editingSnippet = null)}
+                          class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
+                        >Cancel</button>
+                      </div>
+                    </div>
+                  {/if}
                 {/each}
               {/if}
             </div>
@@ -545,6 +645,49 @@
             <Plus size={11} />
           </button>
         </div>
+
+        {#if showAddVar && uiMode === 'inline'}
+          <div class="border-b border-border bg-muted/40 p-3 space-y-2">
+            <label class="block space-y-0.5">
+              <span class="text-[10px] text-muted-foreground">Name <span class="text-destructive">*</span></span>
+              <input
+                type="text"
+                placeholder="NAME (e.g. TARGET_IP)"
+                bind:value={newVarName}
+                class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              {#if addVarError}<p class="mt-0.5 text-[10px] text-destructive">{addVarError}</p>{/if}
+            </label>
+            <label class="block space-y-0.5">
+              <span class="text-[10px] text-muted-foreground">Value</span>
+              <input
+                type="text"
+                placeholder="Value (optional)"
+                bind:value={newVarValue}
+                class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+            <div class="flex gap-2">
+              <button
+                onclick={() => {
+                  const name = newVarName.trim().toUpperCase();
+                  if (!name) { addVarError = 'Name is required.'; return; }
+                  if (!/^[A-Z][A-Z0-9_-]*$/.test(name)) { addVarError = 'Must start with a letter; only A-Z, 0-9, _ or - allowed.'; return; }
+                  addVarError = '';
+                  void saveVariable(name, newVarValue.trim());
+                  newVarName = '';
+                  newVarValue = '';
+                  closeAddVarModal();
+                }}
+                class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+              >Add</button>
+              <button
+                onclick={closeAddVarModal}
+                class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
+              >Cancel</button>
+            </div>
+          </div>
+        {/if}
 
         <div class="border-b border-border px-3 py-2">
           <input
@@ -583,6 +726,40 @@
                 <span class="w-10 flex-shrink-0"></span>
               {/if}
             </div>
+            {#if editingVar?.id === v.id && uiMode === 'inline'}
+              <div class="rounded border border-border bg-muted/40 px-2 pb-2 pt-1.5 -mt-1 space-y-1.5">
+                <label class="block space-y-0.5">
+                  <span class="text-[10px] text-muted-foreground">Name <span class="text-destructive">*</span></span>
+                  <input
+                    type="text"
+                    bind:value={editVarName}
+                    class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </label>
+                {#if editVarName.trim().toUpperCase() !== editingVar.name}
+                  <p class="text-[10px] text-amber-500">Renaming won't update snippets using <code class="font-mono">{'{' + editingVar.name + '}'}</code> - update them manually.</p>
+                {/if}
+                <label class="block space-y-0.5">
+                  <span class="text-[10px] text-muted-foreground">Value</span>
+                  <input
+                    type="text"
+                    placeholder="Enter value"
+                    bind:value={editVarValue}
+                    class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </label>
+                <div class="flex gap-1.5">
+                  <button
+                    onclick={saveEditVar}
+                    class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                  >Save</button>
+                  <button
+                    onclick={() => (editingVar = null)}
+                    class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
+                  >Cancel</button>
+                </div>
+              </div>
+            {/if}
           {/each}
 
           {#if filteredVars.length === 0}
@@ -616,7 +793,7 @@
   />
 {/if}
 
-{#if editingSnippet}
+{#if editingSnippet && uiMode !== 'inline'}
   <ToolModal
     ariaLabel="Edit snippet"
     onClose={() => (editingSnippet = null)}
@@ -676,7 +853,7 @@
   </ToolModal>
 {/if}
 
-{#if addingSnippet}
+{#if addingSnippet && uiMode !== 'inline'}
   <ToolModal
     ariaLabel="Add snippet"
     onClose={() => (addingSnippet = false)}
@@ -740,7 +917,7 @@
   </ToolModal>
 {/if}
 
-{#if showAddVar}
+{#if showAddVar && uiMode !== 'inline'}
   <ToolModal
     ariaLabel="Add variable"
     onClose={closeAddVarModal}
@@ -803,7 +980,7 @@
   </ToolModal>
 {/if}
 
-{#if editingVar}
+{#if editingVar && uiMode !== 'inline'}
   <ToolModal
     ariaLabel="Edit variable"
     onClose={() => (editingVar = null)}
@@ -822,8 +999,16 @@
       </div>
       <div class="space-y-2">
         <div>
-          <p class="text-[10px] text-muted-foreground">Name</p>
-          <p class="mt-0.5 rounded border border-border bg-muted px-2 py-1.5 font-mono text-sm text-muted-foreground">{'{' + editingVar.name + '}'}</p>
+          <label class="text-sm text-muted-foreground" for="edit-var-name">Name</label>
+          <input
+            id="edit-var-name"
+            type="text"
+            bind:value={editVarName}
+            class="mt-0.5 w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          {#if editVarName.trim().toUpperCase() !== editingVar.name}
+            <p class="mt-1 text-[10px] text-amber-500">Renaming won't update snippets using <code class="font-mono">{'{' + editingVar.name + '}'}</code> - update them manually.</p>
+          {/if}
         </div>
         <div>
           <label class="text-sm text-muted-foreground" for="edit-var-value">Value</label>

@@ -400,30 +400,29 @@
     </div>
     {/if}
 
-    <!-- Add-entry form -->
-    {#if addingEntry && uiMode === 'inline'}
-      <div class="border-b border-border bg-muted/40 p-3">
-        <OperationLogEntryForm
-          variant="inline"
-          description={newDescription}
-          category={newCategory}
-          hostId={newHostId}
-          timestamp={newTimestamp}
-          categoryOptions={CATEGORIES}
-          hostOptions={hostOptions}
-          submitLabel="Add entry"
-          onDescriptionChange={(value) => (newDescription = value)}
-          onCategoryChange={(value) => (newCategory = value)}
-          onHostChange={(value) => (newHostId = value)}
-          onTimestampChange={(value) => (newTimestamp = value)}
-          onSubmit={addEntry}
-          onCancel={requestCloseAddForm}
-        />
-      </div>
-    {/if}
-
     <!-- Timeline -->
     <div class="flex-1 overflow-y-auto">
+      <!-- Add-entry form -->
+      {#if addingEntry && uiMode === 'inline'}
+        <div class="border-b border-border bg-muted/40 p-3">
+          <OperationLogEntryForm
+            variant="inline"
+            description={newDescription}
+            category={newCategory}
+            hostId={newHostId}
+            timestamp={newTimestamp}
+            categoryOptions={CATEGORIES}
+            hostOptions={hostOptions}
+            submitLabel="Add entry"
+            onDescriptionChange={(value) => (newDescription = value)}
+            onCategoryChange={(value) => (newCategory = value)}
+            onHostChange={(value) => (newHostId = value)}
+            onTimestampChange={(value) => (newTimestamp = value)}
+            onSubmit={addEntry}
+            onCancel={requestCloseAddForm}
+          />
+        </div>
+      {/if}
       {#if loading}
         <div class="flex items-center justify-center py-8">
           <RefreshCw size={14} class="animate-spin text-muted-foreground" />

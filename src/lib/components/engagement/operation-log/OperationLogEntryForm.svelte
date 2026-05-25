@@ -143,7 +143,7 @@
   <DateTimePicker
     value={timestamp}
     onchange={onTimestampChange}
-    density="comfortable"
+    density={isInline ? 'compact' : 'comfortable'}
     class="w-full"
   />
 

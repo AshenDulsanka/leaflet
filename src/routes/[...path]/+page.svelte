@@ -1176,6 +1176,7 @@
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (snippetsOpen = false)}
         onInsert={(text) => { insertIntoEditor?.(text); }}
+        {uiMode}
       />
     {/if}
 

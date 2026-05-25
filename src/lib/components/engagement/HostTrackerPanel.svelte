@@ -80,6 +80,8 @@
   let editScope = $state<Scope>('unknown');
   let editNotes = $state('');
   let editScreenshotFilename = $state('');
+  let editScreenshotChoice = $state<string>('');
+  let editScreenshotUploadFile = $state<File | null>(null);
   let editAddingPort = $state(false);
   let editNewPortNum = $state('');
   let editNewPortService = $state('');
@@ -377,7 +379,21 @@
     if (!workspaceId || !editingHostId) return;
     const targetWorkspaceId = workspaceId;
     const targetHostId = editingHostId;
-    const trimmedFilename = editScreenshotFilename.trim();
+    // Resolve screenshot filename from dropdown choice
+    let resolvedScreenshotFilename = editScreenshotFilename;
+    if (editScreenshotChoice !== 'upload') {
+      resolvedScreenshotFilename = editScreenshotChoice;
+    } else if (editScreenshotUploadFile) {
+      const fd = new FormData();
+      fd.append('image', editScreenshotUploadFile);
+      fd.append('workspace_id', targetWorkspaceId);
+      const upRes = await fetch('/api/screenshots', { method: 'POST', body: fd });
+      if (upRes.ok) {
+        const data = await upRes.json() as { url: string };
+        resolvedScreenshotFilename = data.url.replace('/api/screenshots/', '');
+      }
+    }
+    const trimmedFilename = resolvedScreenshotFilename.trim();
     if (trimmedFilename && /\.{2}|\/|\\/.test(trimmedFilename)) {
       console.error('Invalid screenshot filename — path traversal rejected');
       return;
@@ -393,7 +409,7 @@
           notes: editNotes.trim(),
           status: editStatus,
           scope: editScope,
-          screenshot_filename: editScreenshotFilename.trim()
+          screenshot_filename: trimmedFilename
         })
       });
       if (!res.ok) {
@@ -420,6 +436,8 @@
     editScope = host.scope;
     editNotes = host.notes;
     editScreenshotFilename = host.screenshot_filename;
+    editScreenshotChoice = host.screenshot_filename || '';
+    editScreenshotUploadFile = null;
     editAddingPort = false;
     editNewPortNum = '';
     editNewPortService = '';
@@ -428,10 +446,10 @@
   }
 
   async function addPortInEdit(): Promise<void> {
-    if (!workspaceId || !editingHostId || !editNewPortNum.trim()) return;
+    if (!workspaceId || !editingHostId || editNewPortNum === '') return;
     const targetWorkspaceId = workspaceId;
     const targetHostId = editingHostId;
-    const num = parseInt(editNewPortNum);
+    const num = parseInt(String(editNewPortNum));
     if (isNaN(num) || num < 1 || num > 65535) return;
     try {
       const res = await fetch(`/api/workspaces/${targetWorkspaceId}/hosts/${targetHostId}`, {
@@ -926,18 +944,45 @@
                     class="w-full resize-none rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                   ></textarea>
                 </label>
-                <label class="block space-y-0.5">
+                <!-- Screenshot -->
+                <div class="space-y-1">
                   <span class="text-[10px] text-muted-foreground">Screenshot</span>
-                  <input
-                    type="text"
-                    placeholder="filename.png"
-                    bind:value={editScreenshotFilename}
-                    class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </label>
-                {#if host.ports.length > 0}
-                  <div class="space-y-0.5">
+                  {#if screenshotsLoading}
+                    <p class="text-[10px] text-muted-foreground">Loading…</p>
+                  {:else}
+                    <Select
+                      size="sm"
+                      value={editScreenshotChoice}
+                      onchange={(v) => (editScreenshotChoice = v)}
+                      options={[
+                        { value: '', label: 'None' },
+                        ...availableScreenshots.map((s) => ({ value: s.filename, label: s.filename })),
+                        { value: 'upload', label: 'Upload new…' }
+                      ]}
+                    />
+                    {#if editScreenshotChoice === 'upload'}
+                      <input
+                        type="file" accept="image/*"
+                        onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; editScreenshotUploadFile = f ?? null; }}
+                        class="w-full text-[10px] text-muted-foreground"
+                        aria-label="Upload screenshot"
+                      />
+                    {/if}
+                  {/if}
+                </div>
+                <!-- Ports -->
+                <div class="space-y-0.5">
+                  <div class="flex items-center justify-between">
                     <p class="text-[10px] text-muted-foreground">Ports</p>
+                    <button
+                      onclick={() => (editAddingPort = !editAddingPort)}
+                      class="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                      type="button"
+                    >
+                      <Plus size={9} /> Add
+                    </button>
+                  </div>
+                  {#if host.ports.length > 0}
                     <div class="rounded border border-border overflow-hidden">
                       <table class="w-full text-[10px]">
                         <tbody>
@@ -959,8 +1004,35 @@
                         </tbody>
                       </table>
                     </div>
-                  </div>
-                {/if}
+                  {/if}
+                  {#if editAddingPort}
+                    <div class="flex items-center gap-1 pt-0.5">
+                      <input
+                        type="number" placeholder="Port" min="1" max="65535"
+                        bind:value={editNewPortNum}
+                        class="w-14 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <Select size="xs" value={editNewPortProto} onchange={(v) => (editNewPortProto = v)} options={[{ value: 'tcp', label: 'TCP' }, { value: 'udp', label: 'UDP' }]} />
+                      <input
+                        type="text" placeholder="Service"
+                        bind:value={editNewPortService}
+                        class="flex-1 min-w-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <button
+                        onclick={addPortInEdit}
+                        class="flex h-5 w-5 items-center justify-center rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                        type="button"
+                        aria-label="Confirm add port"
+                      ><Plus size={9} /></button>
+                      <button
+                        onclick={() => { editAddingPort = false; editNewPortNum = ''; editNewPortService = ''; editNewPortProto = 'tcp'; }}
+                        class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent"
+                        type="button"
+                        aria-label="Cancel add port"
+                      ><X size={9} /></button>
+                    </div>
+                  {/if}
+                </div>
                 <div class="flex gap-2 pt-1">
                   <button
                     onclick={updateHost}
@@ -1260,6 +1332,12 @@
               class="w-full text-xs text-muted-foreground mt-1"
               aria-label="Upload screenshot"
             />
+          {:else if newScreenshotChoice}
+            <img
+              src="/api/screenshots/{encodeURIComponent(newScreenshotChoice)}"
+              alt="Screenshot preview"
+              class="mt-1 max-h-32 w-full rounded border border-border object-contain"
+            />
           {/if}
         {/if}
       </div>
@@ -1361,16 +1439,24 @@
         {:else}
           <Select
             size="sm"
-            value={editScreenshotFilename}
-            onchange={(v) => (editScreenshotFilename = v)}
+            value={editScreenshotChoice}
+            onchange={(v) => (editScreenshotChoice = v)}
             options={[
               { value: '', label: 'None' },
-              ...availableScreenshots.map((s) => ({ value: s.filename, label: s.filename }))
+              ...availableScreenshots.map((s) => ({ value: s.filename, label: s.filename })),
+              { value: 'upload', label: 'Upload new…' }
             ]}
           />
-          {#if editScreenshotFilename}
+          {#if editScreenshotChoice === 'upload'}
+            <input
+              type="file" accept="image/*"
+              onchange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; editScreenshotUploadFile = f ?? null; }}
+              class="w-full text-xs text-muted-foreground mt-1"
+              aria-label="Upload screenshot"
+            />
+          {:else if editScreenshotChoice}
             <img
-              src="/api/screenshots/{encodeURIComponent(editScreenshotFilename)}"
+              src="/api/screenshots/{encodeURIComponent(editScreenshotChoice)}"
               alt="Screenshot preview"
               class="mt-1 max-h-32 w-full rounded border border-border object-contain"
             />
