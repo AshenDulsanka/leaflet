@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-05-26
 
 ### Added
 
@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CI dependency installs now use pnpm 11 `allowBuilds` approvals so required native/codegen install scripts run during `pnpm install --frozen-lockfile`.
 - File tree visual hierarchy: folder children now render with consistent 16px per-level indentation (up from 14px), with a unified padding formula applied directly on buttons/rows so children sit clearly inside their parent.
 - Folder drag-and-drop reorder reliability: same-sibling folder drags now always reorder (top 50% = before, bottom 50% = after) — no more dead center zone that randomly did nothing.
 - Folder self-move guard: dragging a folder onto a file inside itself no longer triggers an invalid self-move call.
