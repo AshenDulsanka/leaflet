@@ -15,5 +15,6 @@ tags:
 When creating a note from Toolbar at workspace root, use normalized `baseName` for both folder and root paths. Using raw `fileName` in root branch bypasses `.md` normalization and can create extensionless notes.
 
 ## Related
+
 - [[features/editor]]
 - [[features/file-tree]]

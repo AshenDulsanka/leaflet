@@ -15,6 +15,7 @@ tags:
 # Windowed Flow Panels for Engagement Tools
 
 ## Pattern
+
 For large canvas tools (SvelteFlow/D3), prefer Note Graph-style centered dialogs over full-screen overlays:
 
 - Backdrop: `fixed inset-0 ... bg-black/50 backdrop-blur-sm`
@@ -29,6 +30,7 @@ For large canvas tools (SvelteFlow/D3), prefer Note Graph-style centered dialogs
 - Avoid `overflow-hidden`/scroll wrappers around custom `Select` fields in modals when dropdown options are clipped
 
 ## Related
+
 - [[patterns/confirm-dialog-destructive]]
 - [[patterns/engagement-panel-uimode]]
 - [[features/engagement-tools]]

@@ -2,7 +2,7 @@
 name: Researcher
 description: Deep-dives into prior art, library docs, CVEs, and GitHub issues before implementation — never writes code or edits files.
 model: Claude Sonnet 4.6 (copilot)
-tools: [search, web, 'github/*', 'io.github.upstash/context7/*', read]
+tools: [search, web, "github/*", "io.github.upstash/context7/*", read]
 user-invocable: false
 ---
 
@@ -22,6 +22,7 @@ On start: read `.github/memory/_MOC.md` + `learnings/` + `decisions/` — avoid 
 ## When Invoked
 
 Research needed for:
+
 - Unclear implementation path or third-party integrations
 - Security-sensitive topics (auth, crypto, file handling)
 - Technology that may have changed significantly
@@ -57,6 +58,7 @@ Research needed for:
 ```
 
 ## Handoff → Docs-updater
+
 - **type**: learning | decision
 - **summary**: [one-line description of research done]
 - **decisions**: [recommended approach and why]

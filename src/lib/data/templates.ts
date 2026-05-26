@@ -1,12 +1,16 @@
-import type { NoteTemplate } from '$lib/types';
+import type { NoteTemplate } from "$lib/types";
 
 let _id = 0;
-const t = (f: Omit<NoteTemplate, 'id'>): NoteTemplate => ({ id: String(++_id), ...f });
+const t = (f: Omit<NoteTemplate, "id">): NoteTemplate => ({
+  id: String(++_id),
+  ...f,
+});
 
 export const NOTE_TEMPLATES: NoteTemplate[] = [
   t({
-    title: 'Recon',
-    description: 'Initial reconnaissance notes - scope, ports, web, SMB/LDAP and key findings',
+    title: "Recon",
+    description:
+      "Initial reconnaissance notes - scope, ports, web, SMB/LDAP and key findings",
     content: `# Recon - {TARGET}
 
 ## Scope
@@ -65,8 +69,9 @@ export const NOTE_TEMPLATES: NoteTemplate[] = [
   }),
 
   t({
-    title: 'Vulnerability Finding',
-    description: 'Document a single vulnerability - CVSS score, PoC steps, impact, and remediation',
+    title: "Vulnerability Finding",
+    description:
+      "Document a single vulnerability - CVSS score, PoC steps, impact, and remediation",
     content: `# Vulnerability Finding - {TITLE}
 
 ## Summary
@@ -131,8 +136,9 @@ Recommended fix or mitigation.
   }),
 
   t({
-    title: 'Exploit Log',
-    description: 'Step-by-step record of an exploitation attempt - commands used, outcome, and next path',
+    title: "Exploit Log",
+    description:
+      "Step-by-step record of an exploitation attempt - commands used, outcome, and next path",
     content: `# Exploit Log - {TARGET}
 
 ## Date / Time
@@ -193,8 +199,9 @@ Recommended fix or mitigation.
   }),
 
   t({
-    title: 'Post-Exploitation Checklist',
-    description: 'Systematic checklist covering identity, enumeration, persistence, lateral movement, and flags',
+    title: "Post-Exploitation Checklist",
+    description:
+      "Systematic checklist covering identity, enumeration, persistence, lateral movement, and flags",
     content: `# Post-Exploitation Checklist - {TARGET}
 
 ## Identity
@@ -265,8 +272,9 @@ Recommended fix or mitigation.
   }),
 
   t({
-    title: 'Active Directory',
-    description: 'Domain enumeration, attack path, Kerberoast/ASREPRoast findings, ACL abuse, and domain compromise',
+    title: "Active Directory",
+    description:
+      "Domain enumeration, attack path, Kerberoast/ASREPRoast findings, ACL abuse, and domain compromise",
     content: `# Active Directory - {DOMAIN}
 
 ## Environment
@@ -351,10 +359,15 @@ Recommended fix or mitigation.
 ];
 
 /** Search templates by title or description (case-insensitive substring) */
-export function searchTemplates(query: string, templates = NOTE_TEMPLATES): NoteTemplate[] {
+export function searchTemplates(
+  query: string,
+  templates = NOTE_TEMPLATES,
+): NoteTemplate[] {
   if (!query.trim()) return templates;
   const q = query.toLowerCase();
   return templates.filter(
-    (t) => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q),
+    (t) =>
+      t.title.toLowerCase().includes(q) ||
+      t.description.toLowerCase().includes(q),
   );
 }

@@ -14,11 +14,14 @@ tags:
 # Route Handler Tests Must Provide RequestEvent.url
 
 ## Learning
+
 When directly invoking SvelteKit route handlers in tests, include a URL object in the mocked event if handler code reads url.searchParams.
 
 ## Why
+
 Missing url in mocked RequestEvent causes runtime TypeError even though real SvelteKit runtime always provides it.
 
 ## Related
+
 - [[patterns/api-route-validation]]
 - [[features/screenshots]]

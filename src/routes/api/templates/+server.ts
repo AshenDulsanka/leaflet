@@ -53,22 +53,33 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   const content = bodyRecord.content;
   const workspaceId = bodyRecord.workspaceId;
 
-  if (typeof title !== "string" || !title.trim()) throw error(400, "title is required");
-  if (typeof content !== "string" || !content.trim()) throw error(400, "content is required");
-  if (description !== undefined && description !== null && typeof description !== "string") {
+  if (typeof title !== "string" || !title.trim())
+    throw error(400, "title is required");
+  if (typeof content !== "string" || !content.trim())
+    throw error(400, "content is required");
+  if (
+    description !== undefined &&
+    description !== null &&
+    typeof description !== "string"
+  ) {
     throw error(400, "description must be a string");
   }
-  if (workspaceId !== undefined && workspaceId !== null && typeof workspaceId !== "string") {
+  if (
+    workspaceId !== undefined &&
+    workspaceId !== null &&
+    typeof workspaceId !== "string"
+  ) {
     throw error(400, "workspaceId must be a string or null");
   }
 
   const trimmedTitle = title.trim();
   const trimmedContent = content.trim();
-  const trimmedDescription = typeof description === "string" ? description.trim() : "";
-  const trimmedWorkspaceId = typeof workspaceId === "string" ? workspaceId.trim() : workspaceId;
+  const trimmedDescription =
+    typeof description === "string" ? description.trim() : "";
+  const trimmedWorkspaceId =
+    typeof workspaceId === "string" ? workspaceId.trim() : workspaceId;
 
-  if (trimmedTitle.length > 255)
-    throw error(400, "title too long (max 255)");
+  if (trimmedTitle.length > 255) throw error(400, "title too long (max 255)");
   if (trimmedDescription.length > 1000)
     throw error(400, "description too long (max 1000)");
   if (trimmedContent.length > 500_000)

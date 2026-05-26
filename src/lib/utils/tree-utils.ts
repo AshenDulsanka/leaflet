@@ -2,16 +2,23 @@
  * Pure recursive utility functions for operating on the FileNode tree.
  * All functions are stateless and return new structures instead of mutating.
  */
-import type { FileNode } from '$lib/types';
+import type { FileNode } from "$lib/types";
 
 /**
  * Move a node from `fromPath` into the folder at `toFolderPath` (top-level if empty).
  * Returns a new tree with the node relocated and all descendant paths rewritten.
  */
-export function applyMove(nodes: FileNode[], fromPath: string, toFolderPath: string): FileNode[] {
-  const filename = fromPath.split('/').pop()!;
+export function applyMove(
+  nodes: FileNode[],
+  fromPath: string,
+  toFolderPath: string,
+): FileNode[] {
+  const filename = fromPath.split("/").pop()!;
 
-  function removeNode(items: FileNode[]): { found: FileNode | null; remaining: FileNode[] } {
+  function removeNode(items: FileNode[]): {
+    found: FileNode | null;
+    remaining: FileNode[];
+  } {
     const remaining: FileNode[] = [];
     let found: FileNode | null = null;
     for (const n of items) {
@@ -28,15 +35,20 @@ export function applyMove(nodes: FileNode[], fromPath: string, toFolderPath: str
     return { found, remaining };
   }
 
-  function rewritePaths(node: FileNode, oldPrefix: string, newPrefix: string): FileNode {
-    const newPath =
-      node.path.startsWith(oldPrefix + '/')
-        ? newPrefix + node.path.slice(oldPrefix.length)
-        : node.path;
+  function rewritePaths(
+    node: FileNode,
+    oldPrefix: string,
+    newPrefix: string,
+  ): FileNode {
+    const newPath = node.path.startsWith(oldPrefix + "/")
+      ? newPrefix + node.path.slice(oldPrefix.length)
+      : node.path;
     return {
       ...node,
       path: newPath,
-      children: node.children?.map((c) => rewritePaths(c, oldPrefix, newPrefix))
+      children: node.children?.map((c) =>
+        rewritePaths(c, oldPrefix, newPrefix),
+      ),
     };
   }
 
@@ -46,9 +58,15 @@ export function applyMove(nodes: FileNode[], fromPath: string, toFolderPath: str
       return [...items, rewritePaths(movedNode, fromPath, newPath)];
     }
     return items.map((n) => {
-      if (n.path === toFolderPath && n.type === 'folder') {
+      if (n.path === toFolderPath && n.type === "folder") {
         const newPath = `${toFolderPath}/${filename}`;
-        return { ...n, children: [...(n.children ?? []), rewritePaths(movedNode, fromPath, newPath)] };
+        return {
+          ...n,
+          children: [
+            ...(n.children ?? []),
+            rewritePaths(movedNode, fromPath, newPath),
+          ],
+        };
       }
       if (n.children) {
         return { ...n, children: insertNode(n.children, movedNode) };
@@ -66,13 +84,18 @@ export function applyMove(nodes: FileNode[], fromPath: string, toFolderPath: str
  * Reorder nodes at whichever tree level contains the given paths.
  * Returns a new tree with the affected level reordered.
  */
-export function applyReorder(nodes: FileNode[], orderedPaths: string[]): FileNode[] {
+export function applyReorder(
+  nodes: FileNode[],
+  orderedPaths: string[],
+): FileNode[] {
   if (nodes.some((n) => orderedPaths.includes(n.path))) {
-    return orderedPaths.map((p) => nodes.find((n) => n.path === p)!).filter(Boolean);
+    return orderedPaths
+      .map((p) => nodes.find((n) => n.path === p)!)
+      .filter(Boolean);
   }
   return nodes.map((n) => ({
     ...n,
-    children: n.children ? applyReorder(n.children, orderedPaths) : undefined
+    children: n.children ? applyReorder(n.children, orderedPaths) : undefined,
   }));
 }
 
@@ -83,7 +106,7 @@ export function applyReorder(nodes: FileNode[], orderedPaths: string[]): FileNod
 export function flattenTree(nodes: FileNode[]): string[] {
   const paths: string[] = [];
   for (const node of nodes) {
-    if (node.type === 'file') {
+    if (node.type === "file") {
       paths.push(node.path);
     } else if (node.children) {
       paths.push(...flattenTree(node.children));
@@ -99,8 +122,8 @@ export function flattenTree(nodes: FileNode[]): string[] {
 export function findNoteByName(nodes: FileNode[], name: string): string | null {
   const lower = name.toLowerCase();
   for (const node of nodes) {
-    if (node.type === 'file') {
-      const nodeName = node.name.replace(/\.md$/i, '').toLowerCase();
+    if (node.type === "file") {
+      const nodeName = node.name.replace(/\.md$/i, "").toLowerCase();
       if (nodeName === lower) return node.path;
     } else if (node.children) {
       const found = findNoteByName(node.children, name);

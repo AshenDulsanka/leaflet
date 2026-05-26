@@ -2,8 +2,8 @@
  * ProseMirror decoration helpers for [[wikilink]] syntax highlighting.
  * Imported by the Milkdown plugin wired into the WYSIWYG editor.
  */
-import { Decoration, DecorationSet } from '@milkdown/kit/prose/view';
-import type { Node as ProseMirrorNode } from '@milkdown/kit/prose/model';
+import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
+import type { Node as ProseMirrorNode } from "@milkdown/kit/prose/model";
 
 /**
  * Regex for matching [[wikilink]] syntax.
@@ -28,16 +28,18 @@ export function buildWikilinkDecorations(doc: ProseMirrorNode): DecorationSet {
       const nameEnd = end - 2;
       decorations.push(
         Decoration.inline(start, nameStart, {
-          class: 'wikilink-bracket',
-          style: 'font-size:0;line-height:0;opacity:0;color:transparent'
-        })
+          class: "wikilink-bracket",
+          style: "font-size:0;line-height:0;opacity:0;color:transparent",
+        }),
       );
-      decorations.push(Decoration.inline(nameStart, nameEnd, { class: 'wikilink-name' }));
+      decorations.push(
+        Decoration.inline(nameStart, nameEnd, { class: "wikilink-name" }),
+      );
       decorations.push(
         Decoration.inline(nameEnd, end, {
-          class: 'wikilink-bracket',
-          style: 'font-size:0;line-height:0;opacity:0;color:transparent'
-        })
+          class: "wikilink-bracket",
+          style: "font-size:0;line-height:0;opacity:0;color:transparent",
+        }),
       );
     }
   });

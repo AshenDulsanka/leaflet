@@ -19,6 +19,7 @@ This project also serves as a reference for **agent orchestration** and open-sou
 ## Features
 
 **Core**
+
 - WYSIWYG editor (Milkdown) with source mode toggle (CodeMirror)
 - LaTeX math rendering (inline `$...$` and block `$$...$$`)
 - Syntax-highlighted code blocks
@@ -31,6 +32,7 @@ This project also serves as a reference for **agent orchestration** and open-sou
 - Export to Markdown, HTML, and PDF
 
 **Workspaces**
+
 - Isolated workspaces — each with its own note tree
 - Pentest workspaces are the default creation type
 - General workspaces remain available for everyday notes
@@ -38,12 +40,14 @@ This project also serves as a reference for **agent orchestration** and open-sou
 - Workspace order can be rearranged by drag and drop; right-click a workspace for rename/delete
 
 **Templates and Workflow**
+
 - Command Palette templates insert raw Markdown snippets into the current note
 - Global templates are always available; workspace templates appear when that workspace is active
 - Methodology checklist is available only in pentest workspaces with the CPTS preset enabled
 - Destructive panel actions use confirmation dialogs
 
 **CTF and Pentest Tools** (pentest workspaces only)
+
 - Host tracker with port management (initial port entry and screenshot association on add)
 - Credential vault
 - Flag tracker
@@ -53,11 +57,13 @@ This project also serves as a reference for **agent orchestration** and open-sou
 - Add forms open as centered modal dialogs by default (toggle to inline mode in Settings)
 
 **AI Integration** (optional)
+
 - AI chat assistant with current note as context
 - Note summarization
 - Google Gemini (default) or MiniMax provider
 
 **Sync**
+
 - One-click git push and pull
 - Persistent sync badge with recommendation-driven pull/push actions and stale/error states
 - Status refresh on load, window focus, and after pull/push actions
@@ -68,19 +74,19 @@ This project also serves as a reference for **agent orchestration** and open-sou
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Framework | SvelteKit 5 (adapter-node) |
-| Language | TypeScript (strict mode) |
-| Styling | Tailwind CSS v4 |
-| Editor (WYSIWYG) | Milkdown (@milkdown/crepe) |
-| Editor (Source) | CodeMirror 6 (svelte-codemirror-editor) |
-| Math | @milkdown/plugin-math + KaTeX |
-| Database | SQLite via better-sqlite3 |
-| ORM | drizzle-orm (better-sqlite3 dialect, synchronous) |
-| Icons | @lucide/svelte |
-| Package Manager | pnpm |
-| Runtime | Node.js 22 LTS |
+| Layer            | Technology                                        |
+| ---------------- | ------------------------------------------------- |
+| Framework        | SvelteKit 5 (adapter-node)                        |
+| Language         | TypeScript (strict mode)                          |
+| Styling          | Tailwind CSS v4                                   |
+| Editor (WYSIWYG) | Milkdown (@milkdown/crepe)                        |
+| Editor (Source)  | CodeMirror 6 (svelte-codemirror-editor)           |
+| Math             | @milkdown/plugin-math + KaTeX                     |
+| Database         | SQLite via better-sqlite3                         |
+| ORM              | drizzle-orm (better-sqlite3 dialect, synchronous) |
+| Icons            | @lucide/svelte                                    |
+| Package Manager  | pnpm                                              |
+| Runtime          | Node.js 22 LTS                                    |
 
 ## Quick Start (Docker - Recommended)
 
@@ -128,15 +134,15 @@ App runs at http://localhost:3000.
 
 Copy `.env.example` to `.env` and configure:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `NOTES_DATA_DIR` | No | `./data` | Directory for database and notes |
-| `NOTES_DIR` | No | `./data/notes` | Directory for `.md` note files |
-| `SCREENSHOTS_DIR` | No | `./data/screenshots` | Directory for uploaded screenshots |
-| `PORT` | No | `3000` (prod) / `5173` (dev) | Server port |
-| `AI_PROVIDER` | No | `gemini` | AI provider: `gemini` or `minimax` |
-| `GEMINI_API_KEY` | No | - | Google Gemini API key (enables AI features) |
-| `MINIMAX_API_KEY` | No | - | MiniMax API key (alternative provider) |
+| Variable          | Required | Default                      | Description                                 |
+| ----------------- | -------- | ---------------------------- | ------------------------------------------- |
+| `NOTES_DATA_DIR`  | No       | `./data`                     | Directory for database and notes            |
+| `NOTES_DIR`       | No       | `./data/notes`               | Directory for `.md` note files              |
+| `SCREENSHOTS_DIR` | No       | `./data/screenshots`         | Directory for uploaded screenshots          |
+| `PORT`            | No       | `3000` (prod) / `5173` (dev) | Server port                                 |
+| `AI_PROVIDER`     | No       | `gemini`                     | AI provider: `gemini` or `minimax`          |
+| `GEMINI_API_KEY`  | No       | -                            | Google Gemini API key (enables AI features) |
+| `MINIMAX_API_KEY` | No       | -                            | MiniMax API key (alternative provider)      |
 
 AI features are silently disabled when no API key is configured.
 
@@ -165,27 +171,26 @@ git pull
 
 ## Documentation
 
-| File | Contents |
-|------|----------|
-| `AGENTS.md` | 8-agent orchestration pipeline and AI coding agent guidelines |
-| `docs/ARCHITECTURE.md` | Workspace model, runtime data flow, storage layout, sync design |
-| `docs/API.md` | API route contracts, validation rules, templates, screenshots |
-| `docs/COMPONENTS.md` | Component inventory and visible UI surfaces |
-| `docs/ENGAGEMENT_TOOLS.md` | Host tracker, credential vault, flag tracker, findings, topology |
-| `docs/FEATURES.md` | End-user feature guide and UX conventions |
-| `docs/SECURITY.md` | Path traversal, validation, and secret-handling rules |
-| `.github/skills/architecture/SKILL.md` | Data flow, folder structure, design decisions |
-| `.github/skills/coding-standards/SKILL.md` | Code conventions for contributors and AI agents |
-| `.github/skills/commit-conventions/SKILL.md` | Commit message format and examples |
-| `.github/skills/branch-conventions/SKILL.md` | Branch naming rules |
-| `.github/skills/pr-standards/SKILL.md` | Pull request requirements |
-| `.github/agents/` | 8 specialized agents (orchestrator, planner, coder, designer, code-reviewer, security-auditor, test-writer, docs-updater) |
-| `CONTRIBUTING.md` | How to contribute |
+| File                                         | Contents                                                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `AGENTS.md`                                  | 8-agent orchestration pipeline and AI coding agent guidelines                                                             |
+| `docs/ARCHITECTURE.md`                       | Workspace model, runtime data flow, storage layout, sync design                                                           |
+| `docs/API.md`                                | API route contracts, validation rules, templates, screenshots                                                             |
+| `docs/COMPONENTS.md`                         | Component inventory and visible UI surfaces                                                                               |
+| `docs/ENGAGEMENT_TOOLS.md`                   | Host tracker, credential vault, flag tracker, findings, topology                                                          |
+| `docs/FEATURES.md`                           | End-user feature guide and UX conventions                                                                                 |
+| `docs/SECURITY.md`                           | Path traversal, validation, and secret-handling rules                                                                     |
+| `.github/skills/architecture/SKILL.md`       | Data flow, folder structure, design decisions                                                                             |
+| `.github/skills/coding-standards/SKILL.md`   | Code conventions for contributors and AI agents                                                                           |
+| `.github/skills/commit-conventions/SKILL.md` | Commit message format and examples                                                                                        |
+| `.github/skills/branch-conventions/SKILL.md` | Branch naming rules                                                                                                       |
+| `.github/skills/pr-standards/SKILL.md`       | Pull request requirements                                                                                                 |
+| `.github/agents/`                            | 8 specialized agents (orchestrator, planner, coder, designer, code-reviewer, security-auditor, test-writer, docs-updater) |
+| `CONTRIBUTING.md`                            | How to contribute                                                                                                         |
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
-
 
 ## License
 

@@ -11,11 +11,13 @@ tags:
 > Graph view: color-coded by type — blue=decisions, green=patterns, yellow=learnings, purple=sessions, red=reviews.
 
 ## Sessions
+
 - [[sessions/2025-07-15-analyze-codebase]] — Initial vault population from analyze-codebase skill
 - [[sessions/2026-04-29-flow-panels-doc-sync]] — Document flow-panel UX updates and refresh memory links
 - [[sessions/2026-04-30-regression-fix-doc-finalization]] — Finalize regression-fix changelog + memory coverage
 
 ## Decisions
+
 - [[decisions/ADR-001-sveltekit-framework]] — SvelteKit 5 as Application Framework
 - [[decisions/ADR-002-sqlite-database]] — SQLite via better-sqlite3 for Structured Data
 - [[decisions/ADR-003-file-based-notes]] — Markdown Files on Disk for Note Storage
@@ -27,6 +29,7 @@ tags:
 - [[decisions/ADR-009-flow-canvas-dialog-behavior]] — Windowed Dialog + ConfirmDialog Standard for Flow Canvases
 
 ## Active Patterns
+
 - [[patterns/safe-path-validation]] — safePath() for All Filesystem Operations
 - [[patterns/workspace-scoped-queries]] — Workspace-Scoped DB Queries (IDOR Prevention)
 - [[patterns/confirm-dialog-destructive]] — ConfirmDialog for All Destructive Actions
@@ -35,15 +38,18 @@ tags:
 - [[patterns/api-route-validation]] — API Route Input Validation Pattern
 
 ## Learnings
+
 - [[learnings/milkdown-posatdom]] — Use posAtDOM Instead of posAtCoords in Milkdown
 - [[learnings/svelte5-derived-by-syntax]] — $derived.by() Required for Multi-Statement Derived Blocks
 - [[learnings/svelte-const-placement]] — {@const} Must Be Direct Child of Block Tags
 - [[learnings/sveltekit-import-extensions]] — No .js Extension in SvelteKit TypeScript Imports
 
 ## Reviews
+
 - [[reviews/2026-04-29-flow-panels-doc-review]] — Docs-only review of flow-panel UX changelog and memory consistency
 
 ## Features
+
 - [[features/editor]] — Milkdown WYSIWYG + CodeMirror dual editor
 - [[features/workspaces]] — Workspace creation, switching, and scoped data isolation
 - [[features/file-tree]] — File tree with zone-based drag-and-drop reorder

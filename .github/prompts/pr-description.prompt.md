@@ -11,19 +11,25 @@ Read the changes (diff, commit messages, or file list) and produce a PR descript
 ---
 
 ### What changed
+
 A concise summary of the changes. Focus on the "what", not the "how":
+
 - List the key changes as bullet points
 - Group related changes together
 - Be specific: "Added email validation to the contact form" not "fixed stuff"
 
 ### Why
+
 The motivation or context:
+
 - What problem does this solve?
 - Link to any relevant issue or ticket if known
 - Why this approach was chosen over alternatives (if non-obvious)
 
 ### How to test
+
 Step-by-step instructions for a reviewer to verify the changes work:
+
 1. [Setup step if needed]
 2. [Action to take]
 3. [What to observe / expected result]
@@ -31,6 +37,7 @@ Step-by-step instructions for a reviewer to verify the changes work:
 Cover both the happy path and any edge cases that were fixed.
 
 ### Screenshots / recordings
+
 [Note any UI changes that need visual verification. Leave placeholder if applicable.]
 
 ---
@@ -45,6 +52,7 @@ Cover both the happy path and any edge cases that were fixed.
 - Do not pad with marketing language ("exciting new", "powerful feature", etc.)
 
 ## What Not to Include
+
 - Internal implementation details the reviewer doesn't need
 - Obvious information (don't describe what TypeScript is)
 - Speculation about future work (that belongs in a separate issue)

@@ -14,21 +14,21 @@ Leaflet exposes JSON routes for notes, workspaces, screenshots, user templates, 
 
 ## Route Map
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET, POST | `/api/workspaces` | List workspaces and create a workspace |
-| GET, PATCH, DELETE | `/api/workspaces/[id]` | Read, update, or delete a workspace |
-| GET, POST, PUT, DELETE | `/api/notes/[...path]` | Note CRUD |
-| GET | `/api/notes/tree` | File tree for the active workspace |
-| GET | `/api/notes/search` | Search notes |
-| GET | `/api/templates` | List global templates or merge in workspace-scoped templates |
-| POST | `/api/templates` | Create a user template |
-| DELETE | `/api/templates/[id]` | Delete a user template |
-| GET, POST | `/api/screenshots` | List screenshots or upload a new screenshot |
-| GET, PATCH, DELETE | `/api/screenshots/[filename]` | Read, update, or delete a screenshot |
-| GET, POST | `/api/ai/chat` and `/api/ai/summarize` | AI assistant endpoints |
-| GET | `/api/ai/status` | Provider availability |
-| POST | `/api/sync` | Git sync (`action: status | pull | push`) |
+| Method                 | Path                                   | Purpose                                                      |
+| ---------------------- | -------------------------------------- | ------------------------------------------------------------ | ---- | ------ |
+| GET, POST              | `/api/workspaces`                      | List workspaces and create a workspace                       |
+| GET, PATCH, DELETE     | `/api/workspaces/[id]`                 | Read, update, or delete a workspace                          |
+| GET, POST, PUT, DELETE | `/api/notes/[...path]`                 | Note CRUD                                                    |
+| GET                    | `/api/notes/tree`                      | File tree for the active workspace                           |
+| GET                    | `/api/notes/search`                    | Search notes                                                 |
+| GET                    | `/api/templates`                       | List global templates or merge in workspace-scoped templates |
+| POST                   | `/api/templates`                       | Create a user template                                       |
+| DELETE                 | `/api/templates/[id]`                  | Delete a user template                                       |
+| GET, POST              | `/api/screenshots`                     | List screenshots or upload a new screenshot                  |
+| GET, PATCH, DELETE     | `/api/screenshots/[filename]`          | Read, update, or delete a screenshot                         |
+| GET, POST              | `/api/ai/chat` and `/api/ai/summarize` | AI assistant endpoints                                       |
+| GET                    | `/api/ai/status`                       | Provider availability                                        |
+| POST                   | `/api/sync`                            | Git sync (`action: status                                    | pull | push`) |
 
 ## Templates API
 
@@ -36,9 +36,9 @@ Leaflet exposes JSON routes for notes, workspaces, screenshots, user templates, 
 
 Returns user templates ordered newest first.
 
-| Query | Behavior |
-|---|---|
-| no `workspaceId` | Returns global templates only (`workspace_id IS NULL`) |
+| Query              | Behavior                                                         |
+| ------------------ | ---------------------------------------------------------------- |
+| no `workspaceId`   | Returns global templates only (`workspace_id IS NULL`)           |
 | `workspaceId=<id>` | Returns global templates plus templates scoped to that workspace |
 
 Example:

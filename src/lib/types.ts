@@ -7,7 +7,7 @@
 export interface FileNode {
   name: string;
   path: string; // relative path from NOTES_DIR root
-  type: 'file' | 'folder';
+  type: "file" | "folder";
   children?: FileNode[]; // only present when type === 'folder'
   extension?: string; // only present when type === 'file'
   sort_order?: number; // custom sort position; absent means unset (treated as Infinity)
@@ -43,7 +43,7 @@ export interface Note {
 export interface Workspace {
   id: string;
   name: string;
-  type: 'pentest' | 'general';
+  type: "pentest" | "general";
   icon_color: string;
   exam_start_date: string | null;
   exam_duration_days: number;
@@ -78,15 +78,21 @@ export interface Host {
   notes?: string;
 }
 
-export type HostStatus = 'discovered' | 'scanning' | 'foothold' | 'user' | 'root' | 'compromised';
+export type HostStatus =
+  | "discovered"
+  | "scanning"
+  | "foothold"
+  | "user"
+  | "root"
+  | "compromised";
 
 /** A single open port on a host */
 export interface Port {
   number: number;
-  protocol: 'tcp' | 'udp';
+  protocol: "tcp" | "udp";
   service?: string;
   version?: string;
-  state: 'open' | 'filtered' | 'closed';
+  state: "open" | "filtered" | "closed";
 }
 
 /** A credential found during an engagement */
@@ -99,11 +105,17 @@ export interface Credential {
   sourceHostId?: string;
   sourceMethod?: string;
   validOnHostIds: string[];
-  status: 'untested' | 'valid' | 'cracked' | 'expired';
+  status: "untested" | "valid" | "cracked" | "expired";
   notes?: string;
 }
 
-export type CredentialType = 'password' | 'ntlm' | 'netntlmv2' | 'kerberos' | 'ssh-key' | 'token';
+export type CredentialType =
+  | "password"
+  | "ntlm"
+  | "netntlmv2"
+  | "kerberos"
+  | "ssh-key"
+  | "token";
 
 /** A captured flag */
 export interface Flag {
@@ -111,7 +123,7 @@ export interface Flag {
   workspaceId: string;
   value: string;
   hostId?: string;
-  flagType: 'user' | 'root' | 'other';
+  flagType: "user" | "root" | "other";
   captureMethod?: string;
   capturedAt: string;
   screenshotPath?: string;
@@ -130,15 +142,15 @@ export interface CommandSnippet {
 }
 
 export type SnippetCategory =
-  | 'recon'
-  | 'exploitation'
-  | 'privesc-linux'
-  | 'privesc-windows'
-  | 'pivoting'
-  | 'ad-attacks'
-  | 'file-transfer'
-  | 'credential-attacks'
-  | 'custom';
+  | "recon"
+  | "exploitation"
+  | "privesc-linux"
+  | "privesc-windows"
+  | "pivoting"
+  | "ad-attacks"
+  | "file-transfer"
+  | "credential-attacks"
+  | "custom";
 
 /** Variable substitution context for command snippets */
 export interface SnippetContext {
@@ -165,9 +177,19 @@ export interface UserTemplate {
   updated_at: string;
 }
 
-export type FindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info' | 'none';
+export type FindingSeverity =
+  | "critical"
+  | "high"
+  | "medium"
+  | "low"
+  | "info"
+  | "none";
 
-export type FindingStatus = 'open' | 'confirmed' | 'remediated' | 'false-positive';
+export type FindingStatus =
+  | "open"
+  | "confirmed"
+  | "remediated"
+  | "false-positive";
 
 /** A vulnerability/finding discovered during a pentest engagement */
 export interface Finding {
@@ -193,10 +215,10 @@ export interface Finding {
 /** A single port parsed from Nmap output */
 export interface NmapPort {
   number: number;
-  protocol: 'tcp' | 'udp';
+  protocol: "tcp" | "udp";
   service: string;
   version: string;
-  state: 'open' | 'closed' | 'filtered';
+  state: "open" | "closed" | "filtered";
 }
 
 /** A host parsed from Nmap output */
@@ -215,13 +237,13 @@ export interface NmapParseResult {
 
 /** Category for an AI prompt template */
 export type AiPromptCategory =
-  | 'recon'
-  | 'exploitation'
-  | 'privesc'
-  | 'post-exploitation'
-  | 'reporting'
-  | 'ad-attacks'
-  | 'general';
+  | "recon"
+  | "exploitation"
+  | "privesc"
+  | "post-exploitation"
+  | "reporting"
+  | "ad-attacks"
+  | "general";
 
 /** A built-in AI prompt template; prompts may contain [PLACEHOLDER] tokens */
 export interface AiPromptTemplate {
@@ -233,11 +255,11 @@ export interface AiPromptTemplate {
 }
 
 export type FindingTemplateCategory =
-  | 'injection'
-  | 'auth'
-  | 'crypto'
-  | 'exposure'
-  | 'misc';
+  | "injection"
+  | "auth"
+  | "crypto"
+  | "exposure"
+  | "misc";
 
 /** A built-in vulnerability finding template for pre-filling the findings form */
 export interface FindingTemplate {
@@ -267,15 +289,15 @@ export interface AttackNode {
 
 /** Category for an operation log timeline entry */
 export type OpLogCategory =
-  | 'recon'
-  | 'initial-access'
-  | 'exploitation'
-  | 'post-exploitation'
-  | 'lateral-movement'
-  | 'privilege-escalation'
-  | 'exfiltration'
-  | 'cleanup'
-  | 'other';
+  | "recon"
+  | "initial-access"
+  | "exploitation"
+  | "post-exploitation"
+  | "lateral-movement"
+  | "privilege-escalation"
+  | "exfiltration"
+  | "cleanup"
+  | "other";
 
 /** An operation log entry in a pentest engagement workspace */
 export interface OperationLogEntry {
@@ -323,7 +345,7 @@ export interface ScannedFinding {
   hostIp: string;
   hostPort: number | null;
   pluginId: string;
-  source: 'nessus' | 'burp';
+  source: "nessus" | "burp";
 }
 
 /** Result returned by parseScanner() / parseNessus() / parseBurp() */

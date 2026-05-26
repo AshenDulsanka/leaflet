@@ -5,10 +5,10 @@
  */
 
 const ALLOWED_UPLOAD_TYPES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/gif',
-  'image/webp',
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
 ]);
 
 /** Returns true only for the four image types the server accepts. */
@@ -27,18 +27,21 @@ export async function uploadAndInsert(
   onUploaded?: () => void,
 ): Promise<void> {
   if (!isAllowedImageType(file.type)) return;
-  const rawExt = file.type.split('/')[1] ?? 'png';
-  const ext = rawExt === 'jpeg' ? 'jpg' : rawExt;
+  const rawExt = file.type.split("/")[1] ?? "png";
+  const ext = rawExt === "jpeg" ? "jpg" : rawExt;
   const formData = new FormData();
-  formData.append('image', file, `screenshot.${ext}`);
-  if (workspaceId) formData.append('workspace_id', workspaceId);
+  formData.append("image", file, `screenshot.${ext}`);
+  if (workspaceId) formData.append("workspace_id", workspaceId);
   try {
-    const res = await fetch('/api/screenshots', { method: 'POST', body: formData });
+    const res = await fetch("/api/screenshots", {
+      method: "POST",
+      body: formData,
+    });
     if (!res.ok) return;
     const { url } = (await res.json()) as { url: string };
     onInsert(`![screenshot](${url})`);
     onUploaded?.();
   } catch {
-    console.error('Failed to upload screenshot');
+    console.error("Failed to upload screenshot");
   }
 }

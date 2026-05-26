@@ -9,7 +9,7 @@ Write Vitest unit tests for the following code.
 Always follow this pattern at the top of the test file:
 
 ```typescript
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from "vitest";
 
 // Set up any required test fixtures before importing modules that read them
 // (e.g. environment variables, temporary directories, mock state)
@@ -26,18 +26,20 @@ For each exported function in the provided code, write tests covering:
 ## Specific Patterns
 
 ### File system functions
+
 ```typescript
-it('throws when path contains traversal sequence', async () => {
-  await expect(readFile('../evil')).rejects.toThrow();
+it("throws when path contains traversal sequence", async () => {
+  await expect(readFile("../evil")).rejects.toThrow();
 });
 ```
 
 ### Database / storage functions
+
 ```typescript
-it('returns the same singleton on repeated calls', () => {
+it("returns the same singleton on repeated calls", () => {
   expect(getDb()).toBe(getDb());
 });
-it('returns a fresh instance after reset', () => {
+it("returns a fresh instance after reset", () => {
   const first = getDb();
   resetDb();
   const second = getDb();
@@ -46,9 +48,12 @@ it('returns a fresh instance after reset', () => {
 ```
 
 ### API route handlers
+
 ```typescript
-it('returns 400 when required field is missing', async () => {
-  const res = await POST({ request: new Request('/', { method: 'POST', body: '{}' }) });
+it("returns 400 when required field is missing", async () => {
+  const res = await POST({
+    request: new Request("/", { method: "POST", body: "{}" }),
+  });
   expect(res.status).toBe(400);
 });
 ```

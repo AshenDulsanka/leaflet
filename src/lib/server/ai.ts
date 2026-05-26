@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from "@google/genai";
 
 const SYSTEM_PROMPT = `You are an expert penetration testing assistant helping with CPTS (Certified Penetration Testing Specialist) exam preparation on Hack The Box.
 
@@ -14,22 +14,22 @@ You help with:
 Be concise, technical, and practical. Use markdown formatting with code blocks for commands.`;
 
 export interface ChatMessage {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
 }
 
-function getProvider(): 'minimax' | 'gemini' {
+function getProvider(): "minimax" | "gemini" {
   const val = process.env.AI_PROVIDER;
-  if (val === 'minimax') return 'minimax';
-  return 'gemini';
+  if (val === "minimax") return "minimax";
+  return "gemini";
 }
 
 function getMiniMaxModel(): string {
-  return process.env.MINIMAX_MODEL ?? 'MiniMax-M2.5';
+  return process.env.MINIMAX_MODEL ?? "MiniMax-M2.5";
 }
 
 function getGeminiModel(): string {
-  return process.env.GEMINI_MODEL ?? 'gemini-2.5-flash';
+  return process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 }
 
 async function* streamMinimax(
@@ -37,22 +37,22 @@ async function* streamMinimax(
   noteContext?: string,
 ): AsyncGenerator<string> {
   const apiKey = process.env.MINIMAX_API_KEY;
-  if (!apiKey) throw new Error('MINIMAX_API_KEY is not configured');
+  if (!apiKey) throw new Error("MINIMAX_API_KEY is not configured");
 
   const systemContent = noteContext
     ? `${SYSTEM_PROMPT}\n\n---\nCurrent note for context:\n${noteContext.slice(0, 4000)}`
     : SYSTEM_PROMPT;
 
-  const baseUrl = process.env.MINIMAX_BASE_URL ?? 'https://api.minimax.io/v1';
+  const baseUrl = process.env.MINIMAX_BASE_URL ?? "https://api.minimax.io/v1";
   const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model: getMiniMaxModel(),
-      messages: [{ role: 'system', content: systemContent }, ...messages],
+      messages: [{ role: "system", content: systemContent }, ...messages],
       stream: true,
       max_tokens: 2048,
       thinking_budget: 0,
@@ -66,18 +66,18 @@ async function* streamMinimax(
 
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
-  let buffer = '';
+  let buffer = "";
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
     for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
+      if (!line.startsWith("data: ")) continue;
       const data = line.slice(6).trim();
-      if (data === '[DONE]') return;
+      if (data === "[DONE]") return;
       try {
         const json = JSON.parse(data);
         const delta = json.choices?.[0]?.delta;
@@ -97,7 +97,7 @@ async function* streamGemini(
   noteContext?: string,
 ): AsyncGenerator<string> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
 
   const baseUrl = process.env.GEMINI_BASE_URL; // undefined = default Google endpoint
   const model = getGeminiModel();
@@ -109,10 +109,10 @@ async function* streamGemini(
   const ai = new GoogleGenAI({ apiKey, ...(baseUrl ? { baseUrl } : {}) });
 
   const history = messages.slice(0, -1).map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
+    role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
-  const lastMessage = messages[messages.length - 1]?.content ?? '';
+  const lastMessage = messages[messages.length - 1]?.content ?? "";
 
   const chat = ai.chats.create({
     model,
@@ -136,7 +136,7 @@ export async function* streamChat(
   noteContext?: string,
 ): AsyncGenerator<string> {
   const provider = getProvider();
-  if (provider === 'gemini') {
+  if (provider === "gemini") {
     yield* streamGemini(messages, noteContext);
   } else {
     yield* streamMinimax(messages, noteContext);
@@ -145,7 +145,7 @@ export async function* streamChat(
 
 export function getAiConfig(): { provider: string; model: string } {
   const provider = getProvider();
-  const model = provider === 'minimax' ? getMiniMaxModel() : getGeminiModel();
+  const model = provider === "minimax" ? getMiniMaxModel() : getGeminiModel();
   return { provider, model };
 }
 
@@ -162,8 +162,8 @@ Extract and organize:
 
 Format with clear markdown headers. Keep it brief and scannable.\n\n---\n${content.slice(0, 6000)}`;
 
-  let result = '';
-  for await (const chunk of streamChat([{ role: 'user', content: prompt }])) {
+  let result = "";
+  for await (const chunk of streamChat([{ role: "user", content: prompt }])) {
     result += chunk;
   }
   return result;

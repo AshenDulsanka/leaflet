@@ -4,7 +4,7 @@
  *        notifications.add('success', 'Pushed!');
  */
 
-export type NotificationType = 'success' | 'error' | 'info' | 'warning';
+export type NotificationType = "success" | "error" | "info" | "warning";
 
 export interface Notification {
   id: number;
@@ -50,7 +50,7 @@ function scheduleAutoDismiss(id: number, durationMs: number): void {
 }
 
 function pickOverflowDropIndex(items: Notification[]): number {
-  const nonErrorIndex = items.findIndex((item) => item.type !== 'error');
+  const nonErrorIndex = items.findIndex((item) => item.type !== "error");
   if (nonErrorIndex >= 0) {
     return nonErrorIndex;
   }
@@ -68,12 +68,24 @@ export const notifications = {
     return _items;
   },
 
-  add(type: NotificationType, message: string, options: NotificationOptions = {}): void {
+  add(
+    type: NotificationType,
+    message: string,
+    options: NotificationOptions = {},
+  ): void {
     const id = ++_counter;
-    const sticky = options.sticky ?? type === 'error';
-    const durationMs = options.durationMs ?? (type === 'warning' ? WARNING_DURATION_MS : DURATION_MS);
+    const sticky = options.sticky ?? type === "error";
+    const durationMs =
+      options.durationMs ??
+      (type === "warning" ? WARNING_DURATION_MS : DURATION_MS);
     const expiresAt = sticky ? null : Date.now() + durationMs;
-    const nextNotification: Notification = { id, type, message, expiresAt, sticky };
+    const nextNotification: Notification = {
+      id,
+      type,
+      message,
+      expiresAt,
+      sticky,
+    };
 
     let nextItems = [..._items, nextNotification];
     while (nextItems.length > MAX_VISIBLE) {

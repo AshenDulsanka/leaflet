@@ -17,6 +17,7 @@ tags:
 When `PATCH /api/workspaces/[id]` receives a changed `name`, it now also migrates `notes_folder` to a safe slug and treats rename as a filesystem+database migration, not a simple label update.
 
 ## Contract
+
 - Generate `notes_folder` from name (`kebab-case`), validate strict slug safety, reject collisions.
 - Rename workspace folder on disk (`safePath`-validated) before DB mutation.
 - Apply DB transaction that updates workspace row and rewrites path-keyed metadata:
@@ -26,5 +27,6 @@ When `PATCH /api/workspaces/[id]` receives a changed `name`, it now also migrate
 - If DB transaction fails after disk rename, attempt folder rollback.
 
 ## Related
+
 - [[patterns/safe-path-validation]]
 - [[patterns/workspace-scoped-queries]]

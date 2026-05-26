@@ -30,12 +30,12 @@ Before importing GSAP:
 
 Pick one primary choreography per page:
 
-| Pattern | Use For |
-|---|---|
-| Pinned narrative | Product explainers, feature storytelling, campaign pages |
-| Scrubbed reveal | Long-form editorial sections, before/after transformations |
-| Horizontal scroll | Galleries, timelines, product collections |
-| Card stack | Sequential proof, case studies, onboarding stories |
+| Pattern                  | Use For                                                        |
+| ------------------------ | -------------------------------------------------------------- |
+| Pinned narrative         | Product explainers, feature storytelling, campaign pages       |
+| Scrubbed reveal          | Long-form editorial sections, before/after transformations     |
+| Horizontal scroll        | Galleries, timelines, product collections                      |
+| Card stack               | Sequential proof, case studies, onboarding stories             |
 | Hero object choreography | Product launch, visual identity moment, immersive landing hero |
 
 Support it with restrained micro-interactions. One confident system beats many unrelated animations.

@@ -5,19 +5,28 @@
  * DELETE /api/workspaces/[id]/hosts/[hostId]/ports/[portId] - Delete port
  */
 
-import { json } from '@sveltejs/kit';
-import { randomUUID } from 'crypto';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from "@sveltejs/kit";
+import { randomUUID } from "crypto";
+import type { RequestHandler } from "@sveltejs/kit";
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
   const { db } = locals;
-  const body = await request.json() as Record<string, unknown>;
+  const body = (await request.json()) as Record<string, unknown>;
 
-  const VALID_SCOPES = new Set(['in-scope', 'out-of-scope', 'unknown']);
+  const VALID_SCOPES = new Set(["in-scope", "out-of-scope", "unknown"]);
   // Allow both timestamp uploads (1234567890.png) and slug-renamed files (my-screenshot.png)
   const SAFE_FILENAME_RE = /^[a-z0-9][a-z0-9-]*\.(png|jpg|jpeg|gif|webp)$/;
 
-  const allowed = ['ip', 'hostname', 'os', 'segment', 'status', 'notes', 'topo_x', 'topo_y'];
+  const allowed = [
+    "ip",
+    "hostname",
+    "os",
+    "segment",
+    "status",
+    "notes",
+    "topo_x",
+    "topo_y",
+  ];
   const updates: string[] = [];
   const values: unknown[] = [];
 
@@ -29,42 +38,52 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
   }
 
   // Validate scope separately
-  if ('scope' in body) {
+  if ("scope" in body) {
     if (!VALID_SCOPES.has(body.scope as string)) {
-      return json({ error: 'Invalid scope value' }, { status: 400 });
+      return json({ error: "Invalid scope value" }, { status: 400 });
     }
-    updates.push('scope = ?');
+    updates.push("scope = ?");
     values.push(body.scope);
   }
 
   // Validate screenshot_filename separately - allow empty string to clear the value
-  if ('screenshot_filename' in body) {
-    const fname = String(body.screenshot_filename ?? '');
-    if (fname !== '' && !SAFE_FILENAME_RE.test(fname)) {
-      return json({ error: 'Invalid screenshot_filename' }, { status: 400 });
+  if ("screenshot_filename" in body) {
+    const fname = String(body.screenshot_filename ?? "");
+    if (fname !== "" && !SAFE_FILENAME_RE.test(fname)) {
+      return json({ error: "Invalid screenshot_filename" }, { status: 400 });
     }
-    updates.push('screenshot_filename = ?');
+    updates.push("screenshot_filename = ?");
     values.push(fname);
   }
 
-  if (updates.length === 0) return json({ error: 'No valid fields' }, { status: 400 });
+  if (updates.length === 0)
+    return json({ error: "No valid fields" }, { status: 400 });
 
-  updates.push('updated_at = ?');
+  updates.push("updated_at = ?");
   values.push(new Date().toISOString());
   values.push(params.hostId);
   values.push(params.id);
 
-  db.prepare(`UPDATE hosts SET ${updates.join(', ')} WHERE id = ? AND workspace_id = ?`).run(...values);
+  db.prepare(
+    `UPDATE hosts SET ${updates.join(", ")} WHERE id = ? AND workspace_id = ?`,
+  ).run(...values);
 
-  const host = db.prepare('SELECT * FROM hosts WHERE id = ?').get(params.hostId) as Record<string, unknown>;
-  const ports = db.prepare('SELECT * FROM ports WHERE host_id = ? ORDER BY number').all(params.hostId);
+  const host = db
+    .prepare("SELECT * FROM hosts WHERE id = ?")
+    .get(params.hostId) as Record<string, unknown>;
+  const ports = db
+    .prepare("SELECT * FROM ports WHERE host_id = ? ORDER BY number")
+    .all(params.hostId);
   return json({ ...host, ports });
 };
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   const { db } = locals;
-  const result = db.prepare('DELETE FROM hosts WHERE id = ? AND workspace_id = ?').run(params.hostId, params.id);
-  if (result.changes === 0) return json({ error: 'Not found' }, { status: 404 });
+  const result = db
+    .prepare("DELETE FROM hosts WHERE id = ? AND workspace_id = ?")
+    .run(params.hostId, params.id);
+  if (result.changes === 0)
+    return json({ error: "Not found" }, { status: 404 });
   return new Response(null, { status: 204 });
 };
 
@@ -72,7 +91,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   // POST to /hosts/[hostId] acts as "add port" when ?port=1 query param is present
   // In SvelteKit, nested routes handle this better - this handles port creation
   const { db } = locals;
-  const body = await request.json() as {
+  const body = (await request.json()) as {
     number: number;
     protocol?: string;
     service?: string;
@@ -81,23 +100,26 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     notes?: string;
   };
 
-  if (!body.number) return json({ error: 'port number is required' }, { status: 400 });
+  if (!body.number)
+    return json({ error: "port number is required" }, { status: 400 });
 
   const id = randomUUID();
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO ports (id, host_id, number, protocol, service, version, state, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     id,
     params.hostId,
     body.number,
-    body.protocol ?? 'tcp',
-    body.service ?? '',
-    body.version ?? '',
-    body.state ?? 'open',
-    body.notes ?? ''
+    body.protocol ?? "tcp",
+    body.service ?? "",
+    body.version ?? "",
+    body.state ?? "open",
+    body.notes ?? "",
   );
 
-  const port = db.prepare('SELECT * FROM ports WHERE id = ?').get(id);
+  const port = db.prepare("SELECT * FROM ports WHERE id = ?").get(id);
   return json(port, { status: 201 });
 };

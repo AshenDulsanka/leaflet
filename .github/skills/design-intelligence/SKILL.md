@@ -13,19 +13,19 @@ The goal is not one fixed aesthetic. The goal is a UI that fits the user's produ
 
 Choose the primary job before loading deeper skills:
 
-| Job | Use |
-|---|---|
-| New page, component, app screen, dashboard, landing page | `design` |
-| Existing UI needs premium upgrade without rewrites | `redesign` |
-| Everyday motion, transitions, hover, state changes | `animate` |
-| Cinematic scroll, pinned sections, timelines, page choreography | `gsap` |
-| UX/accessibility score before launch | `ui-audit` |
-| Deep heuristic/persona critique | `critique` |
-| Slow, janky, layout-shifting, heavy media UI | `ui-optimize` |
-| High-end agency softness, glass, luxury, editorial mood | `soft` |
-| Quiet editorial/workspace minimalism | `minimalist` |
-| Tactical, mechanical, raw, data-dense, Swiss/terminal look | `brutalist` |
-| Generate a semantic `DESIGN.md` for Google Stitch | `stitch` |
+| Job                                                             | Use           |
+| --------------------------------------------------------------- | ------------- |
+| New page, component, app screen, dashboard, landing page        | `design`      |
+| Existing UI needs premium upgrade without rewrites              | `redesign`    |
+| Everyday motion, transitions, hover, state changes              | `animate`     |
+| Cinematic scroll, pinned sections, timelines, page choreography | `gsap`        |
+| UX/accessibility score before launch                            | `ui-audit`    |
+| Deep heuristic/persona critique                                 | `critique`    |
+| Slow, janky, layout-shifting, heavy media UI                    | `ui-optimize` |
+| High-end agency softness, glass, luxury, editorial mood         | `soft`        |
+| Quiet editorial/workspace minimalism                            | `minimalist`  |
+| Tactical, mechanical, raw, data-dense, Swiss/terminal look      | `brutalist`   |
+| Generate a semantic `DESIGN.md` for Google Stitch               | `stitch`      |
 
 Load `design` for implementation after this skill unless the task is purely review-only.
 
@@ -50,16 +50,16 @@ If the repo already has brand tokens, CSS variables, components, or previous des
 
 Use these as starting points, then adapt to user intent:
 
-| Product | Good defaults | Avoid |
-|---|---|---|
-| SaaS / B2B app | restrained palette, strong type hierarchy, clear nav, dense but calm surfaces | marketing hero inside dashboards, fake metric card grids |
-| Admin / dashboard | tabular clarity, filters, persistent state, mono numerals, restrained motion | decorative cards, mystery icons, color-only status |
-| Landing page | strong first viewport, proof, focused CTA, visual asset, memorable structure | centered gradient hero with two generic buttons |
-| E-commerce | product imagery first, trust signals, clear pricing, fast checkout states | vague lifestyle visuals replacing inspectable product info |
-| Portfolio / creative | distinctive art direction, editorial layout, richer motion | generic card grids, stock-looking mockups |
-| Developer tool | precise copy, dark/light aware tokens, keyboard affordances, code/data examples | playful metaphors that obscure workflow |
-| Healthcare / finance / legal | trust, legibility, accessibility, conservative motion, explicit recovery paths | neon, gimmicks, unclear risk language |
-| Consumer mobile/web app | touch targets, direct language, friendly feedback, safe-area awareness | hover-only behavior, tiny controls, dense desktop-first layouts |
+| Product                      | Good defaults                                                                   | Avoid                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| SaaS / B2B app               | restrained palette, strong type hierarchy, clear nav, dense but calm surfaces   | marketing hero inside dashboards, fake metric card grids        |
+| Admin / dashboard            | tabular clarity, filters, persistent state, mono numerals, restrained motion    | decorative cards, mystery icons, color-only status              |
+| Landing page                 | strong first viewport, proof, focused CTA, visual asset, memorable structure    | centered gradient hero with two generic buttons                 |
+| E-commerce                   | product imagery first, trust signals, clear pricing, fast checkout states       | vague lifestyle visuals replacing inspectable product info      |
+| Portfolio / creative         | distinctive art direction, editorial layout, richer motion                      | generic card grids, stock-looking mockups                       |
+| Developer tool               | precise copy, dark/light aware tokens, keyboard affordances, code/data examples | playful metaphors that obscure workflow                         |
+| Healthcare / finance / legal | trust, legibility, accessibility, conservative motion, explicit recovery paths  | neon, gimmicks, unclear risk language                           |
+| Consumer mobile/web app      | touch targets, direct language, friendly feedback, safe-area awareness          | hover-only behavior, tiny controls, dense desktop-first layouts |
 
 ## 4. Premium Quality Bar
 
@@ -92,6 +92,7 @@ For substantial UI work, include a short design direction before code:
 
 ```markdown
 Design direction:
+
 - Product/audience:
 - Tone:
 - Structure:

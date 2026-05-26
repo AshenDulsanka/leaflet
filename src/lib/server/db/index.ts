@@ -1,6 +1,6 @@
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { getDb } from '../database.js';
-import * as schema from './schema.js';
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { getDb } from "../database.js";
+import * as schema from "./schema.js";
 
 type DrizzleDB = ReturnType<typeof drizzle<typeof schema>>;
 

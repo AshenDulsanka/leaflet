@@ -15,16 +15,16 @@ export interface FindOptions {
 export function computeMatches(
   text: string,
   query: string,
-  opts: FindOptions
+  opts: FindOptions,
 ): Array<{ start: number; end: number }> {
   if (!query) return [];
   try {
     let pattern = opts.useRegex
       ? query
-      : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     if (opts.wholeWord) pattern = `\\b${pattern}\\b`;
     // 'gid' is not universally supported — fall back gracefully
-    const safeFlags = opts.caseSensitive ? 'g' : 'gi';
+    const safeFlags = opts.caseSensitive ? "g" : "gi";
     const regex = new RegExp(pattern, safeFlags);
     const matches: Array<{ start: number; end: number }> = [];
     let m: RegExpExecArray | null;

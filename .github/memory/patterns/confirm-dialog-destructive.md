@@ -13,6 +13,7 @@ aliases: []
 # ConfirmDialog for All Destructive Actions
 
 ## When to Use
+
 Any delete, clear, reset, or other irreversible operation triggered from the UI. Applies to engagement panel delete buttons, note deletion, workspace removal, and any bulk clear operations.
 
 ## Implementation
@@ -47,9 +48,11 @@ Any delete, clear, reset, or other irreversible operation triggered from the UI.
 ```
 
 ## Example in Codebase
+
 `src/lib/components/engagement/FlagTrackerPanel.svelte` — canonical reference for ConfirmDialog usage in engagement panels.
 
 ## Anti-Patterns
+
 ```svelte
 <!-- WRONG — direct delete without confirmation -->
 <button onclick={() => deleteItem(id)}>Delete</button>
@@ -59,5 +62,6 @@ Any delete, clear, reset, or other irreversible operation triggered from the UI.
 ```
 
 ## Related
+
 - [[sessions/2026-04-27-analyze-codebase]] — session where this was established
 - [[features/engagement-tools]] — all panels that use this pattern

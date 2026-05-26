@@ -2,7 +2,7 @@
 name: UX Reviewer
 description: Reviews UI components and pages for UX quality, accessibility, interaction design, and usability — never modifies code.
 model: Claude Sonnet 4.6 (copilot)
-tools: [read, search, 'io.github.upstash/context7/*']
+tools: [read, search, "io.github.upstash/context7/*"]
 user-invocable: false
 ---
 
@@ -83,6 +83,7 @@ Per finding: `## [SEVERITY] — <Category>` / Location / Issue / Recommendation
 Severity: **Critical** (WCAG AA fail or blocks core task) | **High** (major friction) | **Medium** (minor) | **Low** (polish)
 
 Summary:
+
 1. **Summary** — component reviewed, overall quality
 2. **Critical** — blocks core tasks or fails WCAG AA
 3. **High** — significant friction
@@ -90,6 +91,7 @@ Summary:
 5. **Status** — Approved / Approved with minor changes / Needs revision
 
 ## Handoff → Docs-updater
+
 - **type**: review
 - **summary**: [components reviewed, overall UX quality]
 - **decisions**: [UX patterns confirmed or issues found]

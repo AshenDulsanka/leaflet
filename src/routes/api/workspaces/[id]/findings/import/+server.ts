@@ -6,20 +6,20 @@
  * in a single transaction.
  */
 
-import { json } from '@sveltejs/kit';
-import { randomUUID } from 'crypto';
-import type { RequestHandler } from './$types';
-import { parseScanner } from '$lib/server/scanner';
-import type { ScannedFinding } from '$lib/types';
+import { json } from "@sveltejs/kit";
+import { randomUUID } from "crypto";
+import type { RequestHandler } from "./$types";
+import { parseScanner } from "$lib/server/scanner";
+import type { ScannedFinding } from "$lib/types";
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
   const { db } = locals;
 
   const form = await request.formData();
-  const file = form.get('file');
+  const file = form.get("file");
 
   if (!(file instanceof File)) {
-    return json({ error: 'file field is required' }, { status: 400 });
+    return json({ error: "file field is required" }, { status: 400 });
   }
 
   const xml = await file.text();
@@ -33,7 +33,9 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
   // Build set of existing finding titles (normalised) for deduplication.
   const existingRows = db
-    .prepare(`SELECT lower(trim(title)) AS norm FROM findings WHERE workspace_id = ?`)
+    .prepare(
+      `SELECT lower(trim(title)) AS norm FROM findings WHERE workspace_id = ?`,
+    )
     .all(workspaceId) as { norm: string }[];
   const existing = new Set(existingRows.map((r) => r.norm));
 
@@ -42,7 +44,9 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   for (const f of result.findings) {
     if (!hostCache.has(f.hostIp)) {
       const row = db
-        .prepare(`SELECT id FROM hosts WHERE workspace_id = ? AND ip = ? LIMIT 1`)
+        .prepare(
+          `SELECT id FROM hosts WHERE workspace_id = ? AND ip = ? LIMIT 1`,
+        )
         .get(workspaceId, f.hostIp) as { id: string } | undefined;
       hostCache.set(f.hostIp, row?.id ?? null);
     }
@@ -70,11 +74,22 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
         : f.hostIp
           ? `**Host:** ${f.hostIp}\n\n${f.description}`
           : f.description;
-      insertStmt.run(randomUUID(), workspaceId, f.title, desc, f.severity, hostId);
+      insertStmt.run(
+        randomUUID(),
+        workspaceId,
+        f.title,
+        desc,
+        f.severity,
+        hostId,
+      );
     }
   });
 
   importTx(toImport);
 
-  return json({ imported: toImport.length, skipped, parseErrors: result.errors.length });
+  return json({
+    imported: toImport.length,
+    skipped,
+    parseErrors: result.errors.length,
+  });
 };

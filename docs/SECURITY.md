@@ -45,7 +45,7 @@ Every server route in `src/routes/api/notes/` must validate file paths before an
 
 ```typescript
 // CORRECT
-const row = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(id);
+const row = db.prepare("SELECT * FROM workspaces WHERE id = ?").get(id);
 
 // NEVER DO THIS
 const row = db.prepare(`SELECT * FROM workspaces WHERE id = ${id}`).get();

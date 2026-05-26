@@ -5,24 +5,28 @@
  * GET  /api/workspaces/global/snippets - List global (unscoped) snippets
  */
 
-import { json } from '@sveltejs/kit';
-import { randomUUID } from 'crypto';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from "@sveltejs/kit";
+import { randomUUID } from "crypto";
+import type { RequestHandler } from "@sveltejs/kit";
 
 export const GET: RequestHandler = async ({ params, locals }) => {
   const { db } = locals;
   // Return workspace-scoped snippets + global snippets (workspace_id IS NULL)
-  const snippets = db.prepare(`
+  const snippets = db
+    .prepare(
+      `
     SELECT * FROM command_snippets
     WHERE workspace_id = ? OR workspace_id IS NULL
     ORDER BY category, title
-  `).all(params.id);
+  `,
+    )
+    .all(params.id);
   return json(snippets);
 };
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
   const { db } = locals;
-  const body = await request.json() as {
+  const body = (await request.json()) as {
     category?: string;
     title: string;
     command: string;
@@ -32,34 +36,48 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   };
 
   const VALID_CATEGORIES = new Set([
-    'general', 'recon', 'exploitation', 'privesc-linux', 'privesc-windows',
-    'pivoting', 'ad-attacks', 'file-transfer', 'credential-attacks'
+    "general",
+    "recon",
+    "exploitation",
+    "privesc-linux",
+    "privesc-windows",
+    "pivoting",
+    "ad-attacks",
+    "file-transfer",
+    "credential-attacks",
   ]);
 
   if (!body.title?.trim() || !body.command?.trim()) {
-    return json({ error: 'title and command are required' }, { status: 400 });
+    return json({ error: "title and command are required" }, { status: 400 });
   }
 
   if (body.category !== undefined && !VALID_CATEGORIES.has(body.category)) {
-    return json({ error: 'Invalid category' }, { status: 400 });
+    return json({ error: "Invalid category" }, { status: 400 });
   }
 
   const id = randomUUID();
   const workspaceId = body.global ? null : params.id;
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO command_snippets (id, workspace_id, category, title, command, description, tags)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     id,
     workspaceId,
-    body.category ?? 'general',
+    body.category ?? "general",
     body.title.trim(),
     body.command.trim(),
-    body.description ?? '',
-    JSON.stringify(body.tags ?? [])
+    body.description ?? "",
+    JSON.stringify(body.tags ?? []),
   );
 
-  const snippet = db.prepare('SELECT * FROM command_snippets WHERE id = ?').get(id) as Record<string, unknown>;
-  return json({ ...snippet, tags: JSON.parse(snippet.tags as string) }, { status: 201 });
+  const snippet = db
+    .prepare("SELECT * FROM command_snippets WHERE id = ?")
+    .get(id) as Record<string, unknown>;
+  return json(
+    { ...snippet, tags: JSON.parse(snippet.tags as string) },
+    { status: 201 },
+  );
 };

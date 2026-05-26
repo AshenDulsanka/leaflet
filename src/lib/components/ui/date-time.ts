@@ -19,19 +19,21 @@ export type CalendarDay = {
 const LOCAL_VALUE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 
 const DATE_LABEL_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  weekday: 'long',
-  month: 'long',
-  day: 'numeric',
-  year: 'numeric',
+  weekday: "long",
+  month: "long",
+  day: "numeric",
+  year: "numeric",
 });
 
-export const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function padNumber(value: number): string {
-  return String(value).padStart(2, '0');
+  return String(value).padStart(2, "0");
 }
 
-export function dateKeyFromParts(parts: Pick<DateParts, 'year' | 'month' | 'day'>): string {
+export function dateKeyFromParts(
+  parts: Pick<DateParts, "year" | "month" | "day">,
+): string {
   return `${parts.year}-${padNumber(parts.month)}-${padNumber(parts.day)}`;
 }
 
@@ -40,18 +42,26 @@ export function formatDateTimeValue(parts: DateParts): string {
 }
 
 function buildDate(parts: DateParts): Date {
-  return new Date(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, 0, 0);
+  return new Date(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    0,
+    0,
+  );
 }
 
 function isValidParts(parts: DateParts): boolean {
   const candidate = buildDate(parts);
 
   return (
-    candidate.getFullYear() === parts.year
-    && candidate.getMonth() === parts.month - 1
-    && candidate.getDate() === parts.day
-    && candidate.getHours() === parts.hour
-    && candidate.getMinutes() === parts.minute
+    candidate.getFullYear() === parts.year &&
+    candidate.getMonth() === parts.month - 1 &&
+    candidate.getDate() === parts.day &&
+    candidate.getHours() === parts.hour &&
+    candidate.getMinutes() === parts.minute
   );
 }
 
@@ -92,15 +102,19 @@ export function localDateTimeValue(date: Date = new Date()): string {
   return formatDateTimeValue(partsFromDate(date));
 }
 
-export function toLocalDateTimeValue(value: string | Date | null | undefined): string {
+export function toLocalDateTimeValue(
+  value: string | Date | null | undefined,
+): string {
   if (value instanceof Date) return localDateTimeValue(value);
-  if (!value) return '';
+  if (!value) return "";
 
   const parsed = parseDateTimeValue(value);
-  return parsed ? formatDateTimeValue(parsed) : '';
+  return parsed ? formatDateTimeValue(parsed) : "";
 }
 
-function splitDateKey(dateKey: string): Pick<DateParts, 'year' | 'month' | 'day'> | null {
+function splitDateKey(
+  dateKey: string,
+): Pick<DateParts, "year" | "month" | "day"> | null {
   const match = dateKey.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
 
@@ -111,9 +125,10 @@ function splitDateKey(dateKey: string): Pick<DateParts, 'year' | 'month' | 'day'
   };
 
   const candidate = new Date(parsed.year, parsed.month - 1, parsed.day);
-  const isValid = candidate.getFullYear() === parsed.year
-    && candidate.getMonth() === parsed.month - 1
-    && candidate.getDate() === parsed.day;
+  const isValid =
+    candidate.getFullYear() === parsed.year &&
+    candidate.getMonth() === parsed.month - 1 &&
+    candidate.getDate() === parsed.day;
 
   return isValid ? parsed : null;
 }
@@ -127,15 +142,18 @@ export function selectedDateKey(value: string): string | null {
   return parsed ? dateKeyFromParts(parsed) : null;
 }
 
-export function monthAnchorFromValue(value: string, fallback: Date = new Date()): Date {
+export function monthAnchorFromValue(
+  value: string,
+  fallback: Date = new Date(),
+): Date {
   const parsed = parseDateTimeValue(value) ?? fallbackParts(fallback);
   return new Date(parsed.year, parsed.month - 1, 1);
 }
 
 export function monthLabel(anchor: Date): string {
   return anchor.toLocaleDateString(undefined, {
-    month: 'long',
-    year: 'numeric',
+    month: "long",
+    year: "numeric",
   });
 }
 
@@ -182,7 +200,8 @@ export function withSelectedDate(
   const nextDate = splitDateKey(dateKey);
   if (!nextDate) return currentValue;
 
-  const currentParts = parseDateTimeValue(currentValue) ?? fallbackParts(fallback);
+  const currentParts =
+    parseDateTimeValue(currentValue) ?? fallbackParts(fallback);
 
   return formatDateTimeValue({
     ...currentParts,
@@ -196,7 +215,8 @@ export function withSelectedTime(
   minute: number,
   fallback: Date = new Date(),
 ): string {
-  const currentParts = parseDateTimeValue(currentValue) ?? fallbackParts(fallback);
+  const currentParts =
+    parseDateTimeValue(currentValue) ?? fallbackParts(fallback);
 
   return formatDateTimeValue({
     ...currentParts,

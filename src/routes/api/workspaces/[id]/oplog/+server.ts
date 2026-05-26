@@ -3,13 +3,20 @@
  * POST /api/workspaces/[id]/oplog  - Create a new operation log entry
  */
 
-import { json } from '@sveltejs/kit';
-import { randomUUID } from 'crypto';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from "@sveltejs/kit";
+import { randomUUID } from "crypto";
+import type { RequestHandler } from "@sveltejs/kit";
 
-import { parseOpLogCreateBody, parseRouteId } from '$lib/server/oplog-validation';
+import {
+  parseOpLogCreateBody,
+  parseRouteId,
+} from "$lib/server/oplog-validation";
 
-function selectEntryById(db: App.Locals['db'], workspaceId: string, entryId: string): unknown {
+function selectEntryById(
+  db: App.Locals["db"],
+  workspaceId: string,
+  entryId: string,
+): unknown {
   return db
     .prepare(
       `
@@ -17,14 +24,18 @@ function selectEntryById(db: App.Locals['db'], workspaceId: string, entryId: str
       FROM operation_log ol
       LEFT JOIN hosts h ON h.id = ol.host_id AND h.workspace_id = ol.workspace_id
       WHERE ol.id = ? AND ol.workspace_id = ?
-    `
+    `,
     )
     .get(entryId, workspaceId);
 }
 
-function hostExistsInWorkspace(db: App.Locals['db'], workspaceId: string, hostId: string): boolean {
+function hostExistsInWorkspace(
+  db: App.Locals["db"],
+  workspaceId: string,
+  hostId: string,
+): boolean {
   const row = db
-    .prepare('SELECT 1 FROM hosts WHERE id = ? AND workspace_id = ?')
+    .prepare("SELECT 1 FROM hosts WHERE id = ? AND workspace_id = ?")
     .get(hostId, workspaceId);
 
   return row !== undefined;
@@ -32,7 +43,7 @@ function hostExistsInWorkspace(db: App.Locals['db'], workspaceId: string, hostId
 
 export const GET: RequestHandler = async ({ params, locals }) => {
   const { db } = locals;
-  const workspaceId = parseRouteId(params.id, 'workspaceId');
+  const workspaceId = parseRouteId(params.id, "workspaceId");
   if (!workspaceId.ok) {
     return json({ error: workspaceId.error }, { status: 400 });
   }
@@ -45,7 +56,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
       LEFT JOIN hosts h ON h.id = ol.host_id AND h.workspace_id = ol.workspace_id
       WHERE ol.workspace_id = ?
       ORDER BY ol.timestamp DESC
-    `
+    `,
     )
     .all(workspaceId.data);
   return json(entries);
@@ -53,7 +64,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
   const { db } = locals;
-  const workspaceId = parseRouteId(params.id, 'workspaceId');
+  const workspaceId = parseRouteId(params.id, "workspaceId");
   if (!workspaceId.ok) {
     return json({ error: workspaceId.error }, { status: 400 });
   }
@@ -62,7 +73,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
   try {
     rawBody = await request.json();
   } catch {
-    return json({ error: 'Invalid JSON' }, { status: 400 });
+    return json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const body = parseOpLogCreateBody(rawBody);
@@ -70,8 +81,14 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     return json({ error: body.error }, { status: 400 });
   }
 
-  if (body.data.hostId !== null && !hostExistsInWorkspace(db, workspaceId.data, body.data.hostId)) {
-    return json({ error: 'host_id must belong to the workspace' }, { status: 400 });
+  if (
+    body.data.hostId !== null &&
+    !hostExistsInWorkspace(db, workspaceId.data, body.data.hostId)
+  ) {
+    return json(
+      { error: "host_id must belong to the workspace" },
+      { status: 400 },
+    );
   }
 
   const id = randomUUID();
@@ -81,7 +98,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     `
     INSERT INTO operation_log (id, workspace_id, category, description, host_id, timestamp, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `
+  `,
   ).run(
     id,
     workspaceId.data,
@@ -90,7 +107,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     body.data.hostId,
     body.data.timestamp,
     now,
-    now
+    now,
   );
 
   const entry = selectEntryById(db, workspaceId.data, id);

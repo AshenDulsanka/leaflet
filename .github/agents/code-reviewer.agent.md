@@ -2,7 +2,7 @@
 name: Code Reviewer
 description: Reviews source code against project coding standards and returns a structured critical/major/minor issue report — never modifies code.
 model: Claude Sonnet 4.6 (copilot)
-tools: [vscode, read, search, 'io.github.upstash/context7/*']
+tools: [vscode, read, search, "io.github.upstash/context7/*"]
 user-invocable: false
 ---
 
@@ -46,6 +46,7 @@ On start: read `.github/memory/_MOC.md` + `patterns/` + `learnings/` for establi
 ### Import Ordering (Low)
 
 Each group separated by a blank line:
+
 1. External npm packages
 2. Framework internals (router, state management, etc.)
 3. Internal path aliases
@@ -76,6 +77,7 @@ Each group separated by a blank line:
 Per issue: `## [SEVERITY] — <Rule>` / File+line / Issue / Current code / Expected pattern
 
 Summary:
+
 1. **Summary** — scope, overall quality
 2. **Critical** — must fix before merge
 3. **Major** — significant violations
@@ -85,6 +87,7 @@ Summary:
 7. **Obstacles** — files unreadable, tools needing flags
 
 ## Handoff → Docs-updater
+
 - **type**: review
 - **summary**: [files reviewed, overall quality verdict]
 - **decisions**: [patterns confirmed or flagged, approach changes needed]

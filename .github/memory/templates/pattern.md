@@ -1,9 +1,9 @@
 ---
 title: "{{pattern-name}}"
-date: {{date}}
+date: { { date } }
 type: pattern
 status: active
-agent: {{agent}}
+agent: { { agent } }
 tags:
   - pattern
 aliases: []
@@ -12,6 +12,7 @@ aliases: []
 # {{pattern-name}}
 
 ## When to Use
+
 Conditions and context where this pattern applies.
 
 ## Implementation
@@ -21,11 +22,14 @@ Conditions and context where this pattern applies.
 ```
 
 ## Example in Codebase
+
 `path/to/example/file.ts` — describe what it demonstrates.
 
 ## Anti-Patterns
+
 What NOT to do and why.
 
 ## Related
+
 - [[decisions/ADR-NNN-slug]] — why this pattern was adopted
 - [[sessions/YYYY-MM-DD-slug]] — session where this was established

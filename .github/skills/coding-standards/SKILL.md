@@ -10,6 +10,7 @@ description: Use when writing or reviewing code in any language. Covers typed-la
 ## Typed Language Rules (apply only when project uses the language)
 
 **TypeScript**
+
 - Strict mode required — never disable `strict: true`
 - No `any` without comment explaining why unavoidable
 - No `@ts-ignore` without comment
@@ -18,12 +19,14 @@ description: Use when writing or reviewing code in any language. Covers typed-la
 - All exported functions: explicit return type annotations
 
 **Python**
+
 - Type hints required on all function signatures (`def fn(x: int) -> str:`)
 - No `# type: ignore` without explanatory comment
 - Use `T | None` (Python 3.10+) or `Optional[T]` — no implicit `None` returns
 - Use `dataclasses` or `pydantic` for structured data shapes
 
 **Go**
+
 - All errors must be checked — never discard with `_` unless intentional + commented
 - Exported identifiers must have doc comments
 - No `interface{}` / `any` without justification
@@ -31,14 +34,14 @@ description: Use when writing or reviewing code in any language. Covers typed-la
 
 ## Naming Conventions
 
-| Thing | Convention | Example |
-|-------|-----------|---------|
-| UI components / classes | PascalCase | `UserCard`, `NoteEditor` |
-| Utility / helper files | kebab-case | `sync-messages.ts`, `format-date.py` |
-| Variables and functions | camelCase | `activeUser`, `loadData()` |
-| Module-level constants | UPPER_SNAKE_CASE | `MAX_RETRIES` |
-| Type / interface names | PascalCase | `UserSchema`, `ApiResponse` |
-| Route / endpoint files | Follow framework convention | `+page.server.ts`, `router.py` |
+| Thing                   | Convention                  | Example                              |
+| ----------------------- | --------------------------- | ------------------------------------ |
+| UI components / classes | PascalCase                  | `UserCard`, `NoteEditor`             |
+| Utility / helper files  | kebab-case                  | `sync-messages.ts`, `format-date.py` |
+| Variables and functions | camelCase                   | `activeUser`, `loadData()`           |
+| Module-level constants  | UPPER_SNAKE_CASE            | `MAX_RETRIES`                        |
+| Type / interface names  | PascalCase                  | `UserSchema`, `ApiResponse`          |
+| Route / endpoint files  | Follow framework convention | `+page.server.ts`, `router.py`       |
 
 ## File Organisation
 
@@ -64,6 +67,7 @@ description: Use when writing or reviewing code in any language. Covers typed-la
 ## Import Ordering
 
 Groups separated by a blank line:
+
 1. External packages / standard library
 2. Framework internals
 3. Internal path aliases
@@ -74,7 +78,7 @@ Groups separated by a blank line:
 - Functions under 50 lines, single responsibility
 - No dead code, unused imports, or commented-out blocks in commits
 - No logic repeated at 3+ call sites without extraction into a named helper
-- Comment the *why*, not the *what*
+- Comment the _why_, not the _what_
 
 ## What Never to Do
 

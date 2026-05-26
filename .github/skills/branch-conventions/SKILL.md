@@ -17,14 +17,14 @@ Include the issue number when a GitHub issue exists for the work.
 
 ## Type Prefixes
 
-| Type | When to Use | Example |
-|------|-------------|---------|
-| `feat` | New user-facing feature | `feat/12-user-profile-page` |
-| `fix` | Bug fix | `fix/auth-token-refresh` |
-| `docs` | Documentation updates only | `docs/contributing-guide` |
-| `chore` | Maintenance, dependency updates, tooling | `chore/upgrade-sveltekit-2` |
+| Type       | When to Use                               | Example                             |
+| ---------- | ----------------------------------------- | ----------------------------------- |
+| `feat`     | New user-facing feature                   | `feat/12-user-profile-page`         |
+| `fix`      | Bug fix                                   | `fix/auth-token-refresh`            |
+| `docs`     | Documentation updates only                | `docs/contributing-guide`           |
+| `chore`    | Maintenance, dependency updates, tooling  | `chore/upgrade-sveltekit-2`         |
 | `refactor` | Code restructure with no behaviour change | `refactor/extract-validation-logic` |
-| `ci` | CI/CD pipeline changes | `ci/add-type-check-workflow` |
+| `ci`       | CI/CD pipeline changes                    | `ci/add-type-check-workflow`        |
 
 ## Rules
 

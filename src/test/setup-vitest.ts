@@ -1,5 +1,5 @@
 // Polyfill missing Web Animations API hooks used by Svelte transitions in jsdom.
-if (typeof Element !== 'undefined' && !Element.prototype.animate) {
+if (typeof Element !== "undefined" && !Element.prototype.animate) {
   Element.prototype.animate = function animate(): Animation {
     const noop = () => undefined;
 
@@ -21,12 +21,12 @@ if (typeof Element !== 'undefined' && !Element.prototype.animate) {
       currentTime: 0,
       effect: null,
       finished: Promise.resolve(),
-      id: '',
+      id: "",
       pending: false,
-      playState: 'finished',
+      playState: "finished",
       playbackRate: 1,
       ready: Promise.resolve(),
-      replaceState: 'active',
+      replaceState: "active",
       startTime: 0,
       timeline: null,
     } as unknown as Animation;

@@ -2,7 +2,17 @@
 name: Coder
 description: Implements server and client-side code, API endpoints, and unit tests following strict project conventions.
 model: Claude Sonnet 4.6 (copilot)
-tools: [vscode, execute, read, edit, search, 'github/*', 'io.github.upstash/context7/*', todo]
+tools:
+  [
+    vscode,
+    execute,
+    read,
+    edit,
+    search,
+    "github/*",
+    "io.github.upstash/context7/*",
+    todo,
+  ]
 user-invocable: false
 ---
 
@@ -32,6 +42,7 @@ On start: read `.github/memory/_MOC.md` + `patterns/` + `decisions/` for establi
 ## Principles
 
 ### Security (non-negotiable)
+
 - Validate all user input at API boundaries (type, length, format)
 - No stack traces or internal paths to client
 - No hardcoded secrets — env vars, fail fast on missing
@@ -39,6 +50,7 @@ On start: read `.github/memory/_MOC.md` + `patterns/` + `decisions/` for establi
 - Database: parameterized queries only, never interpolate user input
 
 ### Code Quality
+
 - TypeScript strict mode, always on
 - No `any` without comment. All exported fns: explicit return types
 - Functions under 50 lines, single responsibility
@@ -55,6 +67,7 @@ Each exported function: happy path + edge case + error case. Mock only at system
 ## Branch + Issue Flow
 
 Per Planner's issues:
+
 1. Load `branch-conventions` skill — create branch per issue following naming rules
 2. Implement issue scope
 3. Commit per issue (atomic)
@@ -69,6 +82,7 @@ Per Planner's issues:
 6. **Obstacles** — dependency conflicts, API surprises, workarounds
 
 ## Handoff → Docs-updater
+
 - **type**: pattern | learning
 - **summary**: [one-line description of what was implemented]
 - **decisions**: [approach choices, patterns applied]

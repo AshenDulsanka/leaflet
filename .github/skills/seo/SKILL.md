@@ -11,16 +11,16 @@ user-invocable: true
 
 Technical foundation must come first — unindexed pages can't rank regardless of quality.
 
-| Phase | Focus | Why first |
-|-------|-------|-----------|
-| **1** | Crawl & index (sitemap, robots.txt, prerender) | Unblocks everything else |
-| **2** | Metadata (title, description, canonical, OG/Twitter) | Controls SERP appearance |
-| **3** | Structured data (JSON-LD) | Enables rich results |
-| **4** | Core Web Vitals (LCP, INP, CLS) | Ranking signal + UX quality |
-| **5** | On-page alignment (H1, headings, first paragraph) | Relevance signal |
-| **6** | Internal linking | Authority distribution |
-| **7** | Off-page (social signals, backlinks) | Domain authority |
-| **8** | Monitoring & iteration | Compound gains |
+| Phase | Focus                                                | Why first                   |
+| ----- | ---------------------------------------------------- | --------------------------- |
+| **1** | Crawl & index (sitemap, robots.txt, prerender)       | Unblocks everything else    |
+| **2** | Metadata (title, description, canonical, OG/Twitter) | Controls SERP appearance    |
+| **3** | Structured data (JSON-LD)                            | Enables rich results        |
+| **4** | Core Web Vitals (LCP, INP, CLS)                      | Ranking signal + UX quality |
+| **5** | On-page alignment (H1, headings, first paragraph)    | Relevance signal            |
+| **6** | Internal linking                                     | Authority distribution      |
+| **7** | Off-page (social signals, backlinks)                 | Domain authority            |
+| **8** | Monitoring & iteration                               | Compound gains              |
 
 ---
 
@@ -36,16 +36,20 @@ export const prerender = true;
 
 export async function GET() {
   const pages = [
-    { url: '/', priority: 1.0, changefreq: 'weekly' },
-    { url: '/about', priority: 0.9, changefreq: 'monthly' },
-    { url: '/projects', priority: 0.9, changefreq: 'weekly' },
-    { url: '/experience', priority: 0.8, changefreq: 'monthly' },
-    { url: '/blog', priority: 0.7, changefreq: 'daily' },
+    { url: "/", priority: 1.0, changefreq: "weekly" },
+    { url: "/about", priority: 0.9, changefreq: "monthly" },
+    { url: "/projects", priority: 0.9, changefreq: "weekly" },
+    { url: "/experience", priority: 0.8, changefreq: "monthly" },
+    { url: "/blog", priority: 0.7, changefreq: "daily" },
   ];
 
   // Dynamic entries
   projects.forEach((p) =>
-    pages.push({ url: `/projects/${p.slug}`, priority: 0.8, changefreq: 'monthly' })
+    pages.push({
+      url: `/projects/${p.slug}`,
+      priority: 0.8,
+      changefreq: "monthly",
+    }),
   );
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -56,12 +60,12 @@ ${pages
     <loc>https://yourdomain.com${p.url}</loc>
     <priority>${p.priority}</priority>
     <changefreq>${p.changefreq}</changefreq>
-  </url>`
+  </url>`,
   )
-  .join('\n')}
+  .join("\n")}
 </urlset>`;
 
-  return new Response(xml, { headers: { 'Content-Type': 'application/xml' } });
+  return new Response(xml, { headers: { "Content-Type": "application/xml" } });
 }
 ```
 
@@ -170,9 +174,9 @@ One component used on every page — prevents inconsistency, reduces errors.
 
 ### Character Limits
 
-| Element | Desktop max | Mobile max | Target range |
-|---------|-------------|------------|--------------|
-| `<title>` | 58–60 chars | 55 chars | **55–59 chars** |
+| Element              | Desktop max   | Mobile max    | Target range      |
+| -------------------- | ------------- | ------------- | ----------------- |
+| `<title>`            | 58–60 chars   | 55 chars      | **55–59 chars**   |
 | `<meta description>` | 155–160 chars | 120–130 chars | **148–155 chars** |
 
 Google truncates by pixel width, not exact char count. Prioritize the first 120 chars of descriptions — mobile shows only ~85–120 chars.
@@ -183,12 +187,12 @@ Google truncates by pixel width, not exact char count. Prioritize the first 120 
 [Name or Brand] | [Primary Keyword] & [Secondary Keyword]
 ```
 
-| Page | Good example | Length |
-|------|-------------|--------|
-| Home | `Your Name \| Security Researcher & Full-Stack Engineer` | 58 |
-| About | `About Your Name \| Cybersecurity Engineer & Developer` | 54 |
-| Projects | `Cybersecurity & Full-Stack Projects \| Your Name` | 49 |
-| Blog post | `How I Built a Phishing Detection System \| Your Blog` | 53 |
+| Page      | Good example                                             | Length |
+| --------- | -------------------------------------------------------- | ------ |
+| Home      | `Your Name \| Security Researcher & Full-Stack Engineer` | 58     |
+| About     | `About Your Name \| Cybersecurity Engineer & Developer`  | 54     |
+| Projects  | `Cybersecurity & Full-Stack Projects \| Your Name`       | 49     |
+| Blog post | `How I Built a Phishing Detection System \| Your Blog`   | 53     |
 
 ### Description Formula
 
@@ -348,26 +352,29 @@ Also add `rel="me noopener noreferrer"` to the same social links in HTML — rei
 
 ### Thresholds (measure at 75th percentile of page loads)
 
-| Metric | Good | Needs work | Poor |
-|--------|------|------------|------|
-| **LCP** — Largest Contentful Paint | ≤ 2.5s | 2.5s–4.0s | > 4.0s |
+| Metric                              | Good    | Needs work  | Poor    |
+| ----------------------------------- | ------- | ----------- | ------- |
+| **LCP** — Largest Contentful Paint  | ≤ 2.5s  | 2.5s–4.0s   | > 4.0s  |
 | **INP** — Interaction to Next Paint | ≤ 200ms | 200ms–500ms | > 500ms |
-| **CLS** — Cumulative Layout Shift | ≤ 0.1 | 0.1–0.25 | > 0.25 |
+| **CLS** — Cumulative Layout Shift   | ≤ 0.1   | 0.1–0.25    | > 0.25  |
 
 FID was retired in 2024; INP replaced it as the interactivity metric.
 
 ### Common Causes & Fixes
 
 **LCP degraders:**
+
 - Large unoptimized images → use WebP/AVIF, add `fetchpriority="high"` on the LCP element
 - Render-blocking scripts/CSS → defer non-critical scripts
 - Slow TTFB → optimize server response time or use prerendering/SSG
 
 **INP degraders:**
+
 - Long JS tasks blocking the main thread → break up heavy handlers, use `requestIdleCallback`
 - Heavy event handlers on inputs/clicks → debounce expensive operations
 
 **CLS degraders:**
+
 - Images/embeds without explicit dimensions → always set `width` + `height`
 - Late-injected banners → reserve space with CSS `min-height` before content loads
 - Web font layout shifts → use `font-display: swap`
@@ -376,8 +383,14 @@ FID was retired in 2024; INP replaced it as the interactivity metric.
 
 ```html
 <!-- LCP image: eager + high priority, explicit dimensions -->
-<img src="hero.webp" alt="..." width="1200" height="630"
-     loading="eager" fetchpriority="high" />
+<img
+  src="hero.webp"
+  alt="..."
+  width="1200"
+  height="630"
+  loading="eager"
+  fetchpriority="high"
+/>
 
 <!-- All other images: lazy, always with dimensions -->
 <img src="project.webp" alt="..." width="800" height="450" loading="lazy" />
@@ -433,6 +446,7 @@ Google extracts the first ~100–150 characters of body copy for rich snippets.
 ```
 
 The first paragraph must:
+
 - Reinforce the H1 topic
 - State the primary keyword naturally
 - Answer "what will I find on this page?"
@@ -450,7 +464,7 @@ Connect detail pages to related detail pages — distributes authority and impro
 export function getRelated<T extends { slug: string; technologies: string[] }>(
   currentSlug: string,
   allItems: T[],
-  limit = 3
+  limit = 3,
 ): T[] {
   const current = allItems.find((i) => i.slug === currentSlug);
   if (!current) return [];
@@ -460,7 +474,9 @@ export function getRelated<T extends { slug: string; technologies: string[] }>(
     .map((item) => ({
       item,
       overlap: item.technologies.filter((t) =>
-        current.technologies.map((x) => x.toLowerCase()).includes(t.toLowerCase())
+        current.technologies
+          .map((x) => x.toLowerCase())
+          .includes(t.toLowerCase()),
       ).length,
     }))
     .filter(({ overlap }) => overlap > 0)
@@ -486,6 +502,7 @@ export function getRelated<T extends { slug: string; technologies: string[] }>(
 Consistent identity across platforms strengthens entity recognition in Google's Knowledge Graph.
 
 **Every public profile must have:**
+
 - Same full name (no nicknames)
 - Same role/headline using your primary keywords
 - Link back to your primary domain
@@ -498,11 +515,13 @@ Platforms: GitHub, LinkedIn, X/Twitter, YouTube, Dev.to, any publications.
 One high-quality backlink beats twenty weak ones.
 
 **Backlink-ready assets (create one):**
+
 - Detailed project case study with architecture, metrics, and lessons
 - Original research or tool comparison
 - Open-source tool with real documentation
 
 **Outreach targets:**
+
 - Relevant communities (Discord servers, Reddit, niche forums)
 - Dev directories (Dev.to, HackerNews Show HN)
 - Guest posts on domain authority > 20 niche sites (cybersecurity, dev, SaaS)
@@ -516,6 +535,7 @@ One high-quality backlink beats twenty weak ones.
 ### Weekly Checklist (30 min)
 
 In Google Search Console:
+
 1. Impressions ↑ — visibility growing?
 2. Clicks ↑ — CTR improvements landing?
 3. CTR by page — any page < 1.5%? → rewrite title/description
@@ -524,12 +544,12 @@ In Google Search Console:
 
 ### Response Guide
 
-| Signal | Action |
-|--------|--------|
-| Impressions ↓ | Check for noindex tags, robots.txt issues, server errors |
-| CTR ↓ on a page | Rewrite title/description — try more specific variant |
-| Avg position degraded | Content refresh + add internal links from higher-ranking pages |
-| CWV regression | Run PageSpeed Insights → isolate regression → fix before next deploy |
+| Signal                | Action                                                               |
+| --------------------- | -------------------------------------------------------------------- |
+| Impressions ↓         | Check for noindex tags, robots.txt issues, server errors             |
+| CTR ↓ on a page       | Rewrite title/description — try more specific variant                |
+| Avg position degraded | Content refresh + add internal links from higher-ranking pages       |
+| CWV regression        | Run PageSpeed Insights → isolate regression → fix before next deploy |
 
 ### Monthly Optimization Cycle
 
@@ -543,29 +563,29 @@ In Google Search Console:
 
 ## Common Pitfalls
 
-| Pitfall | Cause | Fix |
-|---------|-------|-----|
-| Template syntax in JSON-LD | Unescaped `<` in rendered HTML | `.replace(/</g, '\\u003c')` |
-| Duplicate canonicals | Copy-paste errors | Each page self-canonicals to its own URL |
-| Description truncated on mobile | Key info after 120 chars | Front-load the message in first 120 chars |
-| H1 mismatches title | Forgot to sync after title change | H1 must echo or closely match `<title>` |
-| Empty schema fields | No filter before `.map()` | `filter(item => Boolean(item.name?.trim()))` |
-| CLS from images | No explicit dimensions | Always add `width` + `height` to `<img>` |
-| API routes getting indexed | Missing `Disallow` in robots.txt | `Disallow: /api/` |
-| Meta keywords tag | Old habit | Remove — Google ignores it since 2009 |
+| Pitfall                         | Cause                             | Fix                                          |
+| ------------------------------- | --------------------------------- | -------------------------------------------- |
+| Template syntax in JSON-LD      | Unescaped `<` in rendered HTML    | `.replace(/</g, '\\u003c')`                  |
+| Duplicate canonicals            | Copy-paste errors                 | Each page self-canonicals to its own URL     |
+| Description truncated on mobile | Key info after 120 chars          | Front-load the message in first 120 chars    |
+| H1 mismatches title             | Forgot to sync after title change | H1 must echo or closely match `<title>`      |
+| Empty schema fields             | No filter before `.map()`         | `filter(item => Boolean(item.name?.trim()))` |
+| CLS from images                 | No explicit dimensions            | Always add `width` + `height` to `<img>`     |
+| API routes getting indexed      | Missing `Disallow` in robots.txt  | `Disallow: /api/`                            |
+| Meta keywords tag               | Old habit                         | Remove — Google ignores it since 2009        |
 
 ---
 
 ## Validation Tools
 
-| Tool | Use |
-|------|-----|
-| [Google Rich Results Test](https://search.google.com/test/rich-results) | Validate JSON-LD schema |
-| [PageSpeed Insights](https://pagespeed.web.dev) | Core Web Vitals (field + lab) |
-| [Google Search Console](https://search.google.com/search-console) | Indexing, clicks, impressions, CTR |
-| [SERP Simulator — Sistrix](https://app.sistrix.com/serp-simulator) | Preview title/description in SERP |
-| Lighthouse (Chrome DevTools) | Local CWV audit during development |
-| `site:yourdomain.com` in Google | Quick index check |
+| Tool                                                                    | Use                                |
+| ----------------------------------------------------------------------- | ---------------------------------- |
+| [Google Rich Results Test](https://search.google.com/test/rich-results) | Validate JSON-LD schema            |
+| [PageSpeed Insights](https://pagespeed.web.dev)                         | Core Web Vitals (field + lab)      |
+| [Google Search Console](https://search.google.com/search-console)       | Indexing, clicks, impressions, CTR |
+| [SERP Simulator — Sistrix](https://app.sistrix.com/serp-simulator)      | Preview title/description in SERP  |
+| Lighthouse (Chrome DevTools)                                            | Local CWV audit during development |
+| `site:yourdomain.com` in Google                                         | Quick index check                  |
 
 ---
 
@@ -578,6 +598,7 @@ Target both branded queries (`[your name]`) and role queries (`security research
 ### Project pages as conversion funnels
 
 Each project detail page:
+
 - Rich description + `ItemList` + `BreadcrumbList` schema
 - Link to GitHub / live demo
 - Related experience links (internal linking — share authority)

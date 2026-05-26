@@ -22,11 +22,11 @@ Workspace scope also affects other shipped features:
 
 ## Runtime Storage
 
-| Location | Purpose |
-|---|---|
-| `data/notes.db` | SQLite database for workspaces, hosts, credentials, flags, findings, topology, templates, screenshots metadata, and other structured data |
-| `data/notes/` | Markdown notes grouped by workspace folder |
-| `data/screenshots/` | Uploaded screenshot files |
+| Location            | Purpose                                                                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `data/notes.db`     | SQLite database for workspaces, hosts, credentials, flags, findings, topology, templates, screenshots metadata, and other structured data |
+| `data/notes/`       | Markdown notes grouped by workspace folder                                                                                                |
+| `data/screenshots/` | Uploaded screenshot files                                                                                                                 |
 
 The database runs in WAL mode. That keeps concurrent reads fast while the app is in use, and the sync flow checkpoints WAL content before git operations so committed data is complete.
 

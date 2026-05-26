@@ -1,9 +1,11 @@
 # Engagement Tools
 
 ## Purpose
+
 Suite of 10 pentest-specific panels available only in `pentest` workspaces. They cover the full lifecycle of a penetration test engagement: host tracking, credential management, flag tracking, attack path visualization, operation logging, vulnerability findings, network topology, CVSS scoring, command reuse, and methodology checklists.
 
 ## Key Files
+
 - `src/lib/components/engagement/HostTrackerPanel.svelte` — hosts, open ports, screenshots
 - `src/lib/components/engagement/CredentialVaultPanel.svelte` — credential store (username/password/hash/key)
 - `src/lib/components/engagement/FlagTrackerPanel.svelte` — CTF/exam flag capture and submission tracking (canonical uiMode reference)
@@ -16,9 +18,11 @@ Suite of 10 pentest-specific panels available only in `pentest` workspaces. They
 - Methodology panel (inline in `+page.svelte`) — CPTS checklist, gated on `preset === 'cpts'`
 
 ## Status
+
 in-progress
 
 ## Notes
+
 - ALL panels MUST accept `uiMode: 'modal' | 'inline'` prop. See [[patterns/engagement-panel-uimode]].
 - `FlagTrackerPanel.svelte` is the canonical reference for correct uiMode and ConfirmDialog implementation.
 - Methodology panel is gated on `activeWorkspace.preset === 'cpts'` — NOT on `workspace.type`.

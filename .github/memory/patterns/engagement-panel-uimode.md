@@ -14,6 +14,7 @@ aliases: []
 # uiMode-Aware Engagement Panel Pattern
 
 ## When to Use
+
 Building any new engagement panel that includes add or edit forms. All engagement panels (HostTracker, CredentialVault, FlagTracker, FindingsTracker, CommandSnippets, OperationLog, etc.) must implement this pattern.
 
 ## Implementation
@@ -54,11 +55,13 @@ Building any new engagement panel that includes add or edit forms. All engagemen
 ```
 
 ## Example in Codebase
+
 `src/lib/components/engagement/FlagTrackerPanel.svelte` — canonical reference for uiMode-aware panel with both modal and inline branches.
 
 `src/routes/[...path]/+page.svelte` — reads `uiMode` from localStorage and passes it as prop to all engagement panels.
 
 ## Anti-Patterns
+
 ```svelte
 <!-- WRONG — hardcodes modal mode, ignores user preference -->
 <div class="modal-overlay">...</div>
@@ -70,6 +73,7 @@ Building any new engagement panel that includes add or edit forms. All engagemen
 ```
 
 ## Related
+
 - [[decisions/ADR-007-uimode-prop]] — the architectural decision behind this pattern
 - [[features/engagement-tools]] — all panels using this convention
 - [[sessions/2026-04-27-analyze-codebase]] — session where this was established

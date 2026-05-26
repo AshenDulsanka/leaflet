@@ -16,5 +16,6 @@ When validating folder-to-folder drops in FileTree, descendant protection must c
 Also guard reorder cross-parent drops for folders with exact-parent equality (`targetParent === fromPath`) in addition to descendant checks (`targetParent.startsWith(`${fromPath}/`)`). Without equality check, dragging folder onto file inside same folder can emit `onMoveItem(sourceFolder, sourceFolder)`.
 
 ## Related
+
 - [[features/file-tree]]
 - [[patterns/workspace-scoped-queries]]
