@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production compose now passes `GITHUB_TOKEN` into the container and sync auth accepts `GITHUB_TOKEN`/`GH_TOKEN`/`GIT_TOKEN`, preventing non-interactive HTTPS git failures ("could not read Username").
 - SQLite sidecar files (`*.db-shm`, `*.db-wal`) are now untracked-safe via broader ignore patterns; tracked sidecars must be removed from index once with `git rm --cached`.
 - Sync push staging now uses an explicit allowlist (`data/notes.db`, `data/notes/`, `data/screenshots/`) instead of staging the entire `data/` tree.
+- Fresh-start sync push no longer fails when `data/screenshots/` is absent; staging now includes only allowlisted targets that exist or are already tracked.
 
 ## [1.0.0] - 2026-05-26
 

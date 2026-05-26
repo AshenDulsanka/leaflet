@@ -147,6 +147,40 @@ function gitWithOptionalAuth(
   return git(buildGitArgs(args, authHeader), cwd, timeout);
 }
 
+function hasTrackedEntries(repoRoot: string, relPath: string): boolean {
+  const tracked = tryGit(["ls-files", "--", relPath], repoRoot, 5_000);
+  return tracked !== null && tracked.trim().length > 0;
+}
+
+function getSyncAddTargets(repoRoot: string, dataDir: string): string[] {
+  const notesDbPath = join(dataDir, "notes.db");
+  const notesDirPath = join(dataDir, "notes");
+  const screenshotsDirPath = join(dataDir, "screenshots");
+
+  const relNotesDb = relative(repoRoot, notesDbPath);
+  const relNotesDir = relative(repoRoot, notesDirPath);
+  const relScreenshotsDir = relative(repoRoot, screenshotsDirPath);
+
+  const targets: string[] = [];
+
+  if (existsSync(notesDbPath) || hasTrackedEntries(repoRoot, relNotesDb)) {
+    targets.push(relNotesDb);
+  }
+
+  if (existsSync(notesDirPath) || hasTrackedEntries(repoRoot, relNotesDir)) {
+    targets.push(relNotesDir);
+  }
+
+  if (
+    existsSync(screenshotsDirPath) ||
+    hasTrackedEntries(repoRoot, relScreenshotsDir)
+  ) {
+    targets.push(relScreenshotsDir);
+  }
+
+  return targets;
+}
+
 function getRepoRoot(fromDir: string): string | null {
   return tryGit(["rev-parse", "--show-toplevel"], fromDir, 5_000);
 }
@@ -410,11 +444,16 @@ export async function runSyncAction(
 
       checkpoint();
 
-      const relNotesDb = relative(repoRoot, join(dataDir, "notes.db"));
-      const relNotesDir = relative(repoRoot, join(dataDir, "notes"));
-      const relScreenshotsDir = relative(repoRoot, join(dataDir, "screenshots"));
+      const addTargets = getSyncAddTargets(repoRoot, dataDir);
+      if (addTargets.length === 0) {
+        return {
+          status: 200,
+          body: { message: "Nothing to push - no sync targets found." },
+        };
+      }
+
       git(
-        ["add", "--all", "--", relNotesDb, relNotesDir, relScreenshotsDir],
+        ["add", "--all", "--", ...addTargets],
         repoRoot,
         10_000,
       );
