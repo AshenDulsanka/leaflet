@@ -48,14 +48,11 @@
       type="button"
       in:fly={{ x: 36, y: 8, duration: 240 }}
       out:fly={{ x: 30, y: -6, duration: 180 }}
-      class="pointer-events-auto flex w-80 max-w-[calc(100vw-2.5rem)] items-stretch overflow-hidden rounded-full border border-border bg-popover shadow-lg transition-transform duration-150 ease-out hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="pointer-events-auto flex w-80 max-w-[calc(100vw-2.5rem)] items-stretch overflow-hidden rounded-full bg-popover shadow-lg transition-transform duration-150 ease-out hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       onclick={() => notifications.dismiss(notif.id)}
       title="Dismiss notification"
       aria-label={`Dismiss ${notif.type} notification`}
     >
-      <!-- Colored left accent strip -->
-      <div class="w-1 shrink-0 {accentClass[notif.type]}"></div>
-
       <!-- Content -->
       <div class="flex min-w-0 flex-1 items-center gap-2 px-3 py-2">
         <span class="shrink-0 {iconClass[notif.type]}">
@@ -74,7 +71,7 @@
             {notif.message}
           </span>
           {#if notif.expiresAt !== null}
-            <div class="mt-1.5 h-0.5 w-full overflow-hidden rounded-full bg-border">
+            <div class="mt-1.5 h-0.5 w-full overflow-hidden rounded-full">
               <div
                 class="h-full origin-left {accentClass[notif.type]} opacity-60"
                 style={`animation: drain ${remainingMs(notif)}ms linear forwards;`}
