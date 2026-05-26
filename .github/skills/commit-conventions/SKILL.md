@@ -19,37 +19,37 @@ All commits in this repository must follow the [Conventional Commits](https://ww
 
 ## Type Prefixes
 
-| Type | Description | Example |
-|------|-------------|---------|
-| `feat` | A new user-facing feature | `feat(workspace): add CTF/general workspace type selection` |
-| `fix` | A bug fix | `fix(sidebar): scope pinned notes to active workspace` |
-| `docs` | Documentation changes only | `docs(readme): add Docker setup instructions` |
-| `style` | Formatting, whitespace, missing semicolons — no logic change | `style(editor): reformat toolbar button spacing` |
-| `refactor` | Code change that is neither a fix nor a feature | `refactor(tree): extract file rename logic to separate function` |
-| `perf` | Performance improvement | `perf(search): debounce full-text search queries` |
-| `test` | Adding or correcting tests | `test(api): add workspace creation endpoint tests` |
-| `chore` | Build process, dependency updates, tooling | `chore(deps): update @milkdown/crepe to v7.6` |
-| `ci` | CI/CD pipeline configuration | `ci: add svelte-check step to pull request workflow` |
-| `revert` | Reverts a previous commit | `revert: feat(sync): revert git push on sync button` |
+| Type       | Description                                                  | Example                                                    |
+| ---------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
+| `feat`     | A new user-facing feature                                    | `feat(ui): add dark mode toggle to header`                 |
+| `fix`      | A bug fix                                                    | `fix(auth): handle expired session tokens correctly`       |
+| `docs`     | Documentation changes only                                   | `docs(readme): add Docker setup instructions`              |
+| `style`    | Formatting, whitespace, missing semicolons — no logic change | `style(components): reformat button spacing`               |
+| `refactor` | Code change that is neither a fix nor a feature              | `refactor(api): extract validation logic to shared helper` |
+| `perf`     | Performance improvement                                      | `perf(db): add index on users.email column`                |
+| `test`     | Adding or correcting tests                                   | `test(api): add user creation endpoint tests`              |
+| `chore`    | Build process, dependency updates, tooling                   | `chore(deps): update sveltekit to v2.17`                   |
+| `ci`       | CI/CD pipeline configuration                                 | `ci: add type-check step to pull request workflow`         |
+| `revert`   | Reverts a previous commit                                    | `revert: feat(auth): revert oauth provider change`         |
 
 ## Scopes
 
 Use one of the following scopes when the commit is contained to a specific area:
 
-| Scope | Area |
-|-------|------|
-| `editor` | Milkdown WYSIWYG or CodeMirror source editor |
-| `workspace` | Workspace creation, selection, settings |
-| `sidebar` | Sidebar, file tree, pinned notes |
-| `tree` | File/folder tree API or component |
-| `ai` | AI chat, summarize, provider configuration |
-| `engagement` | Host tracker, credential vault, flag tracker, attack chain, report generator |
-| `sync` | Git-based sync feature |
-| `export` | Note export (Markdown, HTML, PDF) |
-| `api` | Server-side API routes |
-| `db` | Database schema, migrations |
-| `docker` | Dockerfile or docker-compose changes |
-| `deps` | Dependency updates (use with `chore` type) |
+| Scope    | Area                                             |
+| -------- | ------------------------------------------------ |
+| `ui`     | Client-side UI components and layouts            |
+| `api`    | Server-side API routes and handlers              |
+| `auth`   | Authentication and authorisation                 |
+| `db`     | Database schema, migrations, queries             |
+| `config` | Application configuration files                  |
+| `docs`   | Project documentation (use with `docs` type)     |
+| `deps`   | Dependency updates (use with `chore` type)       |
+| `ci`     | CI/CD pipeline (use with `ci` type)              |
+| `tests`  | Test files and test utilities                    |
+| `schema` | Data validation schemas (Zod, JSON Schema, etc.) |
+| `infra`  | Infrastructure config (Docker, hosting, env)     |
+| `build`  | Build tooling (Vite, webpack, esbuild, etc.)     |
 
 Scope is optional but recommended for non-trivial commits.
 
@@ -61,6 +61,7 @@ Scope is optional but recommended for non-trivial commits.
 - **No capitalisation** of the first letter after the colon
 
 Examples:
+
 - `feat(sync): add git push on sync button click` — correct
 - `feat(Sync): Added git push on sync button click.` — wrong (capital, past tense, period)
 
@@ -78,7 +79,7 @@ Both forms are valid. The `!` form is more visible at a glance.
 
 ## Body
 
-Use a body when the subject line alone does not fully convey the change. Wrap at 72 characters. Explain *what changed and why*, not *how*.
+Use a body when the subject line alone does not fully convey the change. Wrap at 72 characters. Explain _what changed and why_, not _how_.
 
 ```
 fix(sidebar): scope pinned notes to active workspace
@@ -92,6 +93,7 @@ pinned list.
 ## Footer
 
 Use footers for:
+
 - Breaking change descriptions: `BREAKING CHANGE: ...`
 - Issue references: `Closes #42`, `Fixes #17`, `Refs #55`
 
@@ -102,18 +104,23 @@ Use footers for:
 ```
 feat(workspace): add modal to select CTF vs general workspace type
 ```
+
 ```
 fix(sync): run wal_checkpoint before git add to flush SQLite WAL data
 ```
+
 ```
 docs(contributing): add PR standards and branch naming reference
 ```
+
 ```
 chore(deps): bump better-sqlite3 to 11.8.0
 ```
+
 ```
 refactor(api): extract path validation into shared safePath utility
 ```
+
 ```
 perf(editor): lazy-load milkdown plugins on first editor focus
 ```
@@ -123,12 +130,15 @@ perf(editor): lazy-load milkdown plugins on first editor focus
 ```
 fixed stuff
 ```
+
 ```
 WIP
 ```
+
 ```
 Update files
 ```
+
 ```
 feat: Added the new thing I was working on and also fixed a bug in the sidebar
 ```

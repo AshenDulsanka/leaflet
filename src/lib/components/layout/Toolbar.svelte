@@ -36,9 +36,10 @@
     onOpenTopology?: () => void;
     hasWorkspace?: boolean;
     isPentest?: boolean;
+    isCpts?: boolean;
   }
 
-  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenOperationLog, onOpenCvssCalculator, onOpenFindingsTracker, onOpenTopology, hasWorkspace = false, isPentest = false }: Props =
+  let { searchOpen = $bindable(), editorMode = $bindable(), methodologyOpen = $bindable(), aiChatOpen = $bindable(), newNoteOpen = $bindable(), isDark, hasActiveFile, onNewNote, onNewFolder, onToggleTheme, onOpenCommandPalette, onSummarize, onOpenBacklinks, onOpenScreenshots, onOpenExport, onOpenHelp, onOpenSettings, onOpenGraph, onOpenHostTracker, onOpenCredentialVault, onOpenFlagTracker, onOpenSnippets, onOpenAttackChain, onOpenOperationLog, onOpenCvssCalculator, onOpenFindingsTracker, onOpenTopology, hasWorkspace = false, isPentest = false, isCpts = false }: Props =
     $props();
 
   let activeDialog: 'note' | 'folder' | null = $state(null);
@@ -53,16 +54,19 @@
 
   // Strip fixed width/height so CSS controls sizing of the inline SVGs.
   // SECURITY: ?raw imports are bundled at build time from static assets only.
-  // NEVER use {@html} with runtime user content - use DOMPurify instead.
-  const logoSvg = logoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
-  const typoSvg = typoRaw.replace(/\s(?:width|height)="[^"]*"/g, '');
+  const logoSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(logoRaw.replace(/\s(?:width|height)="[^"]*"/g, ''))}`;
+  const typoSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(typoRaw.replace(/\s(?:width|height)="[^"]*"/g, ''))}`;
 </script>
 
 <header class="flex h-10 items-center gap-1 border-b border-border bg-card px-2">
   <!-- App logo -->
   <a href="/" class="mr-3 flex shrink-0 select-none items-center gap-1.5 text-foreground" aria-label="Leaflet">
-    <span class="flex h-6 w-[22px] items-center invert dark:invert-0 [&>svg]:h-full [&>svg]:w-full">{@html logoSvg}</span>
-    <span class="flex h-[13px] items-center invert dark:invert-0 [&>svg]:h-full [&>svg]:w-auto">{@html typoSvg}</span>
+    <span class="flex h-6 w-[22px] items-center invert dark:invert-0">
+      <img src={logoSrc} alt="" aria-hidden="true" class="h-full w-full" />
+    </span>
+    <span class="flex h-[13px] items-center invert dark:invert-0">
+      <img src={typoSrc} alt="" aria-hidden="true" class="h-full w-auto" />
+    </span>
   </a>
 
   <div class="flex flex-1 items-center gap-0.5">
@@ -106,16 +110,18 @@
   </div>
 
   <div class="flex items-center gap-0.5">
-    <!-- Methodology checklist -->
-    <button
-      title="Methodology checklist (Ctrl+.)"
-      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {methodologyOpen
-        ? 'bg-accent text-accent-foreground'
-        : ''}"
-      onclick={() => (methodologyOpen = !methodologyOpen)}
-    >
-      <ListChecks size={15} />
-    </button>
+    {#if isCpts}
+      <!-- Methodology checklist -->
+      <button
+        title="Methodology checklist (Ctrl+.)"
+        class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {methodologyOpen
+          ? 'bg-accent text-accent-foreground'
+          : ''}"
+        onclick={() => (methodologyOpen = !methodologyOpen)}
+      >
+        <ListChecks size={15} />
+      </button>
+    {/if}
 
     <!-- AI Chat -->
     <button
@@ -220,16 +226,6 @@
       <Terminal size={15} />
     </button>
 
-    <!-- Engagement: Attack Chain -->
-    <button
-      title="Attack chain"
-      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
-      onclick={onOpenAttackChain}
-      disabled={!hasWorkspace}
-    >
-      <Network size={15} />
-    </button>
-
     <!-- Engagement: Operation Log -->
     <button
       title="Operation log"
@@ -238,6 +234,16 @@
       disabled={!hasWorkspace}
     >
       <ScrollText size={15} />
+    </button>
+
+    <!-- Engagement: Findings Tracker -->
+    <button
+      title="Findings Tracker (Ctrl+Shift+F)"
+      class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
+      onclick={onOpenFindingsTracker}
+      disabled={!hasWorkspace}
+    >
+      <Bug size={15} />
     </button>
 
     <!-- Engagement: CVSS Calculator -->
@@ -250,14 +256,14 @@
       <ShieldAlert size={15} />
     </button>
 
-    <!-- Engagement: Findings Tracker -->
+    <!-- Engagement: Attack Chain -->
     <button
-      title="Findings Tracker (Ctrl+Shift+F)"
+      title="Attack chain"
       class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground {!hasWorkspace ? 'opacity-40 cursor-not-allowed' : ''}"
-      onclick={onOpenFindingsTracker}
+      onclick={onOpenAttackChain}
       disabled={!hasWorkspace}
     >
-      <Bug size={15} />
+      <Network size={15} />
     </button>
 
     <!-- Engagement: Network Topology -->

@@ -1,21 +1,17 @@
 <script lang="ts">
-  import { AlignLeft, AlignCenter, AlignRight, ZoomIn, Trash2, X } from '@lucide/svelte';
+  import { ZoomIn, Trash2, X } from '@lucide/svelte';
 
   interface Props {
     rect: DOMRect;
     onOpenLightbox: () => void;
     onDelete: () => void;
-    onAlignLeft: () => void;
-    onAlignCenter: () => void;
-    onAlignRight: () => void;
     onClose: () => void;
   }
 
-  let { rect, onOpenLightbox, onDelete, onAlignLeft, onAlignCenter, onAlignRight, onClose }: Props =
-    $props();
+  let { rect, onOpenLightbox, onDelete, onClose }: Props = $props();
 
   // Toolbar dimensions
-  const W = 230;
+  const W = 108;
   const H = 36;
   const MARGIN = 8;
 
@@ -40,39 +36,11 @@
   aria-label="Image options"
   tabindex="-1"
 >
-  <!-- Align left -->
-  <button
-    class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-    title="Align left"
-    onclick={onAlignLeft}
-  >
-    <AlignLeft size={13} />
-  </button>
-
-  <!-- Align center -->
-  <button
-    class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-    title="Align center"
-    onclick={onAlignCenter}
-  >
-    <AlignCenter size={13} />
-  </button>
-
-  <!-- Align right -->
-  <button
-    class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-    title="Align right"
-    onclick={onAlignRight}
-  >
-    <AlignRight size={13} />
-  </button>
-
-  <span class="mx-1 h-4 w-px bg-border"></span>
-
-  <!-- Open in lightbox -->
+  <!-- Open in lightbox / zoom -->
   <button
     class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
     title="Open full size"
+    aria-label="Open image full size"
     onclick={onOpenLightbox}
   >
     <ZoomIn size={13} />
@@ -84,6 +52,7 @@
   <button
     class="flex h-6 w-6 items-center justify-center rounded text-destructive hover:bg-destructive/10"
     title="Delete image"
+    aria-label="Delete image"
     onclick={onDelete}
   >
     <Trash2 size={13} />
@@ -95,6 +64,7 @@
   <button
     class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
     title="Close (Esc)"
+    aria-label="Close image toolbar"
     onclick={onClose}
   >
     <X size={13} />

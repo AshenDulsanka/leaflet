@@ -16,6 +16,7 @@ PR titles must follow the same format as commit messages (Conventional Commits â
 ```
 
 Examples:
+
 - `feat(workspace): add CTF vs general workspace type selection`
 - `fix(sync): run wal_checkpoint before git push`
 - `docs(readme): add Docker setup instructions`
@@ -38,13 +39,17 @@ Every PR description must include these three sections:
 
 ```markdown
 ## What changed
+
 <!-- Describe what was changed at a high level. Be specific. -->
 
 ## Why
+
 <!-- Explain the motivation. What problem does this solve? What user impact does it have? -->
 
 ## How to test
+
 <!-- Step-by-step instructions to verify the change works correctly. -->
+
 - [ ] Step 1
 - [ ] Step 2
 - [ ] Step 3

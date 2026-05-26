@@ -4,7 +4,7 @@
   import { cubicOut } from 'svelte/easing';
 
   interface Props {
-    onConfirm: (data: { name: string; type: string; icon_color: string }) => void;
+    onConfirm: (data: { name: string; type: string; icon_color: string; preset: string | null }) => void;
     onCancel: () => void;
   }
 
@@ -12,6 +12,7 @@
 
   let name = $state('');
   let selectedType = $state<string>('pentest');
+  let preset = $state<string | null>(null);
   let inputEl: HTMLInputElement | null = $state(null);
 
   const typeOptions = [
@@ -23,6 +24,10 @@
     inputEl?.focus();
   });
 
+  $effect(() => {
+    if (selectedType !== 'pentest') preset = null;
+  });
+
   function submit() {
     if (!name.trim()) return;
     const option = typeOptions.find((o) => o.value === selectedType);
@@ -30,6 +35,7 @@
       name: name.trim(),
       type: selectedType,
       icon_color: option?.color ?? '#6366f1',
+      preset: selectedType === 'pentest' ? preset : null
     });
   }
 
@@ -112,6 +118,32 @@
         {/each}
       </div>
     </div>
+
+    {#if selectedType === 'pentest'}
+      <div class="mb-4">
+        <span class="mb-2 block text-xs font-medium text-muted-foreground">Preset</span>
+        <button
+          type="button"
+          onclick={() => preset = preset === 'cpts' ? null : 'cpts'}
+          class="flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors
+                 {preset === 'cpts'
+                   ? 'border-primary bg-primary/10 text-foreground'
+                   : 'border-border text-muted-foreground hover:border-border/80 hover:bg-accent'}"
+        >
+          <div class="flex h-4 w-4 shrink-0 items-center justify-center rounded border {preset === 'cpts' ? 'bg-primary border-primary' : 'border-border'}">
+            {#if preset === 'cpts'}
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1.5,5 4,7.5 8.5,2.5" />
+              </svg>
+            {/if}
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs font-medium">CPTS Exam</div>
+            <div class="text-[10px] text-muted-foreground">Enables methodology checklist, CPTS preset tasks</div>
+          </div>
+        </button>
+      </div>
+    {/if}
 
     <!-- Actions -->
     <div class="flex justify-end gap-2">

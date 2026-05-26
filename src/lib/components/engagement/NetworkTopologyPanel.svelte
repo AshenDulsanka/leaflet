@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { Workflow, X, RefreshCw, Trash2 } from '@lucide/svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -16,6 +17,7 @@
   import '@xyflow/svelte/dist/style.css';
 
   import type { TopologyEdge, TopologyHost } from '$lib/types';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
   import NetworkTopologyNode from '$lib/components/engagement/NetworkTopologyNode.svelte';
 
   interface Props {
@@ -28,13 +30,20 @@
   // Register the custom node renderer
   const nodeTypes: NodeTypes = { topoNode: NetworkTopologyNode };
 
-  let nodes = $state<Node[]>([]);
-  let edges = $state<Edge[]>([]);
+  let nodes = $state.raw<Node[]>([]);
+  let edges = $state.raw<Edge[]>([]);
   let loading = $state(false);
   let selectedEdgeId = $state<string | null>(null);
+  let confirmDeleteOpen = $state(false);
+  let pendingDeleteEdgeId = $state<string | null>(null);
 
   // Debounce timers per node — avoid spamming PATCH on every drag tick
   const posTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  function clearPositionTimers(): void {
+    for (const timer of posTimers.values()) clearTimeout(timer);
+    posTimers.clear();
+  }
 
   /** Arrange hosts in a circle when no stored position exists. */
   function autoPosition(index: number, total: number): { x: number; y: number } {
@@ -49,6 +58,7 @@
 
   async function loadTopology(): Promise<void> {
     if (!workspaceId) return;
+    clearPositionTimers();
     loading = true;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/topology`);
@@ -85,7 +95,15 @@
   }
 
   $effect(() => {
-    if (workspaceId) loadTopology();
+    clearPositionTimers();
+    if (workspaceId) {
+      loadTopology();
+      return;
+    }
+
+    selectedEdgeId = null;
+    confirmDeleteOpen = false;
+    pendingDeleteEdgeId = null;
   });
 
   async function handleConnect(params: Connection): Promise<void> {
@@ -130,12 +148,15 @@
     posTimers.set(
       targetNode.id,
       setTimeout(async () => {
-        await fetch(`/api/workspaces/${workspaceId}/hosts/${targetNode.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topo_x: targetNode.position.x, topo_y: targetNode.position.y }),
-        });
-        posTimers.delete(targetNode.id);
+        try {
+          await fetch(`/api/workspaces/${workspaceId}/hosts/${targetNode.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topo_x: targetNode.position.x, topo_y: targetNode.position.y }),
+          });
+        } finally {
+          posTimers.delete(targetNode.id);
+        }
       }, 500)
     );
   }
@@ -145,39 +166,75 @@
   }
 
   async function deleteSelectedEdge(): Promise<void> {
-    if (!workspaceId || !selectedEdgeId) return;
+    const edgeId = pendingDeleteEdgeId;
+    if (!workspaceId || !edgeId) return;
     try {
       const res = await fetch(
-        `/api/workspaces/${workspaceId}/topology/edges/${selectedEdgeId}`,
+        `/api/workspaces/${workspaceId}/topology/edges/${edgeId}`,
         { method: 'DELETE' }
       );
       if (res.ok) {
-        edges = edges.filter((e) => e.id !== selectedEdgeId);
-        selectedEdgeId = null;
+        edges = edges.filter((e) => e.id !== edgeId);
       }
     } catch {
       console.error('Failed to delete topology edge');
+    } finally {
+      selectedEdgeId = null;
+      confirmDeleteOpen = false;
+      pendingDeleteEdgeId = null;
     }
   }
 
-  function handleKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      if (selectedEdgeId) {
-        selectedEdgeId = null;
-      } else {
-        onClose();
-      }
-    }
+  function requestDeleteSelectedEdge(): void {
+    if (!selectedEdgeId) return;
+    pendingDeleteEdgeId = selectedEdgeId;
+    confirmDeleteOpen = true;
   }
+
+  function cancelDeleteSelectedEdge(): void {
+    confirmDeleteOpen = false;
+    pendingDeleteEdgeId = null;
+  }
+
+  function handleKeydown(e: KeyboardEvent): void {
+    if (e.key !== 'Escape') return;
+
+    if (confirmDeleteOpen) {
+      cancelDeleteSelectedEdge();
+      e.preventDefault();
+      return;
+    }
+
+    if (selectedEdgeId) {
+      selectedEdgeId = null;
+      e.preventDefault();
+      return;
+    }
+
+    onClose();
+  }
+
+  onDestroy(() => {
+    clearPositionTimers();
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- Full-screen overlay for the network topology diagram -->
 <div
-  class="fixed inset-0 z-50 flex flex-col bg-background"
-  transition:fly={{ x: '100%', duration: 300, easing: cubicOut }}
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+  role="presentation"
+  onclick={(e) => {
+    if (e.target === e.currentTarget) onClose();
+  }}
 >
+  <div
+    class="relative flex h-[80vh] w-[85vw] max-w-[1400px] flex-col overflow-hidden rounded-lg border border-border bg-background shadow-2xl"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Network Topology"
+    transition:fly={{ y: 20, duration: 200, easing: cubicOut }}
+  >
   <!-- Header -->
   <div class="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
     <div class="flex items-center gap-2">
@@ -190,7 +247,7 @@
     <div class="flex items-center gap-1">
       {#if selectedEdgeId}
         <button
-          onclick={deleteSelectedEdge}
+          onclick={requestDeleteSelectedEdge}
           class="flex items-center gap-1 rounded px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
           title="Delete selected connection"
         >
@@ -202,6 +259,7 @@
         onclick={() => loadTopology()}
         class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent"
         title="Refresh"
+        aria-label="Refresh topology"
         disabled={loading}
       >
         <RefreshCw size={14} class={loading ? 'animate-spin' : ''} />
@@ -210,6 +268,7 @@
         onclick={onClose}
         class="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-accent"
         title="Close (Esc)"
+        aria-label="Close network topology panel"
       >
         <X size={14} />
       </button>
@@ -242,7 +301,7 @@
 
       <!-- Status legend -->
       <div
-        class="absolute bottom-8 left-4 flex gap-3 rounded border border-border bg-background/80 px-3 py-1.5 text-[10px] backdrop-blur-sm"
+        class="absolute bottom-4 right-4 z-10 flex gap-3 rounded border border-border bg-background/80 px-3 py-1.5 text-[10px] backdrop-blur-sm"
       >
         <span class="flex items-center gap-1">
           <span class="inline-block h-2.5 w-2.5 rounded-full bg-[#22c55e]"></span>up
@@ -266,4 +325,15 @@
       {/if}
     </div>
   {/if}
+  </div>
 </div>
+
+{#if confirmDeleteOpen}
+  <ConfirmDialog
+    title="Delete Connection"
+    message="Delete selected connection? This cannot be undone."
+    confirmLabel="Delete"
+    onConfirm={deleteSelectedEdge}
+    onCancel={cancelDeleteSelectedEdge}
+  />
+{/if}

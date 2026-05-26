@@ -1,6 +1,15 @@
+<script module lang="ts">
+  const hostCache = new Map<string, string>();
+</script>
+
 <script lang="ts">
-  import { Monitor, Plus, X, ChevronDown, ChevronRight, Trash2, RefreshCw, Globe, Image, FileInput } from '@lucide/svelte';
+  import { Monitor, Plus, X, ChevronDown, ChevronRight, Trash2, RefreshCw, Globe, Image as ImageIcon, Pencil, FileInput } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
+  import ImageLightbox from '$lib/components/editor/ImageLightbox.svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import NmapImportForm from '$lib/components/engagement/NmapImportForm.svelte';
+  import HostAddForm from '$lib/components/engagement/HostAddForm.svelte';
+  import HostEditForm from '$lib/components/engagement/HostEditForm.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -32,160 +41,137 @@
   interface Props {
     workspaceId: string | null;
     onClose: () => void;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { workspaceId, onClose }: Props = $props();
+  let { workspaceId, onClose, uiMode = 'modal' }: Props = $props();
 
   let hosts = $state<Host[]>([]);
   let loading = $state(false);
   let expandedHost = $state<string | null>(null);
   let scopeFilter = $state<'all' | Scope>('all');
+  let hostQuery = $state('');
+  let confirmDelete = $state<{ id: string; label: string; kind: 'host' | 'port'; parentId?: string } | null>(null);
 
   // Add-host form
   let addingHost = $state(false);
-  let newIp = $state('');
-  let newHostname = $state('');
-  let newOs = $state('');
-  let newStatus = $state('unknown');
-  let newScope = $state<Scope>('unknown');
 
-  // Add-port form
-  let addingPortFor = $state<string | null>(null);
-  let newPortNum = $state('');
-  let newPortService = $state('');
-  let newPortProto = $state('tcp');
-
-  // Editing screenshot_filename inline
-  let editingScreenshotFor = $state<string | null>(null);
-  let newScreenshotFilename = $state('');
+  // Edit-host form state
+  let editingHostId = $state<string | null>(null);
+  let lightboxImage = $state<string | null>(null);
 
   // Nmap import
   let importingNmap = $state(false);
-  let nmapRaw = $state('');
-  let nmapImportStatus = $state<'idle' | 'loading' | 'done' | 'error'>('idle');
-  let nmapErrors = $state<Array<{ line: number; message: string }>>([]);
-  let nmapSummary = $state('');
+  let latestLoadRequest = 0;
 
-  // Client-side format detection (mirrors server parser; client cannot import server modules).
-  function detectNmapFormat(raw: string): 'grepable' | 'xml' | 'unknown' {
-    const t = raw.trimStart();
-    if (t.startsWith('<?xml') || t.startsWith('<nmaprun')) return 'xml';
-    if (/# Nmap|^Host:/m.test(raw)) return 'grepable';
-    return 'unknown';
+  function readCachedHosts(id: string): Host[] | null {
+    const cached = hostCache.get(id);
+    if (!cached) return null;
+    try {
+      const parsed = JSON.parse(cached);
+      return Array.isArray(parsed) ? (parsed as Host[]) : null;
+    } catch {
+      return null;
+    }
   }
 
-  const detectedFormat = $derived(detectNmapFormat(nmapRaw));
+  function writeCachedHosts(id: string, items: Host[]): void {
+    hostCache.set(id, JSON.stringify(items));
+  }
+
+
+  function getSortedPorts(ports: Port[]): Port[] {
+    return [...ports].sort((a, b) => a.number - b.number);
+  }
 
   $effect(() => {
-    if (workspaceId) loadHosts();
+    if (!workspaceId) {
+      hosts = [];
+      loading = false;
+      return;
+    }
+
+    const currentWorkspaceId = workspaceId;
+    const cached = readCachedHosts(currentWorkspaceId);
+    if (cached !== null) {
+      hosts = cached;
+    }
+
+    void loadHosts(currentWorkspaceId, cached === null);
   });
 
-  const filteredHosts = $derived(
-    scopeFilter === 'all' ? hosts : hosts.filter((h) => h.scope === scopeFilter)
-  );
+  const filteredHosts = $derived.by(() => {
+    let result = scopeFilter === 'all' ? hosts : hosts.filter((h) => h.scope === scopeFilter);
+    if (hostQuery.trim()) {
+      const q = hostQuery.toLowerCase();
+      result = result.filter(
+        (h) =>
+          h.ip.toLowerCase().includes(q) ||
+          h.hostname.toLowerCase().includes(q) ||
+          (h.os ?? '').toLowerCase().includes(q) ||
+          (h.notes ?? '').toLowerCase().includes(q)
+      );
+    }
+    return result;
+  });
 
-  async function loadHosts(): Promise<void> {
-    if (!workspaceId) return;
-    hosts = [];
-    loading = true;
+  async function loadHosts(targetWorkspaceId: string, blocking = false): Promise<void> {
+    const requestId = latestLoadRequest + 1;
+    latestLoadRequest = requestId;
+    loading = blocking;
+
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/hosts`);
-      hosts = await res.json();
-    } catch {
-      console.error('Failed to load hosts');
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/hosts`);
+      if (!res.ok) {
+        console.error('Failed to load hosts:', { workspaceId: targetWorkspaceId, status: res.status });
+        return;
+      }
+
+      const nextHosts = await res.json() as Host[];
+      if (requestId !== latestLoadRequest || workspaceId !== targetWorkspaceId) {
+        return;
+      }
+
+      hosts = nextHosts;
+      writeCachedHosts(targetWorkspaceId, nextHosts);
+    } catch (err) {
+      console.error('Failed to load hosts:', { workspaceId: targetWorkspaceId, error: err });
     } finally {
-      loading = false;
+      if (requestId === latestLoadRequest) {
+        loading = false;
+      }
     }
   }
 
-  async function addHost(): Promise<void> {
-    if (!workspaceId || !newIp.trim()) return;
-    try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/hosts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip: newIp.trim(), hostname: newHostname.trim(), os: newOs.trim(), status: newStatus, scope: newScope })
-      });
-      if (!res.ok) return;
-      const host: Host = await res.json();
-      hosts = [...hosts, host];
-      newIp = '';
-      newHostname = '';
-      newOs = '';
-      newStatus = 'unknown';
-      newScope = 'unknown';
-      addingHost = false;
-      expandedHost = host.id;
-    } catch {
-      console.error('Failed to add host');
-    }
+  function openAddForm(): void {
+    addingHost = !addingHost;
   }
 
   async function deleteHost(id: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/hosts/${id}`, { method: 'DELETE' });
-    hosts = hosts.filter((h) => h.id !== id);
-    if (expandedHost === id) expandedHost = null;
-  }
-
-  async function updateHostStatus(host: Host, status: string): Promise<void> {
-    if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status })
-    });
-    hosts = hosts.map((h) => h.id === host.id ? { ...h, status } : h);
-  }
-
-  async function updateHostScope(host: Host, scope: Scope): Promise<void> {
-    if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope })
-    });
-    hosts = hosts.map((h) => h.id === host.id ? { ...h, scope } : h);
-  }
-
-  async function saveScreenshotFilename(host: Host): Promise<void> {
-    if (!workspaceId) return;
-    const filename = newScreenshotFilename.trim();
-    await fetch(`/api/workspaces/${workspaceId}/hosts/${host.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ screenshot_filename: filename })
-    });
-    hosts = hosts.map((h) => h.id === host.id ? { ...h, screenshot_filename: filename } : h);
-    editingScreenshotFor = null;
-  }
-
-  async function addPort(hostId: string): Promise<void> {
-    if (!workspaceId || !newPortNum.trim()) return;
-    const num = parseInt(newPortNum);
-    if (isNaN(num) || num < 1 || num > 65535) return;
+    const targetWorkspaceId = workspaceId;
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/hosts/${hostId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number: num, protocol: newPortProto, service: newPortService.trim(), state: 'open' })
-      });
-      if (!res.ok) return;
-      const port: Port = await res.json();
-      hosts = hosts.map((h) => h.id === hostId ? { ...h, ports: [...h.ports, port] } : h);
-      newPortNum = '';
-      newPortService = '';
-      newPortProto = 'tcp';
-      addingPortFor = null;
-    } catch {
-      console.error('Failed to add port');
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/hosts/${id}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete host:', { workspaceId: targetWorkspaceId, hostId: id, status: res.status }); return; }
+      hosts = hosts.filter((h) => h.id !== id);
+      writeCachedHosts(targetWorkspaceId, hosts);
+      if (expandedHost === id) expandedHost = null;
+    } catch (err) {
+      console.error('Failed to delete host:', { workspaceId: targetWorkspaceId, hostId: id, error: err });
     }
   }
 
   async function deletePort(hostId: string, portId: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/hosts/${hostId}/ports/${portId}`, { method: 'DELETE' });
-    hosts = hosts.map((h) => h.id === hostId ? { ...h, ports: h.ports.filter((p) => p.id !== portId) } : h);
+    const targetWorkspaceId = workspaceId;
+    try {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/hosts/${hostId}/ports/${portId}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete port:', { workspaceId: targetWorkspaceId, hostId, portId, status: res.status }); return; }
+      hosts = hosts.map((h) => h.id === hostId ? { ...h, ports: h.ports.filter((p) => p.id !== portId) } : h);
+      writeCachedHosts(targetWorkspaceId, hosts);
+    } catch (err) {
+      console.error('Failed to delete port:', { workspaceId: targetWorkspaceId, hostId, portId, error: err });
+    }
   }
 
   const statusDots: Record<string, string> = {
@@ -201,48 +187,47 @@
     'unknown':      { label: '?',   classes: 'bg-muted text-muted-foreground' }
   };
 
-  async function importNmap(): Promise<void> {
-    if (!workspaceId || !nmapRaw.trim()) return;
-    nmapImportStatus = 'loading';
-    nmapErrors = [];
-    nmapSummary = '';
-    try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/hosts/bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw: nmapRaw }),
-      });
-      const data = await res.json() as {
-        imported?: number;
-        updated?: number;
-        portCount?: number;
-        errors?: Array<{ line: number; message: string }>;
-        error?: string;
-      };
-      if (!res.ok) {
-        nmapImportStatus = 'error';
-        nmapErrors = [{ line: 0, message: data.error ?? 'Import failed' }];
-        return;
-      }
-      nmapErrors = data.errors ?? [];
-      nmapSummary = `Imported ${data.imported ?? 0} new host(s), updated ${data.updated ?? 0}, ${data.portCount ?? 0} port(s).`;
-      nmapImportStatus = 'done';
-      await loadHosts();
-    } catch {
-      nmapImportStatus = 'error';
-      nmapErrors = [{ line: 0, message: 'Network error — import failed.' }];
-    }
-  }
-
   function handleKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') onClose();
+    if (e.defaultPrevented || e.key !== 'Escape') return;
+
+    if (confirmDelete !== null) {
+      e.preventDefault();
+      confirmDelete = null;
+      return;
+    }
+
+    if (lightboxImage !== null) {
+      e.preventDefault();
+      lightboxImage = null;
+      return;
+    }
+
+    if (importingNmap) {
+      e.preventDefault();
+      importingNmap = false;
+      return;
+    }
+
+    if (editingHostId !== null) {
+      e.preventDefault();
+      editingHostId = null;
+      return;
+    }
+
+    if (addingHost) {
+      e.preventDefault();
+      addingHost = false;
+      return;
+    }
+
+    onClose();
   }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <div
-  class="flex h-full w-80 flex-shrink-0 flex-col border-l border-border bg-card"
+  class="absolute right-0 top-0 flex h-full w-80 flex-shrink-0 flex-col border-l border-border bg-card"
   transition:fly={{ x: 320, duration: 200, easing: cubicOut }}
 >
   <!-- Header -->
@@ -253,8 +238,12 @@
     </div>
     <div class="flex items-center gap-1">
       <button
-        onclick={loadHosts}
+        onclick={() => {
+          if (!workspaceId) return;
+          void loadHosts(workspaceId, true);
+        }}
         title="Refresh"
+        aria-label="Refresh hosts"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
@@ -262,13 +251,15 @@
       <button
         onclick={() => (importingNmap = !importingNmap)}
         title="Import from Nmap"
+        aria-label="Import hosts from Nmap"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground {importingNmap ? 'bg-accent text-foreground' : ''}"
       >
         <FileInput size={12} />
       </button>
       <button
-        onclick={() => (addingHost = !addingHost)}
+        onclick={openAddForm}
         title="Add host"
+        aria-label="Add host"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <Plus size={13} />
@@ -276,6 +267,7 @@
       <button
         onclick={onClose}
         title="Close"
+        aria-label="Close host tracker"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <X size={13} />
@@ -291,110 +283,22 @@
   {:else}
     <!-- Add-host form -->
     {#if addingHost}
-      <div class="border-b border-border bg-muted/40 p-3 space-y-2">
-        <input
-          type="text"
-          placeholder="IP address *"
-          bind:value={newIp}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          onkeydown={(e) => { if (e.key === 'Enter') addHost(); if (e.key === 'Escape') addingHost = false; }}
-        />
-        <div class="flex gap-2">
-          <input
-            type="text"
-            placeholder="Hostname"
-            bind:value={newHostname}
-            class="flex-1 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-          <input
-            type="text"
-            placeholder="OS"
-            bind:value={newOs}
-            class="w-24 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-        <select
-          bind:value={newStatus}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="unknown">Unknown</option>
-          <option value="up">Up</option>
-          <option value="down">Down</option>
-          <option value="rooted">Rooted</option>
-        </select>
-        <select
-          bind:value={newScope}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="unknown">Scope?</option>
-          <option value="in-scope">In-scope</option>
-          <option value="out-of-scope">Out-of-scope</option>
-        </select>
-        <div class="flex gap-2">
-          <button
-            onclick={addHost}
-            class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Add
-          </button>
-          <button
-            onclick={() => (addingHost = false)}
-            class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
+      <HostAddForm
+        workspaceId={workspaceId}
+        {uiMode}
+        onHostAdded={(newHost) => { hosts = [...hosts, newHost]; addingHost = false; expandedHost = newHost.id; writeCachedHosts(workspaceId, hosts); }}
+        onCancel={() => (addingHost = false)}
+      />
     {/if}
 
     <!-- Nmap import form -->
     {#if importingNmap}
-      <div class="border-b border-border bg-muted/40 p-3 space-y-2">
-        <!-- Format badge -->
-        <div class="flex items-center gap-2">
-          <span class="text-[10px] text-muted-foreground">Format:</span>
-          {#if detectedFormat === 'grepable'}
-            <span class="rounded bg-green-500/15 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">Grepable (-oG)</span>
-          {:else if detectedFormat === 'xml'}
-            <span class="rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">XML (-oX)</span>
-          {:else}
-            <span class="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Unknown</span>
-          {/if}
-        </div>
-        <textarea
-          rows={8}
-          bind:value={nmapRaw}
-          placeholder="Paste Nmap -oG or -oX output here…"
-          class="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-        ></textarea>
-        <!-- Error list -->
-        {#if nmapErrors.length > 0}
-          <ul class="space-y-0.5">
-            {#each nmapErrors as err}
-              <li class="text-[10px] text-destructive">{err.line > 0 ? `Line ${err.line}: ` : ''}{err.message}</li>
-            {/each}
-          </ul>
-        {/if}
-        <!-- Summary -->
-        {#if nmapSummary}
-          <p class="text-[10px] text-green-600 dark:text-green-400">{nmapSummary}</p>
-        {/if}
-        <div class="flex gap-2">
-          <button
-            onclick={importNmap}
-            disabled={nmapRaw.trim() === '' || nmapImportStatus === 'loading'}
-            class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {nmapImportStatus === 'loading' ? 'Importing…' : 'Import'}
-          </button>
-          <button
-            onclick={() => { importingNmap = false; nmapRaw = ''; nmapImportStatus = 'idle'; nmapErrors = []; nmapSummary = ''; }}
-            class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
+      <NmapImportForm
+        workspaceId={workspaceId}
+        {uiMode}
+        onImportComplete={() => { void loadHosts(workspaceId); }}
+        onCancel={() => (importingNmap = false)}
+      />
     {/if}
 
     <!-- Scope filter bar -->
@@ -416,16 +320,28 @@
       {/each}
     </div>
 
+    {#if hosts.length > 0}
+    <div class="border-b border-border px-3 py-2">
+      <input
+        type="text"
+        aria-label="Filter hosts"
+        placeholder="Filter hosts..."
+        bind:value={hostQuery}
+        class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </div>
+    {/if}
+
     <!-- Host list -->
     <div class="flex-1 overflow-y-auto">
-      {#if loading}
+      {#if loading && hosts.length === 0}
         <div class="flex items-center justify-center py-8">
           <RefreshCw size={16} class="animate-spin text-muted-foreground" />
         </div>
       {:else if filteredHosts.length === 0}
         <div class="flex flex-col items-center justify-center gap-2 py-12 text-center">
           <Globe size={24} class="text-muted-foreground/40" />
-          <p class="text-xs text-muted-foreground">{hosts.length === 0 ? 'No hosts yet. Click + to add one.' : 'No hosts match this filter.'}</p>
+          <p class="text-xs text-muted-foreground">{hosts.length === 0 ? 'No hosts yet. Click + to add one.' : 'No hosts match your filter.'}</p>
         </div>
       {:else}
         {#each filteredHosts as host (host.id)}
@@ -436,6 +352,8 @@
                 onclick={() => (expandedHost = expandedHost === host.id ? null : host.id)}
                 class="flex-shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
                 title={expandedHost === host.id ? 'Collapse' : 'Expand'}
+                aria-label={expandedHost === host.id ? `Collapse host ${host.ip}` : `Expand host ${host.ip}`}
+                aria-expanded={expandedHost === host.id}
               >
                 {#if expandedHost === host.id}
                   <ChevronDown size={11} />
@@ -463,28 +381,37 @@
               {#if host.ports.length > 0}
                 <span class="text-[10px] text-muted-foreground">{host.ports.length}p</span>
               {/if}
-              <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                <select
-                  value={host.status}
-                  onchange={(e) => updateHostStatus(host, (e.currentTarget as HTMLSelectElement).value)}
-                  class="rounded border border-border bg-background px-1 py-0.5 text-[10px] focus:outline-none"
-                  onclick={(e) => e.stopPropagation()}
-                  title="Set status"
-                >
-                  <option value="unknown">?</option>
-                  <option value="up">Up</option>
-                  <option value="down">Down</option>
-                  <option value="rooted">Root</option>
-                </select>
+              <div class="flex items-center gap-1">
                 <button
-                  onclick={() => deleteHost(host.id)}
+                  onclick={(e) => { e.stopPropagation(); editingHostId = host.id; }}
+                  class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                  title="Edit host"
+                  aria-label={`Edit host ${host.ip}`}
+                >
+                  <Pencil size={11} />
+                </button>
+                <button
+                  onclick={(e) => { e.stopPropagation(); confirmDelete = { id: host.id, label: host.ip, kind: 'host' }; }}
                   class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
                   title="Delete host"
+                  aria-label={`Delete host ${host.ip}`}
                 >
                   <Trash2 size={11} />
                 </button>
               </div>
             </div>
+
+            {#if editingHostId === host.id}
+              <HostEditForm
+                workspaceId={workspaceId}
+                host={host}
+                {uiMode}
+                onUpdated={(updated) => { hosts = hosts.map((h) => h.id === host.id ? { ...h, ...updated } : h); editingHostId = null; writeCachedHosts(workspaceId, hosts); }}
+                onPortAdded={(port) => { hosts = hosts.map((h) => h.id === host.id ? { ...h, ports: [...h.ports, port] } : h); writeCachedHosts(workspaceId, hosts); }}
+                onDeletePort={(portId, label) => { confirmDelete = { id: portId, label, kind: 'port', parentId: host.id }; }}
+                onCancel={() => (editingHostId = null)}
+              />
+            {/if}
 
             <!-- Expanded: details + ports + add-port -->
             {#if expandedHost === host.id}
@@ -495,62 +422,36 @@
                   </p>
                 {/if}
 
-                <!-- Scope selector (in expanded view) -->
-                <div class="mb-2 flex items-center gap-2">
-                  <span class="text-[10px] text-muted-foreground">Scope:</span>
-                  <select
-                    value={host.scope}
-                    onchange={(e) => updateHostScope(host, (e.currentTarget as HTMLSelectElement).value as Scope)}
-                    class="rounded border border-border bg-background px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="unknown">Unknown</option>
-                    <option value="in-scope">In-scope</option>
-                    <option value="out-of-scope">Out-of-scope</option>
-                  </select>
-                </div>
-
-                <!-- Screenshot filename -->
-                <div class="mb-2 flex items-center gap-1.5">
-                  <Image size={10} class="flex-shrink-0 text-muted-foreground" />
-                  {#if editingScreenshotFor === host.id}
-                    <input
-                      type="text"
-                      bind:value={newScreenshotFilename}
-                      placeholder="screenshot.png"
-                      class="flex-1 min-w-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
-                      onkeydown={(e) => {
-                        if (e.key === 'Enter') saveScreenshotFilename(host);
-                        if (e.key === 'Escape') editingScreenshotFor = null;
-                      }}
-                    />
+                <!-- Screenshot -->
+                <div class="mb-2">
+                  {#if host.screenshot_filename}
                     <button
-                      onclick={() => saveScreenshotFilename(host)}
-                      class="rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
-                    >Save</button>
-                    <button
-                      onclick={() => (editingScreenshotFor = null)}
-                      class="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-accent"
-                    >Cancel</button>
+                      onclick={() => (lightboxImage = `/api/screenshots/${encodeURIComponent(host.screenshot_filename ?? '')}`)}
+                      class="w-full text-left"
+                      type="button"
+                      title="Click to enlarge"
+                    >
+                      <img
+                        src="/api/screenshots/{encodeURIComponent(host.screenshot_filename ?? '')}"
+                        alt="Screenshot for {host.ip}"
+                        class="max-h-32 w-full rounded border border-border object-contain"
+                      />
+                    </button>
                   {:else}
-                    {#if host.screenshot_filename}
-                      <a
-                        href="/api/screenshots/{host.screenshot_filename}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="flex-1 min-w-0 truncate text-[10px] text-primary hover:underline"
-                        title="Open screenshot"
-                      >{host.screenshot_filename}</a>
-                      <CopyButton text={host.screenshot_filename} size={9} />
-                    {:else}
-                      <span class="flex-1 min-w-0 truncate text-[10px] text-muted-foreground">No screenshot</span>
-                    {/if}
-                    <button
-                      onclick={() => { editingScreenshotFor = host.id; newScreenshotFilename = host.screenshot_filename; }}
-                      class="flex-shrink-0 rounded px-1 py-0.5 text-[9px] text-muted-foreground hover:bg-accent hover:text-foreground"
-                      title="Edit screenshot filename"
-                    >edit</button>
+                    <div class="flex items-center gap-1.5">
+                      <ImageIcon size={10} class="flex-shrink-0 text-muted-foreground" />
+                      <span class="text-[10px] text-muted-foreground">No screenshot</span>
+                    </div>
                   {/if}
                 </div>
+
+                <!-- Notes -->
+                {#if host.notes}
+                  <div class="mb-2">
+                    <p class="mb-0.5 text-[10px] text-muted-foreground">Notes</p>
+                    <p class="text-[10px] text-foreground whitespace-pre-wrap break-words max-h-20 overflow-y-auto">{host.notes}</p>
+                  </div>
+                {/if}
 
                 <!-- Ports table -->
                 {#if host.ports.length > 0}
@@ -565,25 +466,17 @@
                         </tr>
                       </thead>
                       <tbody>
-                        {#each host.ports.sort((a, b) => a.number - b.number) as port (port.id)}
+                        {#each getSortedPorts(host.ports) as port (port.id)}
                           <tr class="group/port border-t border-border">
                             <td class="px-2 py-0.5 font-mono font-medium text-foreground">{port.number}</td>
                             <td class="px-2 py-0.5 text-muted-foreground">{port.protocol}</td>
                             <td class="px-2 py-0.5 text-muted-foreground">{port.service || '-'}</td>
                             <td class="px-1 py-0.5">
-                              <div class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/port:opacity-100">
-                                <CopyButton
-                                  text="{port.number}/{port.protocol}{port.service ? ` ${port.service}` : ''}"
-                                  size={9}
-                                  class="h-4 w-4"
-                                />
-                                <button
-                                  onclick={() => deletePort(host.id, port.id)}
-                                  class="flex h-4 w-4 items-center justify-center rounded text-destructive hover:bg-destructive/10"
-                                >
-                                  <X size={9} />
-                                </button>
-                              </div>
+                              <CopyButton
+                                text="{port.number}/{port.protocol}{port.service ? ` ${port.service}` : ''}"
+                                size={9}
+                                class="h-4 w-4"
+                              />
                             </td>
                           </tr>
                         {/each}
@@ -592,53 +485,7 @@
                   </div>
                 {/if}
 
-                <!-- Add-port form -->
-                {#if addingPortFor === host.id}
-                  <div class="flex gap-1.5 items-end flex-wrap">
-                    <input
-                      type="number"
-                      placeholder="Port"
-                      bind:value={newPortNum}
-                      min="1"
-                      max="65535"
-                      class="w-16 rounded border border-border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
-                      onkeydown={(e) => { if (e.key === 'Enter') addPort(host.id); if (e.key === 'Escape') addingPortFor = null; }}
-                    />
-                    <select
-                      bind:value={newPortProto}
-                      class="rounded border border-border bg-background px-1 py-0.5 text-[10px] focus:outline-none"
-                    >
-                      <option value="tcp">TCP</option>
-                      <option value="udp">UDP</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Service"
-                      bind:value={newPortService}
-                      class="flex-1 min-w-0 rounded border border-border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                    <button
-                      onclick={() => addPort(host.id)}
-                      class="rounded bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90"
-                    >
-                      Add
-                    </button>
-                    <button
-                      onclick={() => (addingPortFor = null)}
-                      class="rounded border border-border px-2 py-0.5 text-[10px] hover:bg-accent"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                {:else}
-                  <button
-                    onclick={() => { addingPortFor = host.id; newPortNum = ''; newPortService = ''; newPortProto = 'tcp'; }}
-                    class="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
-                  >
-                    <Plus size={10} />
-                    Add port
-                  </button>
-                {/if}
+
               </div>
             {/if}
           </div>
@@ -647,3 +494,21 @@
     </div>
   {/if}
 </div>
+
+{#if lightboxImage}
+  <ImageLightbox src={lightboxImage} alt="Host screenshot" onClose={() => (lightboxImage = null)} />
+{/if}
+
+{#if confirmDelete !== null}
+  {@const pending = confirmDelete}
+  <ConfirmDialog
+    title={pending.kind === 'host' ? 'Delete Host' : 'Delete Port'}
+    message="Delete '{pending.label}'? This cannot be undone."
+    onConfirm={() => { 
+      if (pending.kind === 'host') deleteHost(pending.id); 
+      else if (pending.parentId) deletePort(pending.parentId, pending.id);
+      confirmDelete = null; 
+    }}
+    onCancel={() => confirmDelete = null}
+  />
+{/if}

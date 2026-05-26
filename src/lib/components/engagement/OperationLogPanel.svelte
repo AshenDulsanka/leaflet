@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { ScrollText, Plus, X, RefreshCw, Pencil, Trash2, Check } from '@lucide/svelte';
+  import { ScrollText, Plus, X, RefreshCw } from '@lucide/svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import ToolModal from '$lib/components/modals/ToolModal.svelte';
+  import OperationLogEntryForm from '$lib/components/engagement/operation-log/OperationLogEntryForm.svelte';
+  import OperationLogEntryItem from '$lib/components/engagement/operation-log/OperationLogEntryItem.svelte';
+  import {
+    localDateTimeValue,
+    toLocalDateTimeValue,
+  } from '$lib/components/ui/date-time';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import type { OpLogCategory, OperationLogEntry } from '$lib/types';
@@ -10,23 +18,40 @@
     hostname: string;
   }
 
+  interface OperationLogFormSnapshot {
+    category: OpLogCategory;
+    description: string;
+    hostId: string;
+    timestamp: string;
+  }
+
   interface Props {
     workspaceId: string | null;
     onClose: () => void;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { workspaceId, onClose }: Props = $props();
+  let { workspaceId, onClose, uiMode = 'modal' }: Props = $props();
 
   let entries = $state<OperationLogEntry[]>([]);
   let hosts = $state<HostOption[]>([]);
   let loading = $state(false);
   let addingEntry = $state(false);
+  let confirmDelete = $state<{ id: string; label: string } | null>(null);
+  let confirmDiscardModal = $state<'add' | 'edit' | null>(null);
+  let ignoreEscapeUntil = $state(0);
 
   // Add-entry form
   let newCategory = $state<OpLogCategory>('other');
   let newDescription = $state('');
   let newHostId = $state('');
   let newTimestamp = $state('');
+  let addInitialSnapshot = $state<OperationLogFormSnapshot>({
+    category: 'other',
+    description: '',
+    hostId: '',
+    timestamp: '',
+  });
 
   // Inline edit state
   let editingId = $state<string | null>(null);
@@ -34,9 +59,16 @@
   let editDescription = $state('');
   let editHostId = $state('');
   let editTimestamp = $state('');
+  let editInitialSnapshot = $state<OperationLogFormSnapshot>({
+    category: 'other',
+    description: '',
+    hostId: '',
+    timestamp: '',
+  });
 
   // Category filter
   let categoryFilter = $state<'all' | OpLogCategory>('all');
+  let oplogQuery = $state('');
 
   const CATEGORIES: { value: OpLogCategory; label: string; color: string }[] = [
     { value: 'recon', label: 'Recon', color: 'text-blue-400' },
@@ -50,14 +82,36 @@
     { value: 'other', label: 'Other', color: 'text-muted-foreground' },
   ];
 
-  const categoryColorMap = $derived(
-    Object.fromEntries(CATEGORIES.map((c) => [c.value, c.color]))
+  const hostOptions = $derived.by(() => [
+    { value: '', label: 'No host' },
+    ...hosts.map((host) => ({
+      value: host.id,
+      label: host.hostname ? `${host.ip} (${host.hostname})` : host.ip,
+    })),
+  ]);
+
+  const filteredEntries = $derived.by(() => {
+    let result =
+      categoryFilter === 'all' ? entries : entries.filter((e) => e.category === categoryFilter);
+    if (oplogQuery.trim()) {
+      const q = oplogQuery.toLowerCase();
+      result = result.filter((e) => e.description.toLowerCase().includes(q));
+    }
+    return result;
+  });
+
+  const addFormDirty = $derived(
+    newCategory !== addInitialSnapshot.category ||
+      newDescription !== addInitialSnapshot.description ||
+      newHostId !== addInitialSnapshot.hostId ||
+      newTimestamp !== addInitialSnapshot.timestamp
   );
 
-  const filteredEntries = $derived(
-    categoryFilter === 'all'
-      ? entries
-      : entries.filter((e) => e.category === categoryFilter)
+  const editFormDirty = $derived(
+    editCategory !== editInitialSnapshot.category ||
+      editDescription !== editInitialSnapshot.description ||
+      editHostId !== editInitialSnapshot.hostId ||
+      editTimestamp !== editInitialSnapshot.timestamp
   );
 
   $effect(() => {
@@ -73,6 +127,10 @@
     loading = true;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/oplog`);
+      if (!res.ok) {
+        console.error('Failed to load operation log:', { workspaceId, status: res.status });
+        return;
+      }
       entries = await res.json();
     } catch {
       console.error('Failed to load operation log');
@@ -85,6 +143,10 @@
     if (!workspaceId) return;
     try {
       const res = await fetch(`/api/workspaces/${workspaceId}/hosts`);
+      if (!res.ok) {
+        console.error('Failed to load hosts:', { workspaceId, status: res.status });
+        return;
+      }
       const data = await res.json();
       hosts = (data as Array<{ id: string; ip: string; hostname: string }>).map((h) => ({
         id: h.id,
@@ -96,16 +158,42 @@
     }
   }
 
-  function localNow(): string {
-    // Returns datetime-local compatible string (YYYY-MM-DDTHH:MM) in local time
-    const d = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  function openAddForm(): void {
+    const now = localDateTimeValue();
+    newTimestamp = now;
+    addInitialSnapshot = {
+      category: newCategory,
+      description: newDescription,
+      hostId: newHostId,
+      timestamp: now,
+    };
+    addingEntry = true;
   }
 
-  function openAddForm(): void {
-    newTimestamp = localNow();
-    addingEntry = true;
+  function closeAddForm(): void {
+    addingEntry = false;
+    confirmDiscardModal = null;
+  }
+
+  function closeEditForm(): void {
+    editingId = null;
+    confirmDiscardModal = null;
+  }
+
+  function requestCloseAddForm(): void {
+    if (uiMode === 'modal' && addFormDirty) {
+      confirmDiscardModal = 'add';
+      return;
+    }
+    closeAddForm();
+  }
+
+  function requestCloseEditForm(): void {
+    if (uiMode === 'modal' && editFormDirty) {
+      confirmDiscardModal = 'edit';
+      return;
+    }
+    closeEditForm();
   }
 
   async function addEntry(): Promise<void> {
@@ -128,7 +216,7 @@
       newDescription = '';
       newHostId = '';
       newTimestamp = '';
-      addingEntry = false;
+      closeAddForm();
     } catch {
       console.error('Failed to add operation log entry');
     }
@@ -139,9 +227,13 @@
     editCategory = entry.category;
     editDescription = entry.description;
     editHostId = entry.host_id ?? '';
-    const d = new Date(entry.timestamp);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    editTimestamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    editTimestamp = toLocalDateTimeValue(entry.timestamp);
+    editInitialSnapshot = {
+      category: entry.category,
+      description: entry.description,
+      hostId: entry.host_id ?? '',
+      timestamp: toLocalDateTimeValue(entry.timestamp),
+    };
   }
 
   async function saveEdit(id: string): Promise<void> {
@@ -160,7 +252,7 @@
       if (!res.ok) return;
       const updated: OperationLogEntry = await res.json();
       entries = entries.map((e) => (e.id === id ? updated : e));
-      editingId = null;
+      closeEditForm();
     } catch {
       console.error('Failed to update operation log entry');
     }
@@ -168,8 +260,13 @@
 
   async function deleteEntry(id: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/oplog/${id}`, { method: 'DELETE' });
-    entries = entries.filter((e) => e.id !== id);
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/oplog/${id}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete entry:', { workspaceId, id, status: res.status }); return; }
+      entries = entries.filter((e) => e.id !== id);
+    } catch (err) {
+      console.error('Failed to delete entry:', { workspaceId, id, error: err });
+    }
   }
 
   function formatTime(iso: string): string {
@@ -186,11 +283,41 @@
   }
 
   function handleKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      if (editingId) { editingId = null; return; }
-      if (addingEntry) { addingEntry = false; return; }
-      onClose();
+    if (e.defaultPrevented || e.key !== 'Escape') return;
+
+    if (Date.now() < ignoreEscapeUntil) {
+      return;
     }
+
+    if (confirmDelete) {
+      e.preventDefault();
+      ignoreEscapeUntil = Date.now() + 120;
+      confirmDelete = null;
+      return;
+    }
+
+    if (confirmDiscardModal) {
+      e.preventDefault();
+      ignoreEscapeUntil = Date.now() + 120;
+      confirmDiscardModal = null;
+      return;
+    }
+
+    if (editingId) {
+      e.preventDefault();
+      requestCloseEditForm();
+      return;
+    }
+    if (addingEntry) {
+      e.preventDefault();
+      requestCloseAddForm();
+      return;
+    }
+    onClose();
+  }
+
+  function requestDelete(entry: OperationLogEntry): void {
+    confirmDelete = { id: entry.id, label: entry.description };
   }
 </script>
 
@@ -209,6 +336,7 @@
     <div class="flex items-center gap-1">
       <button
         onclick={loadEntries}
+        aria-label="Refresh operation log"
         title="Refresh"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
@@ -216,6 +344,7 @@
       </button>
       <button
         onclick={openAddForm}
+        aria-label="Add log entry"
         title="Add entry"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
@@ -223,6 +352,7 @@
       </button>
       <button
         onclick={onClose}
+        aria-label="Close operation log panel"
         title="Close"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
@@ -254,59 +384,41 @@
       {/each}
     </div>
 
-    <!-- Add-entry form -->
-    {#if addingEntry}
-      <div class="space-y-2 border-b border-border bg-muted/40 p-3">
-        <textarea
-          placeholder="Describe what happened..."
-          bind:value={newDescription}
-          rows={2}
-          class="w-full resize-none rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          onkeydown={(e) => { if (e.key === 'Enter' && e.ctrlKey) addEntry(); if (e.key === 'Escape') { addingEntry = false; } }}
-        ></textarea>
-        <div class="flex gap-2">
-          <select
-            bind:value={newCategory}
-            class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-          >
-            {#each CATEGORIES as cat}
-              <option value={cat.value}>{cat.label}</option>
-            {/each}
-          </select>
-          <select
-            bind:value={newHostId}
-            class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-          >
-            <option value="">No host</option>
-            {#each hosts as h}
-              <option value={h.id}>{h.ip}{h.hostname ? ` (${h.hostname})` : ''}</option>
-            {/each}
-          </select>
-        </div>
-        <input
-          type="datetime-local"
-          bind:value={newTimestamp}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-        <div class="flex gap-2">
-          <button
-            onclick={addEntry}
-            class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Add entry
-          </button>
-          <button
-            onclick={() => (addingEntry = false)}
-            class="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
+    {#if entries.length > 0}
+    <div class="border-b border-border px-3 py-2">
+      <input
+        type="text"
+        aria-label="Filter log entries"
+        placeholder="Filter log entries..."
+        bind:value={oplogQuery}
+        class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </div>
     {/if}
 
     <!-- Timeline -->
     <div class="flex-1 overflow-y-auto">
+      <!-- Add-entry form -->
+      {#if addingEntry && uiMode === 'inline'}
+        <div class="border-b border-border bg-muted/40 p-3">
+          <OperationLogEntryForm
+            variant="inline"
+            description={newDescription}
+            category={newCategory}
+            hostId={newHostId}
+            timestamp={newTimestamp}
+            categoryOptions={CATEGORIES}
+            hostOptions={hostOptions}
+            submitLabel="Add entry"
+            onDescriptionChange={(value) => (newDescription = value)}
+            onCategoryChange={(value) => (newCategory = value)}
+            onHostChange={(value) => (newHostId = value)}
+            onTimestampChange={(value) => (newTimestamp = value)}
+            onSubmit={addEntry}
+            onCancel={requestCloseAddForm}
+          />
+        </div>
+      {/if}
       {#if loading}
         <div class="flex items-center justify-center py-8">
           <RefreshCw size={14} class="animate-spin text-muted-foreground" />
@@ -314,104 +426,33 @@
       {:else if filteredEntries.length === 0}
         <div class="flex flex-1 items-center justify-center py-8">
           <p class="text-center text-xs text-muted-foreground">
-            {categoryFilter === 'all' ? 'No log entries yet' : 'No entries for this category'}
+            {categoryFilter === 'all' && !oplogQuery.trim() ? 'No log entries yet' : 'No entries match your filter.'}
           </p>
         </div>
       {:else}
         <ul class="divide-y divide-border">
           {#each filteredEntries as entry (entry.id)}
             <li class="group px-3 py-2.5">
-              {#if editingId === entry.id}
-                <!-- Inline edit form -->
-                <div class="space-y-1.5">
-                  <textarea
-                    bind:value={editDescription}
-                    rows={2}
-                    class="w-full resize-none rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                    onkeydown={(e) => { if (e.key === 'Enter' && e.ctrlKey) saveEdit(entry.id); if (e.key === 'Escape') editingId = null; }}
-                  ></textarea>
-                  <div class="flex gap-1.5">
-                    <select
-                      bind:value={editCategory}
-                      class="flex-1 rounded border border-border bg-background px-1 py-0.5 text-xs focus:outline-none"
-                    >
-                      {#each CATEGORIES as cat}
-                        <option value={cat.value}>{cat.label}</option>
-                      {/each}
-                    </select>
-                    <select
-                      bind:value={editHostId}
-                      class="flex-1 rounded border border-border bg-background px-1 py-0.5 text-xs focus:outline-none"
-                    >
-                      <option value="">No host</option>
-                      {#each hosts as h}
-                        <option value={h.id}>{h.ip}{h.hostname ? ` (${h.hostname})` : ''}</option>
-                      {/each}
-                    </select>
-                  </div>
-                  <input
-                    type="datetime-local"
-                    bind:value={editTimestamp}
-                    class="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <div class="flex gap-1.5">
-                    <button
-                      onclick={() => saveEdit(entry.id)}
-                      class="flex items-center gap-1 rounded bg-primary px-2 py-0.5 text-xs text-primary-foreground hover:bg-primary/90"
-                    >
-                      <Check size={10} /> Save
-                    </button>
-                    <button
-                      onclick={() => (editingId = null)}
-                      class="rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              {:else}
-                <!-- Display row -->
-                <div class="flex items-start gap-2">
-                  <!-- Timeline dot -->
-                  <div class="mt-0.5 flex-shrink-0">
-                    <span
-                      class="inline-block h-2 w-2 rounded-full bg-current {categoryColorMap[entry.category] ?? 'text-muted-foreground'}"
-                    ></span>
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex items-center justify-between gap-1">
-                      <span class="text-[10px] font-medium uppercase tracking-wide {categoryColorMap[entry.category] ?? 'text-muted-foreground'}">
-                        {CATEGORIES.find((c) => c.value === entry.category)?.label ?? entry.category}
-                      </span>
-                      <div class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button
-                          onclick={() => startEdit(entry)}
-                          title="Edit"
-                          class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-                        >
-                          <Pencil size={10} />
-                        </button>
-                        <button
-                          onclick={() => deleteEntry(entry.id)}
-                          title="Delete"
-                          class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    </div>
-                    <p class="mt-0.5 text-xs leading-relaxed text-foreground">{entry.description}</p>
-                    <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span class="text-[10px] text-muted-foreground">{formatTime(entry.timestamp)}</span>
-                      {#if entry.host_ip}
-                        <span class="font-mono text-[10px] text-muted-foreground">
-                          {entry.host_ip}{entry.host_hostname ? ` · ${entry.host_hostname}` : ''}
-                        </span>
-                      {/if}
-                    </div>
-                  </div>
-                </div>
-              {/if}
+              <OperationLogEntryItem
+                {entry}
+                {uiMode}
+                editing={editingId === entry.id}
+                editDescription={editDescription}
+                editCategory={editCategory}
+                editHostId={editHostId}
+                editTimestamp={editTimestamp}
+                categoryOptions={CATEGORIES}
+                hostOptions={hostOptions}
+                {formatTime}
+                onStartEdit={startEdit}
+                onDeleteRequest={requestDelete}
+                onEditDescriptionChange={(value) => (editDescription = value)}
+                onEditCategoryChange={(value) => (editCategory = value)}
+                onEditHostChange={(value) => (editHostId = value)}
+                onEditTimestampChange={(value) => (editTimestamp = value)}
+                onSave={() => saveEdit(entry.id)}
+                onCancelEdit={() => (editingId = null)}
+              />
             </li>
           {/each}
         </ul>
@@ -419,3 +460,108 @@
     </div>
   {/if}
 </div>
+
+{#if addingEntry && uiMode === 'modal'}
+  <ToolModal
+    ariaLabel="Add Log Entry"
+    onClose={requestCloseAddForm}
+    maxWidthClass="max-w-2xl"
+    dialogClass="overflow-hidden"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <ScrollText size={14} class="text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Add Log Entry</h2>
+      <button
+        onclick={requestCloseAddForm}
+        aria-label="Close add log entry form"
+        class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+      ><X size={14} /></button>
+    </div>
+    <OperationLogEntryForm
+      variant="modal"
+      description={newDescription}
+      category={newCategory}
+      hostId={newHostId}
+      timestamp={newTimestamp}
+      categoryOptions={CATEGORIES}
+      hostOptions={hostOptions}
+      submitLabel="Add Log Entry"
+      onDescriptionChange={(value) => (newDescription = value)}
+      onCategoryChange={(value) => (newCategory = value)}
+      onHostChange={(value) => (newHostId = value)}
+      onTimestampChange={(value) => (newTimestamp = value)}
+      onSubmit={addEntry}
+      onCancel={requestCloseAddForm}
+    />
+  </ToolModal>
+{/if}
+
+{#if editingId !== null && uiMode === 'modal'}
+  <ToolModal
+    ariaLabel="Edit Log Entry"
+    onClose={requestCloseEditForm}
+    maxWidthClass="max-w-2xl"
+    dialogClass="overflow-hidden"
+  >
+    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <ScrollText size={14} class="text-muted-foreground" />
+      <h2 class="flex-1 text-sm font-semibold">Edit Log Entry</h2>
+      <button
+        onclick={requestCloseEditForm}
+        aria-label="Close edit log entry form"
+        class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+      ><X size={14} /></button>
+    </div>
+    <OperationLogEntryForm
+      variant="modal"
+      description={editDescription}
+      category={editCategory}
+      hostId={editHostId}
+      timestamp={editTimestamp}
+      categoryOptions={CATEGORIES}
+      hostOptions={hostOptions}
+      submitLabel="Save Changes"
+      onDescriptionChange={(value) => (editDescription = value)}
+      onCategoryChange={(value) => (editCategory = value)}
+      onHostChange={(value) => (editHostId = value)}
+      onTimestampChange={(value) => (editTimestamp = value)}
+      onSubmit={() => {
+        if (!editingId) return;
+        saveEdit(editingId);
+      }}
+      onCancel={requestCloseEditForm}
+    />
+  </ToolModal>
+{/if}
+
+{#if confirmDelete !== null}
+  {@const pending = confirmDelete}
+  <ConfirmDialog
+    title="Delete Action"
+    message="Delete this action from the operation log? This cannot be undone."
+    onConfirm={() => { deleteEntry(pending.id); confirmDelete = null; }}
+    onCancel={() => {
+      ignoreEscapeUntil = Date.now() + 120;
+      confirmDelete = null;
+    }}
+  />
+{/if}
+
+{#if confirmDiscardModal !== null}
+  <ConfirmDialog
+    title="Discard Changes"
+    message="You have unsaved changes. Discard them and close this form?"
+    confirmLabel="Discard"
+    onConfirm={() => {
+      if (confirmDiscardModal === 'add') {
+        closeAddForm();
+        return;
+      }
+      closeEditForm();
+    }}
+    onCancel={() => {
+      ignoreEscapeUntil = Date.now() + 120;
+      confirmDiscardModal = null;
+    }}
+  />
+{/if}

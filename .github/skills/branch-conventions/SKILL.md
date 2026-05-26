@@ -17,14 +17,14 @@ Include the issue number when a GitHub issue exists for the work.
 
 ## Type Prefixes
 
-| Type | When to Use | Example |
-|------|-------------|---------|
-| `feat` | New user-facing feature | `feat/7-floating-pill-notifications` |
-| `fix` | Bug fix | `fix/pinned-notes-workspace-scope` |
-| `docs` | Documentation updates only | `docs/contributing-guide` |
-| `chore` | Maintenance, dependency updates, tooling | `chore/bump-milkdown-v7` |
-| `refactor` | Code restructure with no behaviour change | `refactor/extract-file-tree-logic` |
-| `ci` | CI/CD pipeline changes | `ci/add-svelte-check-workflow` |
+| Type       | When to Use                               | Example                             |
+| ---------- | ----------------------------------------- | ----------------------------------- |
+| `feat`     | New user-facing feature                   | `feat/12-user-profile-page`         |
+| `fix`      | Bug fix                                   | `fix/auth-token-refresh`            |
+| `docs`     | Documentation updates only                | `docs/contributing-guide`           |
+| `chore`    | Maintenance, dependency updates, tooling  | `chore/upgrade-sveltekit-2`         |
+| `refactor` | Code restructure with no behaviour change | `refactor/extract-validation-logic` |
+| `ci`       | CI/CD pipeline changes                    | `ci/add-type-check-workflow`        |
 
 ## Rules
 
@@ -39,21 +39,21 @@ Include the issue number when a GitHub issue exists for the work.
 ### Correct
 
 ```
-feat/7-floating-pill-notifications
-fix/5-sqlite-reload-after-pull
-fix/default-workspace-on-fresh-clone
+feat/12-user-profile-page
+fix/5-auth-token-refresh
+fix/missing-error-boundary
 docs/architecture-overview
-chore/update-sveltekit-2-17
-refactor/workspace-api-error-handling
+chore/upgrade-dependencies
+refactor/api-error-handling
 ```
 
 ### Wrong
 
 ```
-feature/add_workspace_type     # underscore, wrong type prefix spelling
-Fix/sidebar-pinned-notes       # uppercase
+feature/add_user_profile       # underscore, wrong type prefix spelling
+Fix/auth-token-refresh         # uppercase
 my-fix                         # missing type prefix
-feat/add-the-new-ctf-workspace-type-selection-dialog  # too long
+feat/add-the-new-user-profile-page-with-settings-tab  # too long
 ```
 
 ## Lifecycle

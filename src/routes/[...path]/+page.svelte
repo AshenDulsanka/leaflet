@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
+  import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
   import { theme } from '$lib/theme.svelte';
   import Sidebar from '$lib/components/layout/Sidebar.svelte';
@@ -30,13 +30,17 @@
   import ScreenshotPanel from '$lib/components/panels/ScreenshotPanel.svelte';
   import ExportModal from '$lib/components/modals/ExportModal.svelte';
   import NoteGraphPanel from '$lib/components/panels/NoteGraphPanel.svelte';
+  import RightPanelContainer from '$lib/components/layout/RightPanelContainer.svelte';
   import type { FileNode, Workspace } from '$lib/types';
-
-  interface FindOptions {
-    caseSensitive: boolean;
-    useRegex: boolean;
-    wholeWord: boolean;
-  }
+  import type { FindOptions } from '$lib/components/editor/find-utils';
+  import {
+    encodePathForUrl,
+    resolveWorkspacePath as _resolveWorkspacePath,
+    workspaceRootUrl,
+    isPathWithinWorkspace as _isPathWithinWorkspace,
+    migrateWorkspacePath
+  } from '$lib/utils/path-utils';
+  import { applyMove, applyReorder, flattenTree, findNoteByName } from '$lib/utils/tree-utils';
 
   interface EditorApi {
     insertText: (text: string) => void;
@@ -48,6 +52,16 @@
     resetContent: (content: string) => void;
   }
 
+  interface SaveSnapshot {
+    filePath: string;
+    content: string;
+    workspaceNotesFolder: string | null;
+  }
+
+  interface OpenFileError {
+    status: number;
+  }
+
   // State
   let tree = $state<FileNode[]>([]);
   let activeFile = $state<string | null>(null);
@@ -57,6 +71,19 @@
   let searchOpen = $state(false);
   let wordCount = $state(0);
   let editorMode = $state<'wysiwyg' | 'source'>('wysiwyg');
+
+  // Interaction mode — persisted in localStorage
+  let uiMode = $state<'modal' | 'inline'>(
+    (typeof localStorage !== 'undefined' ? (localStorage.getItem('leaflet-ui-mode') as 'modal' | 'inline' | null) : null) ?? 'modal'
+  );
+
+  function setUiMode(mode: 'modal' | 'inline'): void {
+    uiMode = mode;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('leaflet-ui-mode', mode);
+    }
+  }
+
   let toastError = $state<string | null>(null);
   let toastTimer: ReturnType<typeof setTimeout>;
 
@@ -72,8 +99,10 @@
   let aiChatOpen = $state(false);
   let summarizeOpen = $state(false);
   let newNoteOpen = $state(false);
+  let newNoteParentPath = $state<string | null>(null);
   let backlinksOpen = $state(false);
   let screenshotsOpen = $state(false);
+  let screenshotVersion = $state(0);
   let exportOpen = $state(false);
   let hostTrackerOpen = $state(false);
   let credentialVaultOpen = $state(false);
@@ -85,6 +114,42 @@
   let cvssOpen = $state(false);
   let findingsTrackerOpen = $state(false);
   let topologyOpen = $state(false);
+  
+  let rightPanelWidth = $state(320); // 320px = 20rem default
+  let isResizingRight = $state(false);
+
+  function startRightResize(e: MouseEvent): void {
+    isResizingRight = true;
+    const startX = e.clientX;
+    const startWidth = rightPanelWidth;
+
+    function onMouseMove(ev: MouseEvent): void {
+      // Moving LEFT increases the panel width (since it's on the right)
+      rightPanelWidth = Math.min(600, Math.max(240, startWidth - (ev.clientX - startX)));
+    }
+
+    function onMouseUp(): void {
+      isResizingRight = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  const rightPanelOpen = $derived(
+    backlinksOpen || 
+    screenshotsOpen || 
+    hostTrackerOpen || 
+    credentialVaultOpen || 
+    flagTrackerOpen || 
+    snippetsOpen || 
+    operationLogOpen || 
+    cvssOpen || 
+    findingsTrackerOpen
+  );
+
   let aiMessages = $state<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   let insertIntoEditor = $state<((text: string) => void) | null>(null);
   let helpOpen = $state(false);
@@ -99,9 +164,23 @@
 
   // Workspace management
   const WS_STORAGE_KEY = 'notes-active-workspace-v1';
+  const SMALL_SCREEN_WARNING_DISMISS_KEY = 'leaflet-small-screen-warning-dismissed-v1';
+  const SMALL_SCREEN_MEDIA_QUERY = '(max-width: 900px)';
   let workspaces = $state<Workspace[]>([]);
   let activeWorkspace = $state<Workspace | null>(null);
   let createWorkspaceOpen = $state(false);
+  let isSmallScreen = $state(false);
+  let showSmallScreenWarning = $state(false);
+  let treeLoadRequestId = $state(0);
+  let treeWriteDepth = $state(0);
+
+  function beginTreeWrite(): void {
+    treeWriteDepth += 1;
+  }
+
+  function endTreeWrite(): void {
+    treeWriteDepth = Math.max(0, treeWriteDepth - 1);
+  }
 
   async function loadWorkspaces() {
     try {
@@ -121,25 +200,62 @@
     }
   }
 
-  function selectWorkspace(ws: Workspace) {
+  function dismissSmallScreenWarning(): void {
+    showSmallScreenWarning = false;
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(SMALL_SCREEN_WARNING_DISMISS_KEY, '1');
+  }
+
+  /** Thin wrapper — adds default workspace folder so callers don't have to repeat it. */
+  function resolveWorkspacePath(path: string, workspaceNotesFolder: string | null = activeWorkspace?.notes_folder ?? null): string {
+    return _resolveWorkspacePath(path, workspaceNotesFolder);
+  }
+
+  /** Thin wrapper — closes over the reactive `workspaces` list required by the pure util. */
+  function isPathWithinWorkspace(path: string, workspaceNotesFolder: string | null): boolean {
+    return _isPathWithinWorkspace(path, workspaceNotesFolder, workspaces);
+  }
+
+  function clearPendingAutosave(): void {
+    clearTimeout(saveTimer);
+  }
+
+  function clearActiveEditorState(): void {
+    activeFile = null;
+    activeContent = '';
+    isDirty = false;
+  }
+
+  function createSaveSnapshot(): SaveSnapshot | null {
+    if (!activeFile || !isDirty) {
+      return null;
+    }
+
+    return {
+      filePath: activeFile,
+      content: activeContent,
+      workspaceNotesFolder: activeWorkspace?.notes_folder ?? null
+    };
+  }
+
+  async function selectWorkspace(ws: Workspace): Promise<void> {
+    clearPendingAutosave();
+    clearActiveEditorState();
     activeWorkspace = ws;
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(WS_STORAGE_KEY, ws.id);
     }
-    // Reload the file tree scoped to this workspace's notes folder,
-    // and clear any open file since it belongs to the previous workspace context.
-    loadTree(ws.notes_folder ?? '');
-    activeFile = null;
-    activeContent = '';
+    await loadTree(ws.notes_folder ?? '');
+    await goto(workspaceRootUrl(ws), { replaceState: true, noScroll: true, keepFocus: true });
   }
 
-  async function createWorkspace(data: { name: string; type: string; icon_color: string }) {
+  async function createWorkspace(data: { name: string; type: string; icon_color: string; preset: string | null }) {
     if (!data.name.trim()) return;
     try {
       const res = await fetch('/api/workspaces', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: data.name.trim(), type: data.type, icon_color: data.icon_color })
+        body: JSON.stringify({ name: data.name.trim(), type: data.type, icon_color: data.icon_color, preset: data.preset ?? null })
       });
       if (!res.ok) return;
       const ws: Workspace = await res.json();
@@ -150,57 +266,262 @@
     }
   }
 
+  async function deleteWorkspace(id: string): Promise<void> {
+    try {
+      const res = await fetch(`/api/workspaces/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        console.error('Failed to delete workspace:', res.status, res.statusText);
+        showError('Failed to delete workspace. Please try again.');
+        return;
+      }
+      if (activeWorkspace?.id === id) {
+        const fallback = workspaces.find(w => w.id !== id);
+        if (fallback) selectWorkspace(fallback);
+      }
+      await invalidateAll();
+      await loadWorkspaces();
+    } catch (err) {
+      console.error('Failed to delete workspace:', err);
+      showError('Failed to delete workspace. Please try again.');
+    }
+  }
+
+  async function renameWorkspace(id: string, newName: string): Promise<void> {
+    const trimmedName = newName.trim();
+    if (!trimmedName) return;
+
+    const previousWorkspace = activeWorkspace?.id === id ? activeWorkspace : null;
+    const previousActiveFile = previousWorkspace?.id === id ? activeFile : null;
+
+    try {
+      const res = await fetch(`/api/workspaces/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedName })
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({} as { error?: string }));
+        showError(payload.error ?? 'Failed to rename workspace. Please try again.');
+        return;
+      }
+
+      const updatedWorkspace = await res.json() as Workspace;
+      workspaces = workspaces.map((w) => (w.id === id ? { ...w, ...updatedWorkspace } : w));
+
+      if (previousWorkspace?.id === id) {
+        const nextActiveFile = previousActiveFile && isPathWithinWorkspace(previousActiveFile, previousWorkspace.notes_folder ?? null)
+          ? migrateWorkspacePath(previousActiveFile, previousWorkspace.notes_folder ?? null, updatedWorkspace.notes_folder ?? null)
+          : null;
+
+        clearPendingAutosave();
+        activeWorkspace = updatedWorkspace;
+
+        if (nextActiveFile) {
+          activeFile = nextActiveFile;
+        } else {
+          clearActiveEditorState();
+        }
+
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(WS_STORAGE_KEY, updatedWorkspace.id);
+        }
+
+        await loadTree(updatedWorkspace.notes_folder ?? '');
+
+        if (nextActiveFile) {
+          await goto(`/${encodePathForUrl(resolveWorkspacePath(nextActiveFile, updatedWorkspace.notes_folder ?? null))}`, {
+            replaceState: true,
+            noScroll: true,
+            keepFocus: true,
+          });
+          return;
+        }
+
+        await goto(workspaceRootUrl(updatedWorkspace), { replaceState: true, noScroll: true, keepFocus: true });
+      }
+    } catch (error) {
+      console.error('Failed to rename workspace:', error);
+      showError('Failed to rename workspace. Please try again.');
+    }
+  }
+
   // Mutual exclusion: opening any panel closes all others.
   // Each effect only fires when its panel becomes true, setting the rest false.
   // No cascades: the others are already false so their effects don't re-trigger.
   $effect(() => { if (searchOpen)      { commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; } });
   $effect(() => { if (commandOpen)     { searchOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; } });
-  $effect(() => { if (methodologyOpen) { searchOpen = false; commandOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; } });
-  $effect(() => { if (aiChatOpen)      { searchOpen = false; commandOpen = false; methodologyOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; } });
+  $effect(() => { if (methodologyOpen) { searchOpen = false; commandOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; findingsTrackerOpen = false; topologyOpen = false; } });
+  $effect(() => { if (aiChatOpen)      { searchOpen = false; commandOpen = false; methodologyOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; findingsTrackerOpen = false; topologyOpen = false; } });
   $effect(() => { if (summarizeOpen)   { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; helpOpen = false; settingsOpen = false; } });
   $effect(() => { if (helpOpen)        { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; settingsOpen = false; } });
   $effect(() => { if (settingsOpen)    { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; } });
   $effect(() => { if (backlinksOpen)   { searchOpen = false; commandOpen = false; methodologyOpen = false; aiChatOpen = false; summarizeOpen = false; helpOpen = false; settingsOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (screenshotsOpen) { backlinksOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (screenshotsOpen) { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
   $effect(() => { if (exportOpen)      { helpOpen = false; settingsOpen = false; } });
-  $effect(() => { if (hostTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (credentialVaultOpen) { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (flagTrackerOpen)     { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; snippetsOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (snippetsOpen)        { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; operationLogOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (hostTrackerOpen)     { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (credentialVaultOpen) { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; flagTrackerOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (flagTrackerOpen)     { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; snippetsOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (snippetsOpen)        { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; operationLogOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
   $effect(() => { if (attackChainOpen)     { /* full-screen modal - no sidebar conflict */ } });
   $effect(() => { if (graphOpen)           { /* full-screen overlay - close other full-screen panels */ attackChainOpen = false; } });
-  $effect(() => { if (operationLogOpen)    { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (cvssOpen)            { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; findingsTrackerOpen = false; } });
-  $effect(() => { if (findingsTrackerOpen) { backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; } });
-  $effect(() => { if (topologyOpen) { attackChainOpen = false; graphOpen = false; } });
+  $effect(() => { if (operationLogOpen)    { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; cvssOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (cvssOpen)            { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; findingsTrackerOpen = false; } });
+  $effect(() => { if (findingsTrackerOpen) { methodologyOpen = false; aiChatOpen = false; backlinksOpen = false; screenshotsOpen = false; hostTrackerOpen = false; credentialVaultOpen = false; flagTrackerOpen = false; snippetsOpen = false; operationLogOpen = false; cvssOpen = false; } });
+  $effect(() => { if (topologyOpen) { methodologyOpen = false; aiChatOpen = false; attackChainOpen = false; graphOpen = false; } });
+
+  function toggleRightPanel(panel: 'screenshots' | 'hosttracker' | 'credvault' | 'flagtracker' | 'snippets' | 'oplog' | 'cvss' | 'findings' | 'backlinks'): void {
+    const isCurrentlyOpen =
+      (panel === 'screenshots' && screenshotsOpen) ||
+      (panel === 'hosttracker' && hostTrackerOpen) ||
+      (panel === 'credvault' && credentialVaultOpen) ||
+      (panel === 'flagtracker' && flagTrackerOpen) ||
+      (panel === 'snippets' && snippetsOpen) ||
+      (panel === 'oplog' && operationLogOpen) ||
+      (panel === 'cvss' && cvssOpen) ||
+      (panel === 'findings' && findingsTrackerOpen) ||
+      (panel === 'backlinks' && backlinksOpen);
+    // Close all right panels
+    screenshotsOpen = false;
+    hostTrackerOpen = false;
+    credentialVaultOpen = false;
+    flagTrackerOpen = false;
+    snippetsOpen = false;
+    operationLogOpen = false;
+    cvssOpen = false;
+    findingsTrackerOpen = false;
+    backlinksOpen = false;
+    // Open the requested panel only if it wasn't already open (toggle)
+    if (!isCurrentlyOpen) {
+      if (panel === 'screenshots') screenshotsOpen = true;
+      else if (panel === 'hosttracker') hostTrackerOpen = true;
+      else if (panel === 'credvault') credentialVaultOpen = true;
+      else if (panel === 'flagtracker') flagTrackerOpen = true;
+      else if (panel === 'snippets') snippetsOpen = true;
+      else if (panel === 'oplog') operationLogOpen = true;
+      else if (panel === 'cvss') cvssOpen = true;
+      else if (panel === 'findings') findingsTrackerOpen = true;
+      else if (panel === 'backlinks') backlinksOpen = true;
+    }
+  }
 
   onMount(async () => {
     // Load workspaces first so we can scope the tree to the active workspace
     await loadWorkspaces();
-    await loadTree(activeWorkspace?.notes_folder ?? '');
-    // If URL already has a file path (e.g. hard refresh on /templates/cheatsheet),
-    // open that file without pushing another history entry.
     const urlPath = $page.params.path;
+    if (!urlPath && activeWorkspace) {
+      await loadTree(activeWorkspace.notes_folder ?? '');
+      await goto(workspaceRootUrl(activeWorkspace), { replaceState: true, noScroll: true, keepFocus: true });
+      return;
+    }
     if (urlPath) {
-      await openFile(urlPath, false);
+      const matchedWorkspace = workspaces.find(
+        (ws) => urlPath === ws.notes_folder || urlPath.startsWith(`${ws.notes_folder}/`)
+      );
+      if (matchedWorkspace) {
+        activeWorkspace = matchedWorkspace;
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(WS_STORAGE_KEY, matchedWorkspace.id);
+        }
+      }
+    }
+    await loadTree(activeWorkspace?.notes_folder ?? '');
+    // If URL already has a note file path, open it without pushing another history entry.
+    // open that file without pushing another history entry.
+    if (urlPath && urlPath.endsWith('.md')) {
+      try {
+        await openFile(urlPath, false, undefined, true);
+      } catch (openErr: unknown) {
+        const status = getOpenFileStatus(openErr);
+        if (status === 400 || status === 404) {
+          await goto(`/${encodePathForUrl(urlPath)}`, {
+            replaceState: true,
+            noScroll: true,
+            keepFocus: true,
+            invalidateAll: true
+          });
+          return;
+        }
+
+        console.error('Failed to open file:', urlPath);
+      }
     }
   });
 
-  async function loadTree(base = '') {
+  onMount(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQueryList = window.matchMedia(SMALL_SCREEN_MEDIA_QUERY);
+
+    const updateWarningVisibility = (): void => {
+      isSmallScreen = mediaQueryList.matches;
+      if (!mediaQueryList.matches) {
+        showSmallScreenWarning = false;
+        return;
+      }
+
+      const dismissed = localStorage.getItem(SMALL_SCREEN_WARNING_DISMISS_KEY) === '1';
+      showSmallScreenWarning = !dismissed;
+    };
+
+    updateWarningVisibility();
+    mediaQueryList.addEventListener('change', updateWarningVisibility);
+
+    return () => {
+      mediaQueryList.removeEventListener('change', updateWarningVisibility);
+    };
+  });
+
+  async function loadTree(base = '', options: { force?: boolean } = {}): Promise<void> {
+    const requestId = treeLoadRequestId + 1;
+    treeLoadRequestId = requestId;
+
     try {
       const query = base ? `?base=${encodeURIComponent(base)}` : '';
       const res = await fetch(`/api/notes/tree${query}`);
       const data = await res.json();
+
+      if (requestId !== treeLoadRequestId) {
+        return;
+      }
+
+      if (treeWriteDepth > 0 && !options.force) {
+        return;
+      }
+
       tree = data.tree ?? [];
     } catch {
       console.error('Failed to load file tree');
     }
   }
 
+  function getOpenFileStatus(error: unknown): number | null {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'status' in error &&
+      typeof (error as { status: unknown }).status === 'number'
+    ) {
+      return (error as OpenFileError).status;
+    }
+
+    return null;
+  }
+
   // updateUrl = false when we are already at the correct URL (e.g. on mount)
-  async function openFile(path: string, updateUrl = true, scrollTo?: { line: number; lineText: string }) {
+  async function openFile(
+    path: string,
+    updateUrl = true,
+    scrollTo?: { line: number; lineText: string },
+    throwOnError = false
+  ) {
     try {
-      const res = await fetch(`/api/notes/${path}`);
+      const resolvedPath = resolveWorkspacePath(path);
+      const encodedPath = encodePathForUrl(resolvedPath);
+      const res = await fetch(`/api/notes/${encodedPath}`);
+      if (!res.ok) {
+        throw { status: res.status } satisfies OpenFileError;
+      }
       const data = await res.json();
       activeFile = path;
       // Un-escape [[wikilinks]] that may have been over-escaped by a previous version of the serializer
@@ -212,9 +533,12 @@
       if (scrollTo) pendingScrollTarget = scrollTo;
       isDirty = false;
       if (updateUrl) {
-        await goto('/' + path, { replaceState: true, noScroll: true, keepFocus: true });
+        await goto('/' + encodedPath, { replaceState: true, noScroll: true, keepFocus: true });
       }
-    } catch {
+    } catch (error: unknown) {
+      if (throwOnError) {
+        throw error;
+      }
       console.error('Failed to open file:', path);
     }
   }
@@ -224,20 +548,36 @@
   function handleContentChange(content: string) {
     activeContent = content;
     isDirty = true;
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveFile(), 1500);
+    clearPendingAutosave();
+    const snapshot = createSaveSnapshot();
+    if (!snapshot) {
+      return;
+    }
+
+    saveTimer = setTimeout(() => {
+      void saveFile(snapshot);
+    }, 1500);
   }
 
-  async function saveFile() {
-    if (!activeFile || !isDirty) return;
+  async function saveFile(snapshot: SaveSnapshot | null = createSaveSnapshot()): Promise<void> {
+    if (!snapshot) return;
+
     isSaving = true;
     try {
-      await fetch(`/api/notes/${activeFile}`, {
+      const resolvedPath = resolveWorkspacePath(snapshot.filePath, snapshot.workspaceNotesFolder);
+      await fetch(`/api/notes/${encodePathForUrl(resolvedPath)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: activeContent })
+        body: JSON.stringify({ content: snapshot.content })
       });
-      isDirty = false;
+
+      const isCurrentFile = activeFile === snapshot.filePath;
+      const isCurrentWorkspace = (activeWorkspace?.notes_folder ?? null) === snapshot.workspaceNotesFolder;
+      const isCurrentContent = activeContent === snapshot.content;
+
+      if (isCurrentFile && isCurrentWorkspace && isCurrentContent) {
+        isDirty = false;
+      }
     } catch {
       console.error('Failed to save file');
     } finally {
@@ -246,54 +586,74 @@
   }
 
   async function createFile(path: string, type: 'file' | 'folder', initialContent?: string) {
-    const wsFolder = activeWorkspace?.notes_folder;
-    const alreadyPrefixed = wsFolder && path.startsWith(`${wsFolder}/`);
-    const fullPath = wsFolder && !alreadyPrefixed ? `${wsFolder}/${path}` : path;
-    const res = await fetch(`/api/notes/${fullPath}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type })
-    });
-    if (!res.ok) {
-      if (res.status === 409) {
-        const name = path.split('/').pop() ?? path;
-        showError(`"${name}" already exists. Choose a different name.`);
-      } else {
-        showError('Failed to create item.');
-      }
-      return;
-    }
-    if (type === 'file' && initialContent) {
-      await fetch(`/api/notes/${fullPath}`, {
-        method: 'PUT',
+    const fullPath = resolveWorkspacePath(path);
+    const encodedPath = encodePathForUrl(fullPath);
+    beginTreeWrite();
+    try {
+      const res = await fetch(`/api/notes/${encodedPath}`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: initialContent })
+        body: JSON.stringify({ type })
       });
+      if (!res.ok) {
+        if (res.status === 409) {
+          const name = path.split('/').pop() ?? path;
+          showError(`"${name}" already exists. Choose a different name.`);
+        } else {
+          showError('Failed to create item.');
+        }
+        return;
+      }
+      if (type === 'file' && initialContent) {
+        await fetch(`/api/notes/${encodedPath}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: initialContent })
+        });
+      }
+    } finally {
+      endTreeWrite();
     }
-    await loadTree(activeWorkspace?.notes_folder ?? '');
+
+    await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
   }
 
   async function deleteFile(path: string) {
-    await fetch(`/api/notes/${path}`, { method: 'DELETE' });
+    const resolvedPath = resolveWorkspacePath(path);
+    beginTreeWrite();
+    try {
+      await fetch(`/api/notes/${encodePathForUrl(resolvedPath)}`, { method: 'DELETE' });
+    } finally {
+      endTreeWrite();
+    }
+
     if (activeFile === path) {
       activeFile = null;
       activeContent = '';
-      await goto('/', { replaceState: true, noScroll: true });
+      await goto(workspaceRootUrl(activeWorkspace), { replaceState: true, noScroll: true, keepFocus: true });
     }
-    await loadTree(activeWorkspace?.notes_folder ?? '');
+    await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
   }
 
   async function renameFile(fromPath: string, toPath: string) {
-    await fetch(`/api/notes/${fromPath}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ newPath: toPath })
-    });
+    const resolvedFromPath = resolveWorkspacePath(fromPath);
+    const resolvedToPath = resolveWorkspacePath(toPath);
+    beginTreeWrite();
+    try {
+      await fetch(`/api/notes/${encodePathForUrl(resolvedFromPath)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPath: resolvedToPath })
+      });
+    } finally {
+      endTreeWrite();
+    }
+
     if (activeFile === fromPath) {
       activeFile = toPath;
-      await goto('/' + toPath, { replaceState: true, noScroll: true });
+      await goto('/' + encodePathForUrl(resolvedToPath), { replaceState: true, noScroll: true, keepFocus: true });
     }
-    await loadTree(activeWorkspace?.notes_folder ?? '');
+    await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
   }
 
   function handleSummarize() {
@@ -303,38 +663,62 @@
 
   async function moveFile(fromPath: string, toFolderPath: string) {
     const filename = fromPath.split('/').pop()!;
-    await renameFile(fromPath, `${toFolderPath}/${filename}`);
+    const targetPath = toFolderPath ? `${toFolderPath}/${filename}` : filename;
+    if (targetPath === fromPath) {
+      return;
+    }
+
+    tree = applyMove(tree, fromPath, toFolderPath);
+
+    const resolvedFrom = resolveWorkspacePath(fromPath);
+    const resolvedTo = resolveWorkspacePath(targetPath);
+    beginTreeWrite();
+    let moveSuccess = false;
+    try {
+      const res = await fetch(`/api/notes/${encodePathForUrl(resolvedFrom)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPath: resolvedTo })
+      });
+      if (res.ok) {
+        moveSuccess = true;
+      } else {
+        await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
+      }
+    } catch {
+      await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
+    } finally {
+      endTreeWrite();
+    }
+
+    if (moveSuccess && activeFile === fromPath) {
+      activeFile = targetPath;
+      await goto('/' + encodePathForUrl(resolvedTo), { replaceState: true, noScroll: true, keepFocus: true });
+    }
   }
 
-  // Find a note in the file tree by name (without .md extension)
-  function findNoteByName(nodes: FileNode[], name: string): string | null {
-    const lower = name.toLowerCase();
-    for (const node of nodes) {
-      if (node.type === 'file') {
-        const nodeName = node.name.replace(/\.md$/i, '').toLowerCase();
-        if (nodeName === lower) return node.path;
-      } else if (node.children) {
-        const found = findNoteByName(node.children, name);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-
-  // Flat list of all note paths for wikilink autocomplete
-  // readTree only emits type:'file' for .md files, so no extension check needed
-  function flattenTree(nodes: FileNode[]): string[] {
-    const paths: string[] = [];
-    for (const node of nodes) {
-      if (node.type === 'file') {
-        paths.push(node.path);
-      } else if (node.children) {
-        paths.push(...flattenTree(node.children));
-      }
-    }
-    return paths;
-  }
   const noteSuggestions = $derived(flattenTree(tree));
+
+  async function reorderNotes(orderedPaths: string[]): Promise<void> {
+    tree = applyReorder(tree, orderedPaths);
+    const items = orderedPaths.map((path, i) => ({ path, sort_order: i }));
+    beginTreeWrite();
+    try {
+      const res = await fetch('/api/notes/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items })
+      });
+      if (!res.ok) throw new Error('Reorder failed');
+    } catch (err) {
+      console.error('Failed to persist note sort order:', err);
+      showError('Failed to reorder notes. Please try again.');
+      await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
+    } finally {
+      endTreeWrite();
+    }
+  }
+
   const noteTitle = $derived(
     activeFile ? (activeFile.split('/').pop()?.replace(/\.md$/i, '') ?? 'Leaflet') : 'Leaflet'
   );
@@ -376,7 +760,9 @@
     }
     if (e.ctrlKey && e.key === '.') {
       e.preventDefault();
-      methodologyOpen = !methodologyOpen;
+      if (activeWorkspace?.preset === 'cpts') {
+        methodologyOpen = !methodologyOpen;
+      }
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'A') {
       e.preventDefault();
@@ -392,11 +778,11 @@
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'B') {
       e.preventDefault();
-      if (activeFile) backlinksOpen = !backlinksOpen;
+      if (activeFile) toggleRightPanel('backlinks');
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'G') {
       e.preventDefault();
-      screenshotsOpen = !screenshotsOpen;
+      toggleRightPanel('screenshots');
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'X') {
       e.preventDefault();
@@ -408,11 +794,11 @@
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'V') {
       e.preventDefault();
-      cvssOpen = !cvssOpen;
+      toggleRightPanel('cvss');
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'F') {
       e.preventDefault();
-      findingsTrackerOpen = !findingsTrackerOpen;
+      toggleRightPanel('findings');
     }
     if (e.ctrlKey && e.shiftKey && e.key === 'T') {
       e.preventDefault();
@@ -443,35 +829,72 @@
       >&#x2715;</button>
     </div>
   {/if}
+
+  {#if showSmallScreenWarning && isSmallScreen}
+    <div
+      class="fixed inset-0 z-[210] flex items-center justify-center bg-background/45 p-4 backdrop-blur-sm"
+      role="presentation"
+    >
+      <div
+        class="w-full max-w-md rounded-xl border border-amber-500/45 bg-card p-4 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="small-screen-warning-title"
+        aria-describedby="small-screen-warning-description"
+      >
+        <p id="small-screen-warning-title" class="text-sm font-semibold text-foreground">Desktop-focused app</p>
+        <p id="small-screen-warning-description" class="mt-2 text-xs leading-relaxed text-muted-foreground">
+          Leaflet is optimized for desktop workflows. On small screens, some features may be limited or behave unexpectedly.
+        </p>
+        <div class="mt-4 flex justify-end">
+          <button
+            type="button"
+            onclick={dismissSmallScreenWarning}
+            class="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-primary/60"
+            aria-label="Dismiss small screen warning"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <Toolbar
     bind:searchOpen
     bind:editorMode
     bind:methodologyOpen
     bind:aiChatOpen
     bind:newNoteOpen
-    onNewNote={(path, templateContent) => createFile(path, 'file', templateContent || undefined)}
+    onNewNote={(fileName, templateContent) => {
+      const baseName = fileName.endsWith('.md') ? fileName : `${fileName}.md`;
+      const fullPath = newNoteParentPath ? `${newNoteParentPath}/${baseName}` : baseName;
+      newNoteParentPath = null;
+      createFile(fullPath, 'file', templateContent || undefined);
+    }}
     onNewFolder={(path) => createFile(path, 'folder')}
     onToggleTheme={() => theme.toggle()}
     isDark={theme.isDark}
     hasActiveFile={!!activeFile}
     onOpenCommandPalette={() => (commandOpen = true)}
     onSummarize={handleSummarize}
-    onOpenBacklinks={() => { if (activeFile) backlinksOpen = !backlinksOpen; }}
-    onOpenScreenshots={() => (screenshotsOpen = !screenshotsOpen)}
+    onOpenBacklinks={() => { if (activeFile) toggleRightPanel('backlinks'); }}
+    onOpenScreenshots={() => toggleRightPanel('screenshots')}
     onOpenExport={() => { if (activeFile) exportOpen = true; }}
     onOpenHelp={() => (helpOpen = true)}
     onOpenSettings={() => (settingsOpen = true)}
     onOpenGraph={() => (graphOpen = !graphOpen)}
     hasWorkspace={!!activeWorkspace}
     isPentest={activeWorkspace?.type === 'pentest'}
-    onOpenHostTracker={() => (hostTrackerOpen = !hostTrackerOpen)}
-    onOpenCredentialVault={() => (credentialVaultOpen = !credentialVaultOpen)}
-    onOpenFlagTracker={() => (flagTrackerOpen = !flagTrackerOpen)}
-    onOpenSnippets={() => (snippetsOpen = !snippetsOpen)}
+    isCpts={activeWorkspace?.preset === 'cpts'}
+    onOpenHostTracker={() => toggleRightPanel('hosttracker')}
+    onOpenCredentialVault={() => toggleRightPanel('credvault')}
+    onOpenFlagTracker={() => toggleRightPanel('flagtracker')}
+    onOpenSnippets={() => toggleRightPanel('snippets')}
     onOpenAttackChain={() => (attackChainOpen = !attackChainOpen)}
-    onOpenOperationLog={() => (operationLogOpen = !operationLogOpen)}
-    onOpenCvssCalculator={() => (cvssOpen = !cvssOpen)}
-    onOpenFindingsTracker={() => (findingsTrackerOpen = !findingsTrackerOpen)}
+    onOpenOperationLog={() => toggleRightPanel('oplog')}
+    onOpenCvssCalculator={() => toggleRightPanel('cvss')}
+    onOpenFindingsTracker={() => toggleRightPanel('findings')}
     onOpenTopology={() => (topologyOpen = !topologyOpen)}
   />
 
@@ -490,6 +913,14 @@
       onMoveItem={moveFile}
       onSelectWorkspace={selectWorkspace}
       onCreateWorkspace={() => (createWorkspaceOpen = true)}
+      onDeleteWorkspace={deleteWorkspace}
+      onRenameWorkspace={renameWorkspace}
+      onReorderWorkspaces={(reordered) => (workspaces = reordered)}
+      onNewNoteInFolder={(parentPath) => {
+        newNoteParentPath = parentPath;
+        newNoteOpen = true;
+      }}
+      onReorderNotes={reorderNotes}
       onPullSuccess={async () => {
         await loadWorkspaces();
         await loadTree(activeWorkspace?.notes_folder ?? '');
@@ -512,12 +943,14 @@
           onContentChange={handleContentChange}
           onWordCountChange={(count: number) => (wordCount = count)}
           onReady={(api: EditorApi) => { insertIntoEditor = api.insertText; editorApi = api; }}
+          onImageUploaded={() => { screenshotVersion += 1; }}
           onImageClick={(src: string, alt: string) => (lightboxImage = { src, alt })}
           onWikilinkClick={(name: string) => {
             const path = findNoteByName(tree, name);
             if (path) openFile(path);
           }}
           {noteSuggestions}
+          workspaceId={activeWorkspace?.id ?? null}
         />
       {:else}
         <div class="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
@@ -541,10 +974,18 @@
         </div>
       {/if}
     </main>
-    {#if backlinksOpen}
-      <BacklinksPanel
-        {activeFile}
-        onClose={() => (backlinksOpen = false)}
+
+    <RightPanelContainer
+      open={rightPanelOpen}
+      width={rightPanelWidth}
+      isResizing={isResizingRight}
+      onStartResize={startRightResize}
+    >
+
+      {#if backlinksOpen}
+        <BacklinksPanel
+          {activeFile}
+          onClose={() => (backlinksOpen = false)}
         onNavigate={(path, line, lineText) => {
           if (path === activeFile) {
             pendingScrollTarget = { line, lineText };
@@ -559,9 +1000,10 @@
     {#if screenshotsOpen}
       <ScreenshotPanel
         workspaceId={activeWorkspace?.id ?? null}
-        notesFolder={activeWorkspace?.notes_folder ?? ''}
         onClose={() => (screenshotsOpen = false)}
         onInsert={(md) => { insertIntoEditor?.(md); }}
+        refreshTrigger={screenshotVersion}
+        {uiMode}
       />
     {/if}
 
@@ -569,6 +1011,7 @@
       <HostTrackerPanel
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (hostTrackerOpen = false)}
+        {uiMode}
       />
     {/if}
 
@@ -576,6 +1019,7 @@
       <CredentialVaultPanel
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (credentialVaultOpen = false)}
+        {uiMode}
       />
     {/if}
 
@@ -585,6 +1029,7 @@
         totalFlags={activeWorkspace?.total_flags ?? 0}
         passingFlags={activeWorkspace?.passing_flags ?? 0}
         onClose={() => (flagTrackerOpen = false)}
+        {uiMode}
       />
     {/if}
 
@@ -593,6 +1038,7 @@
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (snippetsOpen = false)}
         onInsert={(text) => { insertIntoEditor?.(text); }}
+        {uiMode}
       />
     {/if}
 
@@ -600,6 +1046,7 @@
       <OperationLogPanel
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (operationLogOpen = false)}
+        {uiMode}
       />
     {/if}
 
@@ -614,8 +1061,10 @@
       <FindingsTrackerPanel
         workspaceId={activeWorkspace?.id ?? null}
         onClose={() => (findingsTrackerOpen = false)}
+        {uiMode}
       />
     {/if}
+    </RightPanelContainer>
 
   </div>
 
@@ -623,6 +1072,7 @@
     <AttackChainPanel
       workspaceId={activeWorkspace?.id ?? null}
       onClose={() => (attackChainOpen = false)}
+      {uiMode}
     />
   {/if}
 
@@ -647,6 +1097,8 @@
   {#if commandOpen}
     <CommandPalette
       onClose={() => (commandOpen = false)}
+      workspaceId={activeWorkspace?.id}
+      currentContent={activeContent}
       onInsert={(text) => { insertIntoEditor?.(text); }}
       onOpenCvss={() => (cvssOpen = true)}
     />
@@ -698,6 +1150,8 @@
       onClose={() => (settingsOpen = false)}
       {editorMode}
       onEditorModeChange={(m) => (editorMode = m)}
+      {uiMode}
+      onUiModeChange={setUiMode}
     />
   {/if}
 
@@ -725,3 +1179,5 @@
     onCancel={() => (createWorkspaceOpen = false)}
   />
 {/if}
+
+

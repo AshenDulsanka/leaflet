@@ -3,25 +3,25 @@
  * POST /api/workspaces/[id]/findings  - Create a new finding
  */
 
-import { json } from '@sveltejs/kit';
-import { randomUUID } from 'crypto';
-import type { RequestHandler } from '@sveltejs/kit';
-import type { FindingSeverity, FindingStatus } from '$lib/types';
+import { json } from "@sveltejs/kit";
+import { randomUUID } from "crypto";
+import type { RequestHandler } from "@sveltejs/kit";
+import type { FindingSeverity, FindingStatus } from "$lib/types";
 
 const VALID_SEVERITIES = new Set<FindingSeverity>([
-  'critical',
-  'high',
-  'medium',
-  'low',
-  'info',
-  'none',
+  "critical",
+  "high",
+  "medium",
+  "low",
+  "info",
+  "none",
 ]);
 
 const VALID_STATUSES = new Set<FindingStatus>([
-  'open',
-  'confirmed',
-  'remediated',
-  'false-positive',
+  "open",
+  "confirmed",
+  "remediated",
+  "false-positive",
 ]);
 
 export const GET: RequestHandler = async ({ params, locals }) => {
@@ -34,7 +34,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
       LEFT JOIN hosts h ON h.id = f.host_id
       WHERE f.workspace_id = ?
       ORDER BY f.created_at DESC
-    `
+    `,
     )
     .all(params.id);
   return json(findings);
@@ -55,24 +55,27 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     mitre_technique_name?: string;
   };
 
-  const title = (body.title ?? '').trim();
+  const title = (body.title ?? "").trim();
   if (!title) {
-    return json({ error: 'title is required' }, { status: 400 });
+    return json({ error: "title is required" }, { status: 400 });
   }
 
-  const severity = (body.severity ?? 'info') as FindingSeverity;
+  const severity = (body.severity ?? "info") as FindingSeverity;
   if (!VALID_SEVERITIES.has(severity)) {
     return json({ error: `Invalid severity: ${severity}` }, { status: 400 });
   }
 
-  const status = (body.status ?? 'open') as FindingStatus;
+  const status = (body.status ?? "open") as FindingStatus;
   if (!VALID_STATUSES.has(status)) {
     return json({ error: `Invalid status: ${status}` }, { status: 400 });
   }
 
   const cvssScore = body.cvss_score ?? 0;
-  if (typeof cvssScore !== 'number' || cvssScore < 0 || cvssScore > 10) {
-    return json({ error: 'cvss_score must be a number between 0 and 10' }, { status: 400 });
+  if (typeof cvssScore !== "number" || cvssScore < 0 || cvssScore > 10) {
+    return json(
+      { error: "cvss_score must be a number between 0 and 10" },
+      { status: 400 },
+    );
   }
 
   const id = randomUUID();
@@ -83,22 +86,22 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     INSERT INTO findings
       (id, workspace_id, title, description, severity, cvss_score, cvss_vector, status, host_id, note_path, mitre_technique_id, mitre_technique_name, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `
+  `,
   ).run(
     id,
     params.id,
     title,
-    (body.description ?? '').trim(),
+    (body.description ?? "").trim(),
     severity,
     cvssScore,
-    (body.cvss_vector ?? '').trim(),
+    (body.cvss_vector ?? "").trim(),
     status,
     body.host_id ?? null,
-    (body.note_path ?? '').trim(),
-    (body.mitre_technique_id ?? '').trim(),
-    (body.mitre_technique_name ?? '').trim(),
+    (body.note_path ?? "").trim(),
+    (body.mitre_technique_id ?? "").trim(),
+    (body.mitre_technique_name ?? "").trim(),
     now,
-    now
+    now,
   );
 
   const finding = db
@@ -108,7 +111,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
     FROM findings f
     LEFT JOIN hosts h ON h.id = f.host_id
     WHERE f.id = ?
-  `
+  `,
     )
     .get(id);
 

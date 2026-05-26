@@ -1,27 +1,18 @@
 ---
-description: Write Vitest unit tests for the selected Leaflet server-side TypeScript code. Follows existing test patterns in src/lib/server/ — sets NOTES_DATA_DIR before imports, uses tmpdir() for isolation, and calls reloadDb() in afterEach. Targets notes.ts and database.ts.
+description: Write Vitest unit tests for the selected TypeScript code. Covers server-side utilities, API route handlers, and data layer functions. Tests must be isolated, deterministic, and follow the project's existing test structure.
 ---
 
-Write Vitest unit tests for the following Leaflet server-side code.
+Write Vitest unit tests for the following code.
 
 ## Setup Requirements
 
 Always follow this pattern at the top of the test file:
 
 ```typescript
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from "vitest";
 
-// Environment variables must be set BEFORE importing the modules that read them
-const testDir = join(tmpdir(), `leaflet-test-${Date.now()}`);
-process.env.NOTES_DATA_DIR = testDir;
-
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
-import { reloadDb } from '$lib/server/database';
-
-afterEach(() => {
-  reloadDb();
-});
+// Set up any required test fixtures before importing modules that read them
+// (e.g. environment variables, temporary directories, mock state)
 ```
 
 ## What to Write
@@ -34,35 +25,46 @@ For each exported function in the provided code, write tests covering:
 
 ## Specific Patterns
 
-### notes.ts functions (file system operations)
+### File system functions
+
 ```typescript
-it('throws when path contains traversal sequence', async () => {
-  await expect(createNote('../evil', 'note')).rejects.toThrow();
+it("throws when path contains traversal sequence", async () => {
+  await expect(readFile("../evil")).rejects.toThrow();
 });
 ```
 
-### database.ts functions
+### Database / storage functions
+
 ```typescript
-it('returns the same singleton on repeated calls', () => {
+it("returns the same singleton on repeated calls", () => {
   expect(getDb()).toBe(getDb());
 });
-it('returns a fresh instance after reloadDb()', () => {
+it("returns a fresh instance after reset", () => {
   const first = getDb();
-  reloadDb();
-  expect(getDb()).not.toBe(first);
+  resetDb();
+  const second = getDb();
+  expect(first).not.toBe(second);
 });
 ```
 
-## Cleanup
+### API route handlers
 
-At the end of the file, add:
 ```typescript
-import { rm } from 'fs/promises';
-
-afterAll(async () => {
-  await rm(testDir, { recursive: true, force: true });
+it("returns 400 when required field is missing", async () => {
+  const res = await POST({
+    request: new Request("/", { method: "POST", body: "{}" }),
+  });
+  expect(res.status).toBe(400);
 });
 ```
+
+## Test Quality Rules
+
+- Each `it` block tests exactly one behaviour
+- Test descriptions complete the sentence “it ...”
+- No test should depend on the side-effects of another test
+- Use `beforeEach`/`afterEach` for setup/teardown, not `beforeAll`/`afterAll` unless shared state is genuinely immutable
+- Mock external dependencies (HTTP calls, external APIs) — never make real network calls in unit tests
 
 ## Output
 

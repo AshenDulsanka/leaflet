@@ -19,28 +19,30 @@ Leaflet is a self-hosted markdown note-taking app. Notes are `.md` files on disk
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Framework | SvelteKit 5 (adapter-node) |
-| Language | TypeScript (strict mode) |
-| Styling | Tailwind CSS v4 |
-| Editor (WYSIWYG) | Milkdown (@milkdown/crepe) |
-| Editor (Source) | CodeMirror 6 (svelte-codemirror-editor) |
-| Math | @milkdown/plugin-math + KaTeX |
-| Database | SQLite via better-sqlite3 |
-| Icons | @lucide/svelte (zero emojis) |
-| Package Manager | pnpm |
-| Runtime | Node.js 22 LTS |
+| Layer            | Technology                                        |
+| ---------------- | ------------------------------------------------- |
+| Framework        | SvelteKit 5 (adapter-node)                        |
+| Language         | TypeScript (strict mode)                          |
+| Styling          | Tailwind CSS v4                                   |
+| Editor (WYSIWYG) | Milkdown (@milkdown/crepe)                        |
+| Editor (Source)  | CodeMirror 6 (svelte-codemirror-editor)           |
+| Math             | @milkdown/plugin-math + KaTeX                     |
+| Database         | SQLite via better-sqlite3                         |
+| ORM              | drizzle-orm (better-sqlite3 dialect, synchronous) |
+| Icons            | @lucide/svelte (zero emojis)                      |
+| Package Manager  | pnpm                                              |
+| Runtime          | Node.js 22 LTS                                    |
 
 ## Project Terminology
 
-| Term | Meaning |
-|------|---------|
-| Workspace | An isolated context for notes. Can be `general` or `ctf`. |
-| CTF Workspace | Unlocks engagement tools: host tracker, credential vault, flag tracker, attack chain. |
-| General Workspace | Standard note-taking without engagement panels. |
-| Notes Folder | Each workspace maps to a subfolder in `data/notes/`. |
-| Default Workspace | Auto-created on first run so the user always starts in a valid context. |
+| Term              | Meaning                                                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workspace         | An isolated context for notes. Can be `general` or `pentest`.                                                                                 |
+| Pentest Workspace | Unlocks engagement tools: host tracker, credential vault, flag tracker, attack chain, and more.                                               |
+| CPTS Preset       | Optional preset (`preset = 'cpts'`) on a pentest workspace. Gates the Methodology checklist button. Set via toggle in `WorkspaceCreateModal`. |
+| General Workspace | Standard note-taking without engagement panels.                                                                                               |
+| Notes Folder      | Each workspace maps to a subfolder in `data/notes/`.                                                                                          |
+| Default Workspace | Auto-created on first run so the user always starts in a valid context.                                                                       |
 
 ## Folder Structure
 
@@ -70,7 +72,10 @@ leaflet/
 - Use Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`). No Svelte 4 syntax.
 - Use Lucide icons from `@lucide/svelte`. No emojis anywhere — not in code, data, seed files, comments, or UI strings. When an icon identifier is needed in data or database records, use the Lucide icon name as a string (e.g., `'notebook-pen'`, `'circle-alert'`).
 - Use `better-sqlite3` synchronously. No async DB calls.
+- New queries should prefer `event.locals.drizzle` (type-safe Drizzle client) where possible; raw `better-sqlite3` via `event.locals.db` stays available for transaction-heavy or migration code.
 - Validate all file paths with `safePath()` before any `fs` operation (see `docs/SECURITY.md`).
+- Gate CPTS-specific features (e.g., Methodology panel) on `activeWorkspace.preset === 'cpts'`, not on `workspace.type`. Do not use `workspace.type` alone for fine-grained feature gating.
+- When adding a new engagement panel, implement the `uiMode: 'modal' | 'inline'` prop convention (default `'modal'`). In modal mode, add/edit forms must render as centered overlay dialogs; inline mode keeps forms expanding in-panel.
 - Follow `.github/skills/coding-standards/SKILL.md` for naming, imports, error handling.
 - Follow `.github/skills/commit-conventions/SKILL.md` for all commit messages.
 - Follow `.github/skills/branch-conventions/SKILL.md` for branch naming.
@@ -91,22 +96,23 @@ leaflet/
 4. Write the implementation following all **What Agents Must Do** rules.
 5. Run `pnpm check` and `pnpm lint` mentally to verify no TypeScript or lint errors.
 6. Update `CHANGELOG.md` under `[Unreleased]` with a concise entry for every change made.
+
 - Do not leave dead code, unused imports, or commented-out blocks.
 
 ## Orchestration Pipeline
 
 For complex features, bug fixes, or multi-file changes, use the 8-agent orchestration pipeline in `.github/agents/`. Invoke `@Orchestrator` as your entry point — it will break the work into phases, delegate to specialist agents, and report results.
 
-| Agent | Role |
-|-------|------|
-| **Orchestrator** | Brain — classifies request, plans phases, delegates, gates on quality |
-| **Planner** | Researches codebase and produces ordered implementation steps |
-| **Coder** | Implements TypeScript, SvelteKit routes, server-side logic |
-| **Designer** | Writes Svelte 5 components and Tailwind UI |
-| **Code Reviewer** | Audits code quality against coding-standards/SKILL.md |
-| **Security Auditor** | Audits for path traversal, SQL injection, XSS, and secret leaks |
-| **Test Writer** | Writes Vitest unit tests for `src/lib/server/` |
-| **Docs Updater** | Updates CHANGELOG.md, AGENTS.md, README.md |
+| Agent                | Role                                                                  |
+| -------------------- | --------------------------------------------------------------------- |
+| **Orchestrator**     | Brain — classifies request, plans phases, delegates, gates on quality |
+| **Planner**          | Researches codebase and produces ordered implementation steps         |
+| **Coder**            | Implements TypeScript, SvelteKit routes, server-side logic            |
+| **Designer**         | Writes Svelte 5 components and Tailwind UI                            |
+| **Code Reviewer**    | Audits code quality against coding-standards/SKILL.md                 |
+| **Security Auditor** | Audits for path traversal, SQL injection, XSS, and secret leaks       |
+| **Test Writer**      | Writes Vitest unit tests for `src/lib/server/`                        |
+| **Docs Updater**     | Updates CHANGELOG.md, AGENTS.md, README.md                            |
 
 **Standard pipeline:** Planner → Coder + Designer (parallel) → Code Reviewer + Security Auditor (parallel) → Test Writer + Docs Updater (parallel)
 

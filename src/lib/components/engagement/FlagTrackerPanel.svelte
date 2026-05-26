@@ -1,6 +1,13 @@
+<script module lang="ts">
+  const flagCache = new Map<string, string>();
+</script>
+
 <script lang="ts">
-  import { Flag, Plus, X, RefreshCw, CheckCircle2, Circle, Trash2 } from '@lucide/svelte';
+  import { Flag, Plus, X, RefreshCw, CheckCircle2, Circle, Trash2, Pencil } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import FlagForm from '$lib/components/engagement/FlagForm.svelte';
+  import type { FlagFormData } from '$lib/components/engagement/FlagForm.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -21,96 +28,150 @@
     totalFlags?: number;
     passingFlags?: number;
     onClose: () => void;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { workspaceId, totalFlags = 0, passingFlags = 0, onClose }: Props = $props();
+  let { workspaceId, totalFlags = 0, passingFlags = 0, onClose, uiMode = 'modal' }: Props = $props();
 
   let flags = $state<FlagEntry[]>([]);
   let loading = $state(false);
   let addingFlag = $state(false);
+  let confirmDelete = $state<{ id: string; label: string } | null>(null);
+  let flagQuery = $state('');
+  let editingFlagId = $state<string | null>(null);
+  let latestLoadRequest = 0;
 
-  // Add-flag form
-  let newValue = $state('');
-  let newFlagType = $state('user');
-  let newCaptureMethod = $state('');
-  let newNotes = $state('');
+  function readCachedFlags(id: string): FlagEntry[] | null {
+    const cached = flagCache.get(id);
+    if (!cached) return null;
+    try {
+      const parsed = JSON.parse(cached);
+      return Array.isArray(parsed) ? (parsed as FlagEntry[]) : null;
+    } catch { return null; }
+  }
+
+  function writeCachedFlags(id: string, items: FlagEntry[]): void {
+    flagCache.set(id, JSON.stringify(items));
+  }
 
   $effect(() => {
-    if (workspaceId) loadFlags();
+    if (!workspaceId) { flags = []; loading = false; return; }
+    const currentWorkspaceId = workspaceId;
+    const cached = readCachedFlags(currentWorkspaceId);
+    if (cached !== null) flags = cached;
+    void loadFlags(currentWorkspaceId, cached === null);
   });
 
-  async function loadFlags() {
-    if (!workspaceId) return;
-    flags = [];
-    loading = true;
+  async function loadFlags(targetWorkspaceId: string, blocking = false): Promise<void> {
+    const requestId = latestLoadRequest + 1;
+    latestLoadRequest = requestId;
+    loading = blocking;
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/flags`);
-      flags = await res.json();
-    } catch {
-      console.error('Failed to load flags');
-    } finally {
-      loading = false;
-    }
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/flags`);
+      if (!res.ok) { console.error('Failed to load flags:', { workspaceId: targetWorkspaceId, status: res.status }); return; }
+      const nextFlags = await res.json() as FlagEntry[];
+      if (requestId !== latestLoadRequest || workspaceId !== targetWorkspaceId) return;
+      flags = nextFlags;
+      writeCachedFlags(targetWorkspaceId, nextFlags);
+    } catch (err) { console.error('Failed to load flags:', { workspaceId: targetWorkspaceId, error: err }); }
+    finally { if (requestId === latestLoadRequest) loading = false; }
   }
 
-  async function addFlag() {
+  async function addFlag(data: FlagFormData): Promise<void> {
     if (!workspaceId) return;
+    const targetWorkspaceId = workspaceId;
     try {
-      const res = await fetch(`/api/workspaces/${workspaceId}/flags`, {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/flags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          value: newValue.trim(),
-          flag_type: newFlagType,
-          capture_method: newCaptureMethod.trim(),
-          notes: newNotes.trim()
-        })
+        body: JSON.stringify({ value: data.value.trim(), flag_type: data.flagType, capture_method: data.captureMethod.trim(), notes: data.notes.trim() }),
       });
-      if (!res.ok) return;
+      if (!res.ok) { console.error('Failed to add flag:', { workspaceId, status: res.status }); return; }
       const flag: FlagEntry = await res.json();
       flags = [...flags, flag];
-      newValue = '';
-      newFlagType = 'user';
-      newCaptureMethod = '';
-      newNotes = '';
+      writeCachedFlags(targetWorkspaceId, flags);
       addingFlag = false;
-    } catch {
-      console.error('Failed to add flag');
-    }
+    } catch (err) { console.error('Failed to add flag:', { workspaceId: targetWorkspaceId, error: err }); }
   }
 
-  async function toggleSubmitted(flag: FlagEntry) {
+  function startEditing(flag: FlagEntry): void {
+    editingFlagId = flag.id;
+  }
+
+  async function updateFlag(id: string, data: FlagFormData): Promise<void> {
     if (!workspaceId) return;
+    const targetWorkspaceId = workspaceId;
+    try {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/flags/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: data.value.trim(), flag_type: data.flagType, capture_method: data.captureMethod.trim(), notes: data.notes.trim() }),
+      });
+      if (!res.ok) { console.error('Failed to update flag:', { workspaceId: targetWorkspaceId, flagId: id, status: res.status }); return; }
+      const updated: FlagEntry = await res.json();
+      flags = flags.map((f) => f.id === id ? updated : f);
+      writeCachedFlags(targetWorkspaceId, flags);
+      if (editingFlagId === id) editingFlagId = null;
+    } catch (err) { console.error('Failed to update flag:', { workspaceId: targetWorkspaceId, flagId: id, error: err }); }
+  }
+
+  async function toggleSubmitted(flag: FlagEntry): Promise<void> {
+    if (!workspaceId) return;
+    const targetWorkspaceId = workspaceId;
     const submitted = flag.submitted ? 0 : 1;
-    await fetch(`/api/workspaces/${workspaceId}/flags/${flag.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submitted })
-    });
-    flags = flags.map((f) => f.id === flag.id ? { ...f, submitted } : f);
+    try {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/flags/${flag.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submitted }),
+      });
+      if (!res.ok) { console.error('Failed to toggle flag submitted:', { workspaceId: targetWorkspaceId, flagId: flag.id, status: res.status }); return; }
+      flags = flags.map((f) => f.id === flag.id ? { ...f, submitted } : f);
+      writeCachedFlags(targetWorkspaceId, flags);
+    } catch (err) { console.error('Failed to toggle flag submitted:', { workspaceId: targetWorkspaceId, flagId: flag.id, error: err }); }
   }
 
-  async function deleteFlag(id: string) {
+  async function deleteFlag(id: string): Promise<void> {
     if (!workspaceId) return;
-    await fetch(`/api/workspaces/${workspaceId}/flags/${id}`, { method: 'DELETE' });
-    flags = flags.filter((f) => f.id !== id);
+    const targetWorkspaceId = workspaceId;
+    try {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/flags/${id}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete flag:', { workspaceId: targetWorkspaceId, flagId: id, status: res.status }); return; }
+      flags = flags.filter((f) => f.id !== id);
+      writeCachedFlags(targetWorkspaceId, flags);
+    } catch (err) { console.error('Failed to delete flag:', { workspaceId: targetWorkspaceId, flagId: id, error: err }); }
   }
+
+  const filteredFlags = $derived(
+    flagQuery.trim()
+      ? flags.filter((f) =>
+          f.value.toLowerCase().includes(flagQuery.toLowerCase()) ||
+          f.flag_type.toLowerCase().includes(flagQuery.toLowerCase()) ||
+          f.capture_method.toLowerCase().includes(flagQuery.toLowerCase()) ||
+          (f.host_ip ?? '').toLowerCase().includes(flagQuery.toLowerCase()) ||
+          (f.host_hostname ?? '').toLowerCase().includes(flagQuery.toLowerCase())
+        )
+      : flags
+  );
 
   const submittedCount = $derived(flags.filter((f) => f.submitted).length);
   const userFlags = $derived(flags.filter((f) => f.flag_type === 'user'));
   const rootFlags = $derived(flags.filter((f) => f.flag_type === 'root'));
-
   const progressPct = $derived(totalFlags > 0 ? Math.round((submittedCount / totalFlags) * 100) : 0);
   const isPassing = $derived(passingFlags > 0 && submittedCount >= passingFlags);
 
   const typeColors: Record<string, string> = {
     user: 'text-blue-400',
     root: 'text-green-400',
-    other: 'text-muted-foreground'
+    other: 'text-muted-foreground',
   };
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') onClose();
+  function handleKeydown(e: KeyboardEvent): void {
+    if (e.defaultPrevented || e.key !== 'Escape') return;
+    if (confirmDelete !== null) { e.preventDefault(); confirmDelete = null; return; }
+    if (editingFlagId !== null) { e.preventDefault(); editingFlagId = null; return; }
+    if (addingFlag) { e.preventDefault(); addingFlag = false; return; }
+    onClose();
   }
 </script>
 
@@ -125,18 +186,23 @@
     <div class="flex items-center gap-2">
       <Flag size={14} class="text-muted-foreground" />
       <span class="text-xs font-semibold">Flag Tracker</span>
+      {#if isPassing}
+        <span class="rounded bg-green-500/15 px-1.5 py-0.5 text-[9px] font-medium text-green-600 dark:text-green-400">PASSING</span>
+      {/if}
     </div>
     <div class="flex items-center gap-1">
       <button
-        onclick={loadFlags}
+        onclick={() => { if (!workspaceId) return; void loadFlags(workspaceId, true); }}
         title="Refresh"
+        aria-label="Refresh flags"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
       </button>
       <button
-        onclick={() => (addingFlag = !addingFlag)}
+        onclick={() => { addingFlag = !addingFlag; editingFlagId = null; }}
         title="Add flag"
+        aria-label="Add flag"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <Plus size={13} />
@@ -144,6 +210,7 @@
       <button
         onclick={onClose}
         title="Close"
+        aria-label="Close flag tracker"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
       >
         <X size={13} />
@@ -151,82 +218,72 @@
     </div>
   </div>
 
+  <!-- Progress bar -->
+  {#if totalFlags > 0}
+    <div class="border-b border-border px-3 py-2">
+      <div class="mb-1 flex items-center justify-between">
+        <span class="text-[10px] text-muted-foreground">{submittedCount}/{totalFlags} submitted</span>
+        <span class="text-[10px] {isPassing ? 'text-green-500' : 'text-muted-foreground'}">{progressPct}%</span>
+      </div>
+      <div class="h-1 w-full rounded-full bg-muted">
+        <div
+          class="h-1 rounded-full transition-all {isPassing ? 'bg-green-500' : 'bg-primary'}"
+          style="width: {progressPct}%"
+        ></div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Stats row -->
+  {#if flags.length > 0}
+    <div class="flex border-b border-border">
+      <div class="flex flex-1 flex-col items-center py-2">
+        <span class="text-xs font-semibold text-blue-400">{userFlags.length}</span>
+        <span class="text-[10px] text-muted-foreground">user</span>
+      </div>
+      <div class="flex flex-1 flex-col items-center border-l border-border py-2">
+        <span class="text-xs font-semibold text-green-400">{rootFlags.length}</span>
+        <span class="text-[10px] text-muted-foreground">root</span>
+      </div>
+      <div class="flex flex-1 flex-col items-center border-l border-border py-2">
+        <span class="text-xs font-semibold">{submittedCount}</span>
+        <span class="text-[10px] text-muted-foreground">submitted</span>
+      </div>
+    </div>
+  {/if}
+
   <!-- No workspace -->
   {#if !workspaceId}
     <div class="flex flex-1 items-center justify-center p-4">
       <p class="text-center text-xs text-muted-foreground">Select a workspace to track flags</p>
     </div>
   {:else}
-    <!-- Progress bar -->
-    {#if totalFlags > 0}
-      <div class="border-b border-border px-3 py-2">
-        <div class="mb-1 flex items-center justify-between">
-          <span class="text-xs font-medium">
-            {submittedCount} / {totalFlags} flags
-          </span>
-          <span class="text-xs {isPassing ? 'text-green-500 font-medium' : 'text-muted-foreground'}">
-            {isPassing ? 'PASSING' : `Need ${passingFlags - submittedCount} more`}
-          </span>
-        </div>
-        <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            class="h-full rounded-full transition-all duration-300 {isPassing ? 'bg-green-500' : 'bg-primary'}"
-            style="width: {progressPct}%"
-          ></div>
-        </div>
-        <div class="mt-1 flex gap-3">
-          <span class="text-[10px] text-blue-400">User: {userFlags.length}</span>
-          <span class="text-[10px] text-green-400">Root: {rootFlags.length}</span>
-        </div>
-      </div>
+    <!-- Add flag form -->
+    {#if addingFlag}
+      <FlagForm
+        mode="add"
+        {uiMode}
+        onSubmit={(data) => addFlag(data)}
+        onCancel={() => (addingFlag = false)}
+      />
     {/if}
 
-    <!-- Add-flag form -->
-    {#if addingFlag}
-      <div class="border-b border-border bg-muted/40 p-3 space-y-2">
+    <!-- Filter bar -->
+    {#if flags.length > 0}
+      <div class="border-b border-border px-3 py-2">
         <input
-          type="text"
-          placeholder="Flag value e.g. HTB&#123;...&#125;"
-          bind:value={newValue}
-          class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          onkeydown={(e) => { if (e.key === 'Enter') addFlag(); if (e.key === 'Escape') addingFlag = false; }}
+          type="search"
+          aria-label="Filter flags"
+          placeholder="Filter flags..."
+          bind:value={flagQuery}
+          class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
         />
-        <div class="flex gap-2">
-          <select
-            bind:value={newFlagType}
-            class="flex-1 rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
-          >
-            <option value="user">User flag</option>
-            <option value="root">Root flag</option>
-            <option value="other">Other</option>
-          </select>
-          <input
-            type="text"
-            placeholder="Via (e.g. LPE, DC Sync)"
-            bind:value={newCaptureMethod}
-            class="flex-1 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-        <div class="flex gap-2">
-          <button
-            onclick={addFlag}
-            class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Add
-          </button>
-          <button
-            onclick={() => (addingFlag = false)}
-            class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
-          >
-            Cancel
-          </button>
-        </div>
       </div>
     {/if}
 
     <!-- Flag list -->
     <div class="flex-1 overflow-y-auto">
-      {#if loading}
+      {#if loading && flags.length === 0}
         <div class="flex items-center justify-center py-8">
           <RefreshCw size={16} class="animate-spin text-muted-foreground" />
         </div>
@@ -235,51 +292,87 @@
           <Flag size={24} class="text-muted-foreground/40" />
           <p class="text-xs text-muted-foreground">No flags yet. Click + to add one.</p>
         </div>
+      {:else if filteredFlags.length === 0}
+        <p class="px-3 py-4 text-center text-xs text-muted-foreground">No flags match your filter.</p>
       {:else}
-        {#each flags as flag (flag.id)}
-          <div class="group flex items-start gap-2 border-b border-border px-3 py-2 hover:bg-accent/30 last:border-b-0">
-            <button
-              onclick={() => toggleSubmitted(flag)}
-              class="mt-0.5 flex-shrink-0 {flag.submitted ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'}"
-              title={flag.submitted ? 'Mark unsubmitted' : 'Mark submitted'}
-            >
-              {#if flag.submitted}
-                <CheckCircle2 size={14} />
-              {:else}
-                <Circle size={14} />
-              {/if}
-            </button>
+        {#each filteredFlags as flag (flag.id)}
+          <div class="group border-b border-border hover:bg-accent/30 last:border-b-0">
+            <div class="flex items-start gap-2 px-3 py-2">
+              <button
+                onclick={() => toggleSubmitted(flag)}
+                class="mt-0.5 flex-shrink-0 {flag.submitted ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'}"
+                title={flag.submitted ? 'Mark unsubmitted' : 'Mark submitted'}
+                aria-label={flag.submitted ? `Mark flag ${flag.value || flag.id} as unsubmitted` : `Mark flag ${flag.value || flag.id} as submitted`}
+                aria-pressed={flag.submitted === 1}
+              >
+                {#if flag.submitted}
+                  <CheckCircle2 size={14} />
+                {:else}
+                  <Circle size={14} />
+                {/if}
+              </button>
 
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-1.5">
-                <span class="text-[10px] font-medium uppercase {typeColors[flag.flag_type] ?? typeColors.other}">
-                  {flag.flag_type}
-                </span>
-                {#if flag.host_ip}
-                  <span class="text-[10px] text-muted-foreground">{flag.host_hostname || flag.host_ip}</span>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] font-medium uppercase {typeColors[flag.flag_type] ?? typeColors.other}">
+                    {flag.flag_type}
+                  </span>
+                  {#if flag.host_ip}
+                    <span class="text-[10px] text-muted-foreground">{flag.host_hostname || flag.host_ip}</span>
+                  {/if}
+                </div>
+                <div class="flex items-center gap-1">
+                  <code class="flex-1 truncate text-[10px] font-mono text-foreground">{flag.value || '(empty)'}</code>
+                  {#if flag.value}
+                    <CopyButton text={flag.value} size={10} />
+                  {/if}
+                  <button
+                    onclick={() => startEditing(flag)}
+                    class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                    title="Edit flag"
+                    aria-label={`Edit flag ${flag.value || flag.id}`}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    onclick={() => confirmDelete = { id: flag.id, label: flag.value || flag.flag_type }}
+                    class="flex h-5 w-5 items-center justify-center rounded text-destructive hover:bg-destructive/10"
+                    title="Delete flag"
+                    aria-label={`Delete flag ${flag.value || flag.id}`}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                {#if flag.capture_method}
+                  <p class="text-[10px] text-muted-foreground">via {flag.capture_method}</p>
                 {/if}
               </div>
-              <div class="flex items-center gap-1">
-                <code class="flex-1 truncate text-[10px] font-mono text-foreground">{flag.value || '(empty)'}</code>
-                {#if flag.value}
-                  <CopyButton text={flag.value} size={10} />
-                {/if}
-              </div>
-              {#if flag.capture_method}
-                <p class="text-[10px] text-muted-foreground">via {flag.capture_method}</p>
-              {/if}
             </div>
-
-            <button
-              onclick={() => deleteFlag(flag.id)}
-              class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-destructive opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10"
-              title="Delete flag"
-            >
-              <Trash2 size={10} />
-            </button>
+            {#if editingFlagId === flag.id}
+              <FlagForm
+                mode="edit"
+                {uiMode}
+                initialValue={flag.value}
+                initialFlagType={flag.flag_type}
+                initialCaptureMethod={flag.capture_method}
+                initialNotes={flag.notes}
+                onSubmit={(data) => updateFlag(flag.id, data)}
+                onCancel={() => (editingFlagId = null)}
+              />
+            {/if}
           </div>
         {/each}
       {/if}
     </div>
   {/if}
 </div>
+
+{#if confirmDelete !== null}
+  {@const pending = confirmDelete}
+  <ConfirmDialog
+    title="Delete Flag"
+    message="Delete '{pending.label}'? This cannot be undone."
+    onConfirm={() => { deleteFlag(pending.id); confirmDelete = null; }}
+    onCancel={() => confirmDelete = null}
+  />
+{/if}

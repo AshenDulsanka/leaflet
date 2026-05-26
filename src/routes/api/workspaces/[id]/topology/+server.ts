@@ -4,8 +4,8 @@
  * for the given workspace. Used by the Network Topology Diagram panel.
  */
 
-import { json } from '@sveltejs/kit';
-import type { RequestHandler } from '@sveltejs/kit';
+import { json } from "@sveltejs/kit";
+import type { RequestHandler } from "@sveltejs/kit";
 
 export const GET: RequestHandler = ({ params, locals }) => {
   const { db } = locals;
@@ -19,13 +19,13 @@ export const GET: RequestHandler = ({ params, locals }) => {
        LEFT JOIN ports p ON p.host_id = h.id
        WHERE h.workspace_id = ?
        GROUP BY h.id
-       ORDER BY h.created_at ASC`
+       ORDER BY h.created_at ASC`,
     )
     .all(params.id);
 
   const edges = db
     .prepare(
-      `SELECT * FROM topology_edges WHERE workspace_id = ? ORDER BY created_at ASC`
+      `SELECT * FROM topology_edges WHERE workspace_id = ? ORDER BY created_at ASC`,
     )
     .all(params.id);
 

@@ -17,6 +17,7 @@ RUN pnpm build
 
 # ---- Stage 3: runtime ----
 FROM node:22-alpine AS runtime
+RUN apk add --no-cache git ca-certificates
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
