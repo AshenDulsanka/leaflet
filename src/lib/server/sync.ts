@@ -7,6 +7,8 @@ import { checkpoint, reloadDb } from "$lib/server/database";
 import { invalidateDrizzle } from "$lib/server/db/index";
 
 const VALID_ACTIONS = ["push", "pull", "status"] as const;
+const DEFAULT_GIT_USER_NAME = "Leaflet Sync Bot";
+const DEFAULT_GIT_USER_EMAIL = "leaflet-sync-bot@local.invalid";
 
 type SyncAction = (typeof VALID_ACTIONS)[number];
 
@@ -68,18 +70,19 @@ function getDataDir(): string {
 
 function getGitEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  const name = process.env.GIT_USER_NAME;
-  const email = process.env.GIT_USER_EMAIL;
+  const name =
+    process.env.GIT_USER_NAME?.trim() ||
+    process.env.GIT_AUTHOR_NAME?.trim() ||
+    DEFAULT_GIT_USER_NAME;
+  const email =
+    process.env.GIT_USER_EMAIL?.trim() ||
+    process.env.GIT_AUTHOR_EMAIL?.trim() ||
+    DEFAULT_GIT_USER_EMAIL;
 
-  if (name) {
-    env.GIT_AUTHOR_NAME = name;
-    env.GIT_COMMITTER_NAME = name;
-  }
-
-  if (email) {
-    env.GIT_AUTHOR_EMAIL = email;
-    env.GIT_COMMITTER_EMAIL = email;
-  }
+  env.GIT_AUTHOR_NAME = name;
+  env.GIT_COMMITTER_NAME = name;
+  env.GIT_AUTHOR_EMAIL = email;
+  env.GIT_COMMITTER_EMAIL = email;
 
   env.GIT_TERMINAL_PROMPT = "0";
   env.GIT_DISCOVERY_ACROSS_FILESYSTEM = "1";
@@ -218,6 +221,13 @@ export function sanitizeGitError(error: unknown): string {
     rawMessage.includes("authentication failed")
   ) {
     return "Git authentication failed. Check remote credentials.";
+  }
+
+  if (
+    rawMessage.includes("author identity unknown") ||
+    rawMessage.includes("unable to auto-detect email address")
+  ) {
+    return "Git author identity is missing. Set GIT_USER_NAME and GIT_USER_EMAIL for the container.";
   }
 
   if (

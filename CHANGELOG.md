@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Docker builds now copy `pnpm-workspace.yaml` into dependency install stages and rely on the repo-pinned pnpm version, so approved native/codegen build scripts run during `docker compose up -d`.
 - CI lint/test failures from Svelte 5 prop-state initialization warnings, stale unused symbols, unused Svelte ignore comments, CommonJS hook script linting, and stale FileTree indentation expectations.
+- Sync commits in production containers now set a deterministic git author fallback and support explicit `GIT_USER_NAME`/`GIT_USER_EMAIL` compose env overrides, preventing "Author identity unknown" failures.
+- SQLite sidecar files (`*.db-shm`, `*.db-wal`) are now untracked-safe via broader ignore patterns; tracked sidecars must be removed from index once with `git rm --cached`.
 
 ## [1.0.0] - 2026-05-26
 
