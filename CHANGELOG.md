@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Docker builds now copy `pnpm-workspace.yaml` into dependency install stages and rely on the repo-pinned pnpm version, so approved native/codegen build scripts run during `docker compose up -d`.
 - CI lint/test failures from Svelte 5 prop-state initialization warnings, stale unused symbols, unused Svelte ignore comments, CommonJS hook script linting, and stale FileTree indentation expectations.
 
 ## [1.0.0] - 2026-05-26
