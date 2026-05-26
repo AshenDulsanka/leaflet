@@ -6,8 +6,8 @@
   import { KeyRound, Pencil, Plus, X, RefreshCw, Eye, EyeOff, Trash2, ShieldCheck, ChevronDown, ChevronRight } from '@lucide/svelte';
   import CopyButton from '$lib/components/ui/CopyButton.svelte';
   import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
-  import ToolModal from '$lib/components/modals/ToolModal.svelte';
-  import Select from '$lib/components/ui/Select.svelte';
+  import CredentialForm from '$lib/components/engagement/CredentialForm.svelte';
+  import type { CredentialFormData } from '$lib/components/engagement/CredentialForm.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -38,25 +38,8 @@
   let confirmDelete = $state<{ id: string; label: string } | null>(null);
   let expandedCredId = $state<string | null>(null);
   let credentialQuery = $state('');
-
-  // Add-cred form
-  let newUsername = $state('');
-  let newSecret = $state('');
-  let newCredType = $state<'password' | 'hash' | 'key' | 'ticket' | 'token' | 'other'>('password');
-  let newDomain = $state('');
-  let newSource = $state('');
-  let newStatus = $state<'unknown' | 'valid' | 'invalid' | 'expired'>('unknown');
-  let newNotes = $state('');
-
-  // Edit-credential state
   let editingCredId = $state<string | null>(null);
-  let editUsername = $state('');
-  let editSecret = $state('');
-  let editCredType = $state<Credential['credential_type']>('password');
-  let editDomain = $state('');
-  let editSource = $state('');
-  let editStatus = $state<Credential['status']>('unknown');
-  let editNotes = $state('');
+  let editingCred = $state<Credential | null>(null);
   let latestLoadRequest = 0;
 
   function readCachedCredentials(id: string): Credential[] | null {
@@ -65,9 +48,7 @@
     try {
       const parsed = JSON.parse(cached);
       return Array.isArray(parsed) ? (parsed as Credential[]) : null;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }
 
   function writeCachedCredentials(id: string, items: Credential[]): void {
@@ -75,18 +56,10 @@
   }
 
   $effect(() => {
-    if (!workspaceId) {
-      credentials = [];
-      loading = false;
-      return;
-    }
-
+    if (!workspaceId) { credentials = []; loading = false; return; }
     const currentWorkspaceId = workspaceId;
     const cached = readCachedCredentials(currentWorkspaceId);
-    if (cached !== null) {
-      credentials = cached;
-    }
-
+    if (cached !== null) credentials = cached;
     void loadCredentials(currentWorkspaceId, cached === null);
   });
 
@@ -94,31 +67,18 @@
     const requestId = latestLoadRequest + 1;
     latestLoadRequest = requestId;
     loading = blocking;
-
     try {
       const res = await fetch(`/api/workspaces/${targetWorkspaceId}/credentials`);
-      if (!res.ok) {
-        console.error('Failed to load credentials:', { workspaceId: targetWorkspaceId, status: res.status });
-        return;
-      }
-
+      if (!res.ok) { console.error('Failed to load credentials:', { workspaceId: targetWorkspaceId, status: res.status }); return; }
       const nextCredentials = await res.json() as Credential[];
-      if (requestId !== latestLoadRequest || workspaceId !== targetWorkspaceId) {
-        return;
-      }
-
+      if (requestId !== latestLoadRequest || workspaceId !== targetWorkspaceId) return;
       credentials = nextCredentials;
       writeCachedCredentials(targetWorkspaceId, nextCredentials);
-    } catch (err) {
-      console.error('Failed to load credentials:', { workspaceId: targetWorkspaceId, error: err });
-    } finally {
-      if (requestId === latestLoadRequest) {
-        loading = false;
-      }
-    }
+    } catch (err) { console.error('Failed to load credentials:', { workspaceId: targetWorkspaceId, error: err }); }
+    finally { if (requestId === latestLoadRequest) loading = false; }
   }
 
-  async function addCredential(): Promise<void> {
+  async function addCredential(data: CredentialFormData): Promise<void> {
     if (!workspaceId) return;
     const targetWorkspaceId = workspaceId;
     try {
@@ -126,78 +86,52 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: newUsername.trim(),
-          secret: newSecret,
-          credential_type: newCredType,
-          domain: newDomain.trim(),
-          source: newSource.trim(),
-          status: newStatus,
-          notes: newNotes.trim()
-        })
+          username: data.username.trim(),
+          secret: data.secret,
+          credential_type: data.credentialType,
+          domain: data.domain.trim(),
+          source: data.source.trim(),
+          status: data.status,
+          notes: data.notes.trim(),
+        }),
       });
-      if (!res.ok) {
-        console.error('Failed to add credential:', { workspaceId, status: res.status });
-        return;
-      }
+      if (!res.ok) { console.error('Failed to add credential:', { workspaceId, status: res.status }); return; }
       const cred: Credential = await res.json();
       credentials = [...credentials, cred];
       writeCachedCredentials(targetWorkspaceId, credentials);
-      newUsername = '';
-      newSecret = '';
-      newCredType = 'password';
-      newDomain = '';
-      newSource = '';
-      newStatus = 'unknown';
-      newNotes = '';
       addingCred = false;
-    } catch (err) {
-      console.error('Failed to add credential:', { workspaceId: targetWorkspaceId, error: err });
-    }
+    } catch (err) { console.error('Failed to add credential:', { workspaceId: targetWorkspaceId, error: err }); }
   }
 
   function startEditing(cred: Credential): void {
     expandedCredId = null;
     editingCredId = cred.id;
-    editUsername = cred.username;
-    editSecret = cred.secret;
-    editCredType = cred.credential_type;
-    editDomain = cred.domain;
-    editSource = cred.source;
-    editStatus = cred.status;
-    editNotes = cred.notes;
+    editingCred = cred;
   }
 
-  async function updateCredential(): Promise<void> {
-    if (!workspaceId || !editingCredId) return;
+  async function updateCredential(id: string, data: CredentialFormData): Promise<void> {
+    if (!workspaceId) return;
     const targetWorkspaceId = workspaceId;
-    const targetCredId = editingCredId;
     try {
-      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/credentials/${targetCredId}`, {
+      const res = await fetch(`/api/workspaces/${targetWorkspaceId}/credentials/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: editUsername.trim(),
-          secret: editSecret,
-          credential_type: editCredType,
-          domain: editDomain.trim(),
-          source: editSource.trim(),
-          status: editStatus,
-          notes: editNotes.trim()
-        })
+          username: data.username.trim(),
+          secret: data.secret,
+          credential_type: data.credentialType,
+          domain: data.domain.trim(),
+          source: data.source.trim(),
+          status: data.status,
+          notes: data.notes.trim(),
+        }),
       });
-      if (!res.ok) {
-        console.error('Failed to update credential:', { workspaceId: targetWorkspaceId, credId: targetCredId, status: res.status });
-        return;
-      }
+      if (!res.ok) { console.error('Failed to update credential:', { workspaceId: targetWorkspaceId, credId: id, status: res.status }); return; }
       const updated: Credential = await res.json();
-      credentials = credentials.map((c) => c.id === targetCredId ? updated : c);
+      credentials = credentials.map((c) => c.id === id ? updated : c);
       writeCachedCredentials(targetWorkspaceId, credentials);
-      if (editingCredId === targetCredId) {
-        editingCredId = null;
-      }
-    } catch (err) {
-      console.error('Failed to update credential:', { workspaceId: targetWorkspaceId, credId: targetCredId, error: err });
-    }
+      if (editingCredId === id) { editingCredId = null; editingCred = null; }
+    } catch (err) { console.error('Failed to update credential:', { workspaceId: targetWorkspaceId, credId: id, error: err }); }
   }
 
   async function deleteCredential(id: string): Promise<void> {
@@ -209,13 +143,10 @@
       credentials = credentials.filter((c) => c.id !== id);
       writeCachedCredentials(targetWorkspaceId, credentials);
       if (expandedCredId === id) expandedCredId = null;
-    } catch (err) {
-      console.error('Failed to delete credential:', { workspaceId: targetWorkspaceId, credentialId: id, error: err });
-    }
+    } catch (err) { console.error('Failed to delete credential:', { workspaceId: targetWorkspaceId, credentialId: id, error: err }); }
   }
 
-
-  function toggleReveal(id: string) {
+  function toggleReveal(id: string): void {
     const next = new Set(revealedIds);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -225,62 +156,29 @@
   const filteredCredentials = $derived.by(() => {
     const query = credentialQuery.trim().toLowerCase();
     if (!query) return credentials;
-
     return credentials.filter((cred) =>
-      [
-        cred.username ?? '',
-        cred.domain ?? '',
-        cred.source ?? '',
-        cred.notes ?? '',
-        cred.credential_type ?? '',
-        cred.status ?? ''
-      ].some((value) => value.toLowerCase().includes(query))
+      [cred.username ?? '', cred.domain ?? '', cred.source ?? '', cred.notes ?? '', cred.credential_type ?? '', cred.status ?? '']
+        .some((value) => value.toLowerCase().includes(query))
     );
   });
 
   const typeLabels: Record<string, string> = {
-    password: 'PW',
-    hash: 'Hash',
-    key: 'Key',
-    ticket: 'TGT',
-    token: 'Token',
-    other: '?'
+    password: 'PW', hash: 'Hash', key: 'Key', ticket: 'TGT', token: 'Token', other: '?'
   };
 
   const statusBadgeClass: Record<string, string> = {
     unknown: 'bg-muted text-muted-foreground border border-border',
     valid: 'bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/30',
     invalid: 'bg-destructive/15 text-destructive border border-destructive/30',
-    expired: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30'
+    expired: 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 border border-yellow-500/30',
   };
 
-  function handleKeydown(e: KeyboardEvent) {
+  function handleKeydown(e: KeyboardEvent): void {
     if (e.defaultPrevented || e.key !== 'Escape') return;
-
-    if (confirmDelete !== null) {
-      e.preventDefault();
-      confirmDelete = null;
-      return;
-    }
-
-    if (addingCred) {
-      e.preventDefault();
-      addingCred = false;
-      return;
-    }
-
-    if (expandedCredId !== null) {
-      e.preventDefault();
-      expandedCredId = null;
-      return;
-    }
-
-    if (editingCredId !== null) {
-      e.preventDefault();
-      editingCredId = null;
-      return;
-    }
-
+    if (confirmDelete !== null) { e.preventDefault(); confirmDelete = null; return; }
+    if (addingCred) { e.preventDefault(); addingCred = false; return; }
+    if (expandedCredId !== null) { e.preventDefault(); expandedCredId = null; return; }
+    if (editingCredId !== null) { e.preventDefault(); editingCredId = null; editingCred = null; return; }
     onClose();
   }
 </script>
@@ -328,6 +226,18 @@
     </div>
   </div>
 
+  <!-- Search bar (when there are credentials) -->
+  {#if credentials.length > 0}
+    <div class="border-b border-border px-3 py-2">
+      <input
+        type="search"
+        placeholder="Filter credentials..."
+        bind:value={credentialQuery}
+        class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </div>
+  {/if}
+
   <!-- No workspace -->
   {#if !workspaceId}
     <div class="flex flex-1 items-center justify-center p-4">
@@ -335,121 +245,14 @@
     </div>
   {:else}
     <!-- Add-credential form -->
-    {#if addingCred && uiMode === 'inline'}
-      <div class="border-b border-border bg-muted/40 p-3 space-y-2">
-        <div class="flex gap-2">
-          <label class="flex-1 space-y-0.5">
-            <span class="block text-[10px] text-muted-foreground">Username</span>
-            <input
-              type="text"
-              placeholder="username"
-              bind:value={newUsername}
-              class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <label class="w-24 space-y-0.5">
-            <span class="block text-[10px] text-muted-foreground">Domain</span>
-            <input
-              type="text"
-              placeholder="CORP"
-              bind:value={newDomain}
-              class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-        </div>
-        <label class="block space-y-0.5">
-          <span class="text-[10px] text-muted-foreground">Secret</span>
-          <input
-            type="text"
-            placeholder="password / hash / key"
-            bind:value={newSecret}
-            class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            onkeydown={(e) => {
-              if (e.key === 'Enter') addCredential();
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-                addingCred = false;
-              }
-            }}
-          />
-        </label>
-        <div class="flex gap-2">
-          <div class="flex-1 space-y-0.5">
-            <p class="text-[10px] text-muted-foreground">Type</p>
-            <Select
-              size="sm"
-              value={newCredType}
-              onchange={(v) => newCredType = v as Credential['credential_type']}
-              options={[
-                { value: 'password', label: 'Password' },
-                { value: 'hash', label: 'Hash' },
-                { value: 'key', label: 'SSH Key' },
-                { value: 'ticket', label: 'Kerberos Ticket' },
-                { value: 'token', label: 'Token' },
-                { value: 'other', label: 'Other' }
-              ]}
-            />
-          </div>
-          <div class="flex-1 space-y-0.5">
-            <p class="text-[10px] text-muted-foreground">Status</p>
-            <Select
-              size="sm"
-              value={newStatus}
-              onchange={(v) => newStatus = v as Credential['status']}
-              options={[
-                { value: 'unknown', label: 'Unknown' },
-                { value: 'valid', label: 'Valid' },
-                { value: 'invalid', label: 'Invalid' },
-                { value: 'expired', label: 'Expired' }
-              ]}
-            />
-          </div>
-        </div>
-        <label class="block space-y-0.5">
-          <span class="text-[10px] text-muted-foreground">URL / Source</span>
-          <input
-            type="text"
-            placeholder="e.g. SMB share, /etc/passwd"
-            bind:value={newSource}
-            class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </label>
-        <label class="block space-y-0.5">
-          <span class="text-[10px] text-muted-foreground">Notes</span>
-          <input
-            type="text"
-            placeholder="Optional notes"
-            bind:value={newNotes}
-            class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </label>
-        <div class="flex gap-2">
-          <button
-            onclick={addCredential}
-            class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Add
-          </button>
-          <button
-            onclick={() => (addingCred = false)}
-            class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    {/if}
-
-    <div class="border-b border-border px-3 py-2">
-      <input
-        type="text"
-        placeholder="Search credentials..."
-        bind:value={credentialQuery}
-        aria-label="Search credentials"
-        class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+    {#if addingCred}
+      <CredentialForm
+        mode="add"
+        {uiMode}
+        onSubmit={(data) => addCredential(data)}
+        onCancel={() => (addingCred = false)}
       />
-    </div>
+    {/if}
 
     <!-- Credential list -->
     <div class="flex-1 overflow-y-auto">
@@ -553,101 +356,20 @@
                 {/if}
               {/if}
             </div>
-            {#if editingCredId === cred.id && uiMode === 'inline'}
-              <div class="border-t border-border bg-muted/40 px-3 pb-3 pt-2 space-y-2">
-                <div class="flex gap-2">
-                  <label class="flex-1 space-y-0.5">
-                    <span class="block text-[10px] text-muted-foreground">Username</span>
-                    <input
-                      type="text"
-                      bind:value={editUsername}
-                      class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </label>
-                  <label class="w-20 space-y-0.5">
-                    <span class="block text-[10px] text-muted-foreground">Domain</span>
-                    <input
-                      type="text"
-                      bind:value={editDomain}
-                      class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </label>
-                </div>
-                <label class="block space-y-0.5">
-                  <span class="text-[10px] text-muted-foreground">Secret</span>
-                  <input
-                    type="text"
-                    bind:value={editSecret}
-                    class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                    onkeydown={(e) => {
-                      if (e.key === 'Enter') updateCredential();
-                      if (e.key === 'Escape') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        editingCredId = null;
-                      }
-                    }}
-                  />
-                </label>
-                <div class="flex gap-2">
-                  <div class="flex-1 space-y-0.5">
-                    <p class="text-[10px] text-muted-foreground">Type</p>
-                    <Select
-                      size="sm"
-                      value={editCredType}
-                      onchange={(v) => editCredType = v as Credential['credential_type']}
-                      options={[
-                        { value: 'password', label: 'Password' },
-                        { value: 'hash', label: 'Hash' },
-                        { value: 'key', label: 'SSH Key' },
-                        { value: 'ticket', label: 'Kerberos Ticket' },
-                        { value: 'token', label: 'Token' },
-                        { value: 'other', label: 'Other' }
-                      ]}
-                    />
-                  </div>
-                  <div class="flex-1 space-y-0.5">
-                    <p class="text-[10px] text-muted-foreground">Status</p>
-                    <Select
-                      size="sm"
-                      value={editStatus}
-                      onchange={(v) => editStatus = v as Credential['status']}
-                      options={[
-                        { value: 'unknown', label: 'Unknown' },
-                        { value: 'valid', label: 'Valid' },
-                        { value: 'invalid', label: 'Invalid' },
-                        { value: 'expired', label: 'Expired' }
-                      ]}
-                    />
-                  </div>
-                </div>
-                <label class="block space-y-0.5">
-                  <span class="text-[10px] text-muted-foreground">URL / Source</span>
-                  <input
-                    type="text"
-                    bind:value={editSource}
-                    class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </label>
-                <label class="block space-y-0.5">
-                  <span class="text-[10px] text-muted-foreground">Notes</span>
-                  <input
-                    type="text"
-                    bind:value={editNotes}
-                    class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                </label>
-                <div class="flex gap-2">
-                  <button
-                    onclick={updateCredential}
-                    class="flex-1 rounded bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-                  >Save</button>
-                  <button
-                    onclick={() => (editingCredId = null)}
-                    class="flex-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent"
-                  >Cancel</button>
-                </div>
-              </div>
+            {#if editingCredId === cred.id}
+              <CredentialForm
+                mode="edit"
+                {uiMode}
+                initialUsername={cred.username}
+                initialSecret={cred.secret}
+                initialCredentialType={cred.credential_type}
+                initialDomain={cred.domain}
+                initialSource={cred.source}
+                initialStatus={cred.status}
+                initialNotes={cred.notes}
+                onSubmit={(data) => updateCredential(cred.id, data)}
+                onCancel={() => { editingCredId = null; editingCred = null; }}
+              />
             {/if}
           </div>
         {/each}
@@ -655,113 +377,6 @@
     </div>
   {/if}
 </div>
-
-{#if addingCred && uiMode === 'modal'}
-  <ToolModal
-    ariaLabel="Add credential"
-    onClose={() => (addingCred = false)}
-    maxWidthClass="max-w-sm"
-  >
-    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
-      <KeyRound size={14} class="text-muted-foreground" />
-      <h2 class="flex-1 text-sm font-semibold">Add Credential</h2>
-      <button onclick={() => (addingCred = false)} aria-label="Close add credential modal" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
-    </div>
-    <div class="space-y-3 px-5 py-4">
-      <div class="flex gap-2">
-        <label class="flex-1 space-y-1">
-          <span class="block text-xs text-muted-foreground">Username</span>
-          <input
-            type="text"
-            placeholder="username"
-            bind:value={newUsername}
-            class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </label>
-        <label class="w-24 space-y-1">
-          <span class="block text-xs text-muted-foreground">Domain</span>
-          <input
-            type="text"
-            placeholder="CORP"
-            bind:value={newDomain}
-            class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </label>
-      </div>
-      <label class="block space-y-1">
-        <span class="text-xs text-muted-foreground">Secret</span>
-        <input
-          type="text"
-          placeholder="password / hash / key"
-          bind:value={newSecret}
-          class="w-full rounded border border-border bg-background px-2 py-1 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          onkeydown={(e) => {
-            if (e.key === 'Enter') addCredential();
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              e.stopPropagation();
-              addingCred = false;
-            }
-          }}
-        />
-      </label>
-      <div class="flex gap-2">
-        <div class="flex-1 space-y-1">
-          <p class="text-xs text-muted-foreground">Type</p>
-          <Select
-            size="sm"
-            value={newCredType}
-            onchange={(v) => newCredType = v as Credential['credential_type']}
-            options={[
-              { value: 'password', label: 'Password' },
-              { value: 'hash', label: 'Hash' },
-              { value: 'key', label: 'SSH Key' },
-              { value: 'ticket', label: 'Kerberos Ticket' },
-              { value: 'token', label: 'Token' },
-              { value: 'other', label: 'Other' }
-            ]}
-          />
-        </div>
-        <div class="flex-1 space-y-1">
-          <p class="text-xs text-muted-foreground">Status</p>
-          <Select
-            size="sm"
-            value={newStatus}
-            onchange={(v) => newStatus = v as Credential['status']}
-            options={[
-              { value: 'unknown', label: 'Unknown' },
-              { value: 'valid', label: 'Valid' },
-              { value: 'invalid', label: 'Invalid' },
-              { value: 'expired', label: 'Expired' }
-            ]}
-          />
-        </div>
-      </div>
-      <label class="block space-y-1">
-        <span class="text-xs text-muted-foreground">URL / Source</span>
-        <input
-          type="text"
-          placeholder="e.g. SMB share, /etc/passwd"
-          bind:value={newSource}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      </label>
-      <label class="block space-y-1">
-        <span class="text-xs text-muted-foreground">Notes</span>
-        <input
-          type="text"
-          placeholder="Optional notes"
-          bind:value={newNotes}
-          class="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      </label>
-    </div>
-    <div class="flex gap-2 border-t border-border px-5 py-3">
-      <button onclick={addCredential} class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Add Credential</button>
-      <button onclick={() => (addingCred = false)} class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent">Cancel</button>
-    </div>
-  </ToolModal>
-{/if}
 
 {#if confirmDelete !== null}
   {@const pending = confirmDelete}
@@ -771,104 +386,4 @@
     onConfirm={() => { deleteCredential(pending.id); confirmDelete = null; }}
     onCancel={() => confirmDelete = null}
   />
-{/if}
-
-{#if editingCredId !== null && uiMode === 'modal'}
-  <ToolModal
-    ariaLabel="Edit credential"
-    onClose={() => (editingCredId = null)}
-    maxWidthClass="max-w-sm"
-  >
-    <div class="flex items-center gap-2 border-b border-border px-5 py-3.5">
-      <KeyRound size={14} class="text-muted-foreground" />
-      <h2 class="flex-1 text-sm font-semibold">Edit Credential</h2>
-      <button onclick={() => (editingCredId = null)} aria-label="Close edit credential modal" class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"><X size={14} /></button>
-    </div>
-    <div class="space-y-3 px-5 py-4">
-      <div class="flex gap-2">
-        <label class="flex-1 space-y-1">
-          <span class="block text-xs text-muted-foreground">Username</span>
-          <input
-            type="text"
-            bind:value={editUsername}
-            class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </label>
-        <label class="w-24 space-y-1">
-          <span class="block text-xs text-muted-foreground">Domain</span>
-          <input
-            type="text"
-            bind:value={editDomain}
-            class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </label>
-      </div>
-      <label class="block space-y-1">
-        <span class="text-xs text-muted-foreground">Secret</span>
-        <input
-          type="text"
-          bind:value={editSecret}
-          class="w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-      </label>
-      <div class="flex gap-2">
-        <div class="flex-1 space-y-1">
-          <p class="text-xs text-muted-foreground">Type</p>
-          <Select
-            size="sm"
-            value={editCredType}
-            onchange={(v) => editCredType = v as Credential['credential_type']}
-            options={[
-              { value: 'password', label: 'Password' },
-              { value: 'hash', label: 'Hash' },
-              { value: 'key', label: 'SSH Key' },
-              { value: 'ticket', label: 'Kerberos Ticket' },
-              { value: 'token', label: 'Token' },
-              { value: 'other', label: 'Other' }
-            ]}
-          />
-        </div>
-        <div class="flex-1 space-y-1">
-          <p class="text-xs text-muted-foreground">Status</p>
-          <Select
-            size="sm"
-            value={editStatus}
-            onchange={(v) => editStatus = v as Credential['status']}
-            options={[
-              { value: 'unknown', label: 'Unknown' },
-              { value: 'valid', label: 'Valid' },
-              { value: 'invalid', label: 'Invalid' },
-              { value: 'expired', label: 'Expired' }
-            ]}
-          />
-        </div>
-      </div>
-      <label class="block space-y-1">
-        <span class="text-xs text-muted-foreground">URL / Source</span>
-        <input
-          type="text"
-          bind:value={editSource}
-          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-      </label>
-      <label class="block space-y-1">
-        <span class="text-xs text-muted-foreground">Notes</span>
-        <input
-          type="text"
-          bind:value={editNotes}
-          class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-      </label>
-    </div>
-    <div class="flex gap-2 border-t border-border bg-muted/30 px-5 py-3">
-      <button
-        onclick={updateCredential}
-        class="flex-1 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-      >Save Changes</button>
-      <button
-        onclick={() => (editingCredId = null)}
-        class="flex-1 rounded border border-border px-3 py-1.5 text-sm hover:bg-accent"
-      >Cancel</button>
-    </div>
-  </ToolModal>
 {/if}

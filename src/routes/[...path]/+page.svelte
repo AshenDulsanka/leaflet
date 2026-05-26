@@ -30,13 +30,18 @@
   import ScreenshotPanel from '$lib/components/panels/ScreenshotPanel.svelte';
   import ExportModal from '$lib/components/modals/ExportModal.svelte';
   import NoteGraphPanel from '$lib/components/panels/NoteGraphPanel.svelte';
+  import RightPanelContainer from '$lib/components/layout/RightPanelContainer.svelte';
   import type { FileNode, Workspace } from '$lib/types';
-
-  interface FindOptions {
-    caseSensitive: boolean;
-    useRegex: boolean;
-    wholeWord: boolean;
-  }
+  import type { FindOptions } from '$lib/components/editor/find-utils';
+  import {
+    encodePathForUrl,
+    normalizeNotesFolder,
+    resolveWorkspacePath as _resolveWorkspacePath,
+    workspaceRootUrl,
+    isPathWithinWorkspace as _isPathWithinWorkspace,
+    migrateWorkspacePath
+  } from '$lib/utils/path-utils';
+  import { applyMove, applyReorder, flattenTree, findNoteByName } from '$lib/utils/tree-utils';
 
   interface EditorApi {
     insertText: (text: string) => void;
@@ -202,73 +207,14 @@
     localStorage.setItem(SMALL_SCREEN_WARNING_DISMISS_KEY, '1');
   }
 
-  function encodePathForUrl(path: string): string {
-    return path
-      .split('/')
-      .map((segment) => encodeURIComponent(segment))
-      .join('/');
-  }
-
-  function normalizeNotesFolder(folder: string | null | undefined): string {
-    return folder?.replace(/^\/+|\/+$/g, '') ?? '';
-  }
-
+  /** Thin wrapper — adds default workspace folder so callers don't have to repeat it. */
   function resolveWorkspacePath(path: string, workspaceNotesFolder: string | null = activeWorkspace?.notes_folder ?? null): string {
-    const normalized = path.replace(/^\/+|\/+$/g, '');
-    const wsFolder = normalizeNotesFolder(workspaceNotesFolder);
-    if (!wsFolder) return normalized;
-    if (normalized === wsFolder || normalized.startsWith(`${wsFolder}/`)) {
-      return normalized;
-    }
-    return `${wsFolder}/${normalized}`;
+    return _resolveWorkspacePath(path, workspaceNotesFolder);
   }
 
-  function workspaceRootUrl(ws: Workspace | null): string {
-    const folder = normalizeNotesFolder(ws?.notes_folder ?? null);
-    if (!folder) return '/';
-    return `/${encodePathForUrl(folder)}`;
-  }
-
+  /** Thin wrapper — closes over the reactive `workspaces` list required by the pure util. */
   function isPathWithinWorkspace(path: string, workspaceNotesFolder: string | null): boolean {
-    const normalizedPath = path.replace(/^\/+|\/+$/g, '');
-    const workspaceFolder = normalizeNotesFolder(workspaceNotesFolder);
-
-    if (!normalizedPath) {
-      return false;
-    }
-
-    if (!workspaceFolder) {
-      return true;
-    }
-
-    if (normalizedPath === workspaceFolder || normalizedPath.startsWith(`${workspaceFolder}/`)) {
-      return true;
-    }
-
-    return !workspaces.some((workspace) => {
-      const folder = normalizeNotesFolder(workspace.notes_folder);
-      return folder !== '' && (normalizedPath === folder || normalizedPath.startsWith(`${folder}/`));
-    });
-  }
-
-  function migrateWorkspacePath(path: string, oldWorkspaceNotesFolder: string | null, newWorkspaceNotesFolder: string | null): string {
-    const normalizedPath = path.replace(/^\/+|\/+$/g, '');
-    const oldWorkspaceFolder = normalizeNotesFolder(oldWorkspaceNotesFolder);
-    const newWorkspaceFolder = normalizeNotesFolder(newWorkspaceNotesFolder);
-
-    if (!oldWorkspaceFolder || !newWorkspaceFolder) {
-      return normalizedPath;
-    }
-
-    if (normalizedPath === oldWorkspaceFolder) {
-      return newWorkspaceFolder;
-    }
-
-    if (normalizedPath.startsWith(`${oldWorkspaceFolder}/`)) {
-      return `${newWorkspaceFolder}${normalizedPath.slice(oldWorkspaceFolder.length)}`;
-    }
-
-    return normalizedPath;
+    return _isPathWithinWorkspace(path, workspaceNotesFolder, workspaces);
   }
 
   function clearPendingAutosave(): void {
@@ -716,53 +662,6 @@
     summarizeOpen = true;
   }
 
-  function applyMove(nodes: FileNode[], fromPath: string, toFolderPath: string): FileNode[] {
-    const filename = fromPath.split('/').pop()!;
-
-    function removeNode(items: FileNode[]): { found: FileNode | null; remaining: FileNode[] } {
-      const remaining: FileNode[] = [];
-      let found: FileNode | null = null;
-      for (const n of items) {
-        if (n.path === fromPath) {
-          found = n;
-        } else if (n.children) {
-          const result = removeNode(n.children);
-          remaining.push({ ...n, children: result.remaining });
-          if (result.found) found = result.found;
-        } else {
-          remaining.push(n);
-        }
-      }
-      return { found, remaining };
-    }
-
-    function rewritePaths(node: FileNode, oldPrefix: string, newPrefix: string): FileNode {
-      const newPath = node.path.startsWith(oldPrefix + '/') ? newPrefix + node.path.slice(oldPrefix.length) : node.path;
-      return { ...node, path: newPath, children: node.children?.map((c) => rewritePaths(c, oldPrefix, newPrefix)) };
-    }
-
-    function insertNode(items: FileNode[], movedNode: FileNode): FileNode[] {
-      if (!toFolderPath) {
-        const newPath = filename;
-        return [...items, rewritePaths(movedNode, fromPath, newPath)];
-      }
-      return items.map((n) => {
-        if (n.path === toFolderPath && n.type === 'folder') {
-          const newPath = `${toFolderPath}/${filename}`;
-          return { ...n, children: [...(n.children ?? []), rewritePaths(movedNode, fromPath, newPath)] };
-        }
-        if (n.children) {
-          return { ...n, children: insertNode(n.children, movedNode) };
-        }
-        return n;
-      });
-    }
-
-    const { found, remaining } = removeNode(nodes);
-    if (!found) return nodes;
-    return insertNode(remaining, found);
-  }
-
   async function moveFile(fromPath: string, toFolderPath: string) {
     const filename = fromPath.split('/').pop()!;
     const targetPath = toFolderPath ? `${toFolderPath}/${filename}` : filename;
@@ -799,45 +698,7 @@
     }
   }
 
-  // Find a note in the file tree by name (without .md extension)
-  function findNoteByName(nodes: FileNode[], name: string): string | null {
-    const lower = name.toLowerCase();
-    for (const node of nodes) {
-      if (node.type === 'file') {
-        const nodeName = node.name.replace(/\.md$/i, '').toLowerCase();
-        if (nodeName === lower) return node.path;
-      } else if (node.children) {
-        const found = findNoteByName(node.children, name);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-
-  // Flat list of all note paths for wikilink autocomplete
-  // readTree only emits type:'file' for .md files, so no extension check needed
-  function flattenTree(nodes: FileNode[]): string[] {
-    const paths: string[] = [];
-    for (const node of nodes) {
-      if (node.type === 'file') {
-        paths.push(node.path);
-      } else if (node.children) {
-        paths.push(...flattenTree(node.children));
-      }
-    }
-    return paths;
-  }
   const noteSuggestions = $derived(flattenTree(tree));
-
-  function applyReorder(nodes: FileNode[], orderedPaths: string[]): FileNode[] {
-    if (nodes.some((n) => orderedPaths.includes(n.path))) {
-      return orderedPaths.map((p) => nodes.find((n) => n.path === p)!).filter(Boolean);
-    }
-    return nodes.map((n) => ({
-      ...n,
-      children: n.children ? applyReorder(n.children, orderedPaths) : undefined
-    }));
-  }
 
   async function reorderNotes(orderedPaths: string[]): Promise<void> {
     tree = applyReorder(tree, orderedPaths);
@@ -1115,15 +976,12 @@
       {/if}
     </main>
 
-    <div class="right-panel-container relative shrink-0 {rightPanelOpen ? '' : 'pointer-events-none'}" style="width: {rightPanelOpen ? `${rightPanelWidth}px` : '0'}; overflow: hidden; transition: width {isResizingRight ? '0ms' : '200ms'} cubic-bezier(0.4, 0, 0.2, 1); --panel-width: {rightPanelWidth}px;">
-      {#if rightPanelOpen}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="absolute left-0 top-0 z-10 w-1 cursor-col-resize transition-colors hover:bg-primary/30 {isResizingRight ? 'bg-primary/50' : ''}"
-          style="height: 100%"
-          onmousedown={startRightResize}
-        ></div>
-      {/if}
+    <RightPanelContainer
+      open={rightPanelOpen}
+      width={rightPanelWidth}
+      isResizing={isResizingRight}
+      onStartResize={startRightResize}
+    >
 
       {#if backlinksOpen}
         <BacklinksPanel
@@ -1207,7 +1065,7 @@
         {uiMode}
       />
     {/if}
-    </div>
+    </RightPanelContainer>
 
   </div>
 
@@ -1323,11 +1181,4 @@
   />
 {/if}
 
-<style>
-  /* Allow right panels to fill the resize container */
-  .right-panel-container > :global(aside),
-  .right-panel-container > :global(div[class*="h-full"]) {
-    width: 100% !important;
-    max-width: none !important;
-  }
-</style>
+

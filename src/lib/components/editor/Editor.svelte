@@ -10,49 +10,12 @@
     type EditorState,
     type Transaction,
   } from "@milkdown/kit/prose/state";
-  import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
-  import type { Node as ProseMirrorNode } from "@milkdown/kit/prose/model";
+  import { DecorationSet } from "@milkdown/kit/prose/view";
   import ImageToolbar from "$lib/components/editor/ImageToolbar.svelte";
-  // Module-scoped regex for [[wikilinks]] — shared by all wikilink helpers.
-  const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
-
-  // Builds a DecorationSet that highlights all [[note]] spans in the document.
-  function buildWikilinkDecorations(doc: ProseMirrorNode): DecorationSet {
-    const decorations: Decoration[] = [];
-    doc.descendants((node: ProseMirrorNode, pos: number) => {
-      if (!node.isText || !node.text) return;
-      WIKILINK_RE.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = WIKILINK_RE.exec(node.text)) !== null) {
-        const start = pos + m.index;
-        const end = start + m[0].length;
-        const nameStart = start + 2;
-        const nameEnd = end - 2;
-        decorations.push(
-          Decoration.inline(start, nameStart, {
-            class: "wikilink-bracket",
-            style: "font-size:0;line-height:0;opacity:0;color:transparent",
-          }),
-        );
-        decorations.push(
-          Decoration.inline(nameStart, nameEnd, { class: "wikilink-name" }),
-        );
-        decorations.push(
-          Decoration.inline(nameEnd, end, {
-            class: "wikilink-bracket",
-            style: "font-size:0;line-height:0;opacity:0;color:transparent",
-          }),
-        );
-      }
-    });
-    return DecorationSet.create(doc, decorations);
-  }
-
-  interface FindOptions {
-    caseSensitive: boolean;
-    useRegex: boolean;
-    wholeWord: boolean;
-  }
+  import WikilinkDropdown from "$lib/components/editor/WikilinkDropdown.svelte";
+  import { uploadAndInsert as _uploadAndInsert, isAllowedImageType } from "$lib/components/editor/editor-upload";
+  import { WIKILINK_RE, buildWikilinkDecorations } from "$lib/components/editor/wikilink-decoration";
+  import { type FindOptions, computeMatches as _computeMatches } from "$lib/components/editor/find-utils";
 
   interface EditorApi {
     insertText: (text: string) => void;
@@ -792,31 +755,13 @@
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  /** Compute all regex matches in a text string. Returns empty array on bad regex. */
+  /** Delegate to the shared find-utils implementation. */
   function computeMatches(
     text: string,
     query: string,
     opts: FindOptions,
   ): Array<{ start: number; end: number }> {
-    if (!query) return [];
-    try {
-      let pattern = opts.useRegex
-        ? query
-        : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (opts.wholeWord) pattern = `\\b${pattern}\\b`;
-      // 'gid' is not universally supported - fall back gracefully
-      const safeFlags = opts.caseSensitive ? "g" : "gi";
-      const regex = new RegExp(pattern, safeFlags);
-      const matches: Array<{ start: number; end: number }> = [];
-      let m: RegExpExecArray | null;
-      while ((m = regex.exec(text)) !== null) {
-        matches.push({ start: m.index, end: m.index + m[0].length });
-        if (m[0].length === 0) regex.lastIndex++; // prevent infinite loop on zero-width
-      }
-      return matches;
-    } catch {
-      return []; // invalid regex
-    }
+    return _computeMatches(text, query, opts);
   }
 
   function findOccurrenceCount(query: string, opts: FindOptions): number {
@@ -985,30 +930,12 @@
   }
 
   async function uploadAndInsert(file: File, wsId: string | null = null) {
-    const rawExt = file.type.split("/")[1] ?? "png";
-    const ext = rawExt === "jpeg" ? "jpg" : rawExt;
-    const formData = new FormData();
-    formData.append("image", file, `screenshot.${ext}`);
-    if (wsId) {
-      formData.append("workspace_id", wsId);
-    }
-    try {
-      const res = await fetch("/api/screenshots", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) return;
-      const { url } = (await res.json()) as { url: string };
-      insertText(`![screenshot](${url})`);
-      onImageUploaded?.();
-    } catch {
-      console.error("Failed to upload screenshot");
-    }
+    await _uploadAndInsert(file, wsId, insertText, onImageUploaded);
   }
 
   async function handlePaste(e: ClipboardEvent) {
     const items = Array.from(e.clipboardData?.items ?? []);
-    const imageItem = items.find((item) => item.type.startsWith("image/"));
+    const imageItem = items.find((item) => isAllowedImageType(item.type));
     if (!imageItem) return;
     e.preventDefault();
     const blob = imageItem.getAsFile();
@@ -1023,7 +950,7 @@
 
   async function handleDrop(e: DragEvent) {
     const files = Array.from(e.dataTransfer?.files ?? []);
-    const imageFile = files.find((f) => f.type.startsWith("image/"));
+    const imageFile = files.find((f) => isAllowedImageType(f.type));
     if (!imageFile) return;
     e.preventDefault();
     await uploadAndInsert(imageFile, workspaceId);
@@ -1121,106 +1048,20 @@
 
   <!-- Wikilink autocomplete dropdown -->
   {#if wikilinkDropdown && mode === "wysiwyg"}
-    <div
-      class="fixed z-[100] min-w-64 max-w-sm overflow-hidden rounded-lg border border-border bg-card shadow-xl"
-      style="left: {wikilinkDropdown.x}px; top: {wikilinkDropdown.y + 6}px;"
-      onpointerdown={(e) => e.stopPropagation()}
-      role="dialog"
-      aria-label="Note search"
-      tabindex="-1"
-    >
-      <!-- Search input at top -->
-      <div class="border-b border-border px-2 py-1.5">
-        <input
-          type="text"
-          role="combobox"
-          aria-expanded="true"
-          aria-autocomplete="list"
-          aria-controls="wikilink-listbox"
-          aria-activedescendant={wikilinkDropdown && wikilinkFiltered.length > 0
-            ? `wikilink-opt-${wikilinkDropdown.selectedIndex}`
-            : undefined}
-          placeholder="Search notes..."
-          bind:value={dropdownSearchText}
-          class="w-full rounded bg-transparent px-1 py-0.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
-          onkeydown={(e) => {
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              if (wikilinkDropdown)
-                wikilinkDropdown = {
-                  ...wikilinkDropdown,
-                  selectedIndex: Math.min(
-                    wikilinkDropdown.selectedIndex + 1,
-                    wikilinkFiltered.length - 1,
-                  ),
-                };
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              if (wikilinkDropdown)
-                wikilinkDropdown = {
-                  ...wikilinkDropdown,
-                  selectedIndex: Math.max(
-                    wikilinkDropdown.selectedIndex - 1,
-                    0,
-                  ),
-                };
-            } else if (e.key === "Enter" || e.key === "Tab") {
-              e.preventDefault();
-              if (
-                wikilinkDropdown &&
-                wikilinkFiltered[wikilinkDropdown.selectedIndex]
-              )
-                selectWikilinkSuggestion(
-                  wikilinkFiltered[wikilinkDropdown.selectedIndex],
-                );
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              wikilinkDropdown = null;
-            }
-          }}
-        />
-      </div>
-      <!-- Results -->
-      {#if wikilinkFiltered.length > 0}
-        <div
-          id="wikilink-listbox"
-          class="max-h-64 overflow-y-auto py-1"
-          role="listbox"
-          aria-label="Note suggestions"
-        >
-          {#each wikilinkFiltered as suggestion, i}
-            {@const name = suggestion.split("/").pop()!.replace(/\.md$/i, "")}
-            {@const folder = suggestion.includes("/")
-              ? suggestion.split("/").slice(0, -1).join("/")
-              : ""}
-            <button
-              id="wikilink-opt-{i}"
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm {i ===
-              wikilinkDropdown.selectedIndex
-                ? 'bg-accent text-accent-foreground'
-                : 'text-foreground hover:bg-accent/60'}"
-              role="option"
-              aria-selected={i === wikilinkDropdown.selectedIndex}
-              onmousedown={(e) => {
-                e.preventDefault();
-                selectWikilinkSuggestion(suggestion);
-              }}
-            >
-              <span class="truncate font-medium">{name}</span>
-              {#if folder}
-                <span class="ml-auto shrink-0 text-xs text-muted-foreground"
-                  >{folder}</span
-                >
-              {/if}
-            </button>
-          {/each}
-        </div>
-      {:else}
-        <div class="px-3 py-3 text-center text-xs text-muted-foreground">
-          No notes found
-        </div>
-      {/if}
-    </div>
+    <WikilinkDropdown
+      x={wikilinkDropdown.x}
+      y={wikilinkDropdown.y}
+      filtered={wikilinkFiltered}
+      selectedIndex={wikilinkDropdown.selectedIndex}
+      searchText={dropdownSearchText}
+      onSelect={selectWikilinkSuggestion}
+      onClose={() => (wikilinkDropdown = null)}
+      onSelectedIndexChange={(i) => {
+        if (wikilinkDropdown)
+          wikilinkDropdown = { ...wikilinkDropdown, selectedIndex: i };
+      }}
+      onSearchTextChange={(t) => (dropdownSearchText = t)}
+    />
   {/if}
 </div>
 

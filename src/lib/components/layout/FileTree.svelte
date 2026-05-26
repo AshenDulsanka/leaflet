@@ -1,10 +1,18 @@
 <script lang="ts">
-  import { FileText, Folder, FolderOpen, ChevronRight, FilePlus, FolderPlus, Pencil, Trash2, Pin, PinOff, FolderInput, Home } from '@lucide/svelte';
+  import { FileText, Folder, FolderOpen, ChevronRight, Home } from '@lucide/svelte';
   import type { FileNode } from '$lib/types';
   import FileTree from './FileTree.svelte';
+  import FileTreeContextMenu from './FileTreeContextMenu.svelte';
   import Dialog from '$lib/components/modals/Dialog.svelte';
   import { fly, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import {
+    getDirname,
+    flattenPathTypeMap,
+    isInvalidFolderDropTarget,
+    getFileDropReorderPosition,
+    getFolderOptions,
+  } from './file-tree-dnd';
 
   interface Props {
     nodes: FileNode[];
@@ -50,39 +58,11 @@
   // Move dialog: currently selected target folder path ('' = root)
   let moveTo = $state<string>('');
 
-  // Flat set of all known paths (including children) for drag validation
-  function flattenPathTypeMap(ns: FileNode[]): Map<string, FileNode['type']> {
-    const pathTypes = new Map<string, FileNode['type']>();
-    const collect = (items: FileNode[]) => {
-      for (const n of items) {
-        pathTypes.set(n.path, n.type);
-        if (n.children) collect(n.children);
-      }
-    };
-    collect(ns);
-    return pathTypes;
-  }
-
   // Root instance receives full tree via `nodes`; child instances can receive
   // explicit `allNodes` from parent. This stays reactive as tree updates.
   const dragValidationNodes = $derived(allNodes ?? nodes);
   const pathTypeMap = $derived(flattenPathTypeMap(dragValidationNodes));
   const knownPaths = $derived(new Set(pathTypeMap.keys()));
-
-  function getDirname(filePath: string): string {
-    const idx = filePath.lastIndexOf('/');
-    return idx >= 0 ? filePath.substring(0, idx) : '';
-  }
-
-  function isInvalidFolderDropTarget(fromPath: string, targetPath: string): boolean {
-    const fromType = pathTypeMap.get(fromPath);
-    if (fromType !== 'folder') {
-      return false;
-    }
-
-    // Prevent moving a folder into itself or one of its descendants.
-    return targetPath === fromPath || targetPath.startsWith(`${fromPath}/`);
-  }
 
   function handleDragStart(e: DragEvent, nodePath: string) {
     draggedPath = nodePath;
@@ -118,15 +98,11 @@
     edgeDropActive = null;
   }
 
-  function getFileDropReorderPosition(pct: number): 'before' | 'after' {
-    return pct < FILE_REORDER_SPLIT_RATIO ? 'before' : 'after';
-  }
-
   function handleFolderDragOver(e: DragEvent, node: FileNode) {
     const fromPath = getDragSourcePath();
     if (!fromPath || fromPath === node.path) return;
     if (!knownPaths.has(fromPath)) return;
-    if (isInvalidFolderDropTarget(fromPath, node.path)) return;
+    if (isInvalidFolderDropTarget(pathTypeMap, fromPath, node.path)) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -186,7 +162,7 @@
 
       if (!fromPath || fromPath === node.path) return;
       if (!knownPaths.has(fromPath)) return; // reject untrusted drag source
-      if (isInvalidFolderDropTarget(fromPath, node.path)) return;
+      if (isInvalidFolderDropTarget(pathTypeMap, fromPath, node.path)) return;
 
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const pct = (e.clientY - rect.top) / rect.height;
@@ -324,30 +300,11 @@
     }
   }
 
-  // Build a flat list of all folder options from the tree, excluding a subtree
-  function getFolderOptions(
-    ns: FileNode[],
-    excludePath: string
-  ): Array<{ path: string; name: string; depth: number }> {
-    const result: Array<{ path: string; name: string; depth: number }> = [];
-    function traverse(items: FileNode[], d: number) {
-      for (const n of items) {
-        if (n.type === 'folder') {
-          if (n.path === excludePath || n.path.startsWith(excludePath + '/')) continue;
-          result.push({ path: n.path, name: n.name, depth: d });
-          if (n.children) traverse(n.children, d + 1);
-        }
-      }
-    }
-    traverse(ns, 0);
-    return result;
-  }
-
   // Edge drop zone handlers
   function handleEdgeDragOver(e: DragEvent, position: 'top' | 'bottom') {
     const fromPath = getDragSourcePath();
     if (!fromPath || !knownPaths.has(fromPath)) return;
-    if (isInvalidFolderDropTarget(fromPath, nodes[0]?.path ?? '')) return;
+    if (isInvalidFolderDropTarget(pathTypeMap, fromPath, nodes[0]?.path ?? '')) return;
     e.preventDefault();
     e.stopPropagation();
     edgeDropActive = position;
@@ -718,60 +675,19 @@
   }
 </style>
 
-<!-- Context menu -->
 {#if contextMenu}
   {@const menuNode = contextMenu.node}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <div
-    class="fixed z-50 min-w-40 rounded-md border border-border bg-popover py-1 shadow-lg"
-    style="left: {contextMenu.x}px; top: {contextMenu.y}px"
-    onclick={(e) => e.stopPropagation()}
-  >
-    {#if menuNode.type === 'folder'}
-      <button
-        class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
-        onclick={() => handleNewFile(menuNode)}
-      >
-        <FilePlus size={13} /> New note
-      </button>
-      <button
-        class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
-        onclick={() => handleNewFolder(menuNode)}
-      >
-        <FolderPlus size={13} /> New folder
-      </button>
-      <div class="my-1 border-t border-border"></div>
-    {/if}
-    <button
-      class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
-      onclick={() => handleRename(menuNode)}
-    >
-      <Pencil size={13} /> Rename
-    </button>
-    {#if menuNode.type === 'file'}
-      <button
-        class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
-        onclick={() => { const path = menuNode.path; closeContextMenu(); onTogglePin?.(path); }}
-      >
-        {#if pinned.includes(menuNode.path)}
-          <PinOff size={13} /> Unpin from favorites
-        {:else}
-          <Pin size={13} /> Pin to favorites
-        {/if}
-      </button>
-    {/if}
-    <button
-      class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
-      onclick={() => handleMove(menuNode)}
-    >
-      <FolderInput size={13} /> Move to...
-    </button>
-    <button
-      class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-accent"
-      onclick={() => handleDelete(menuNode)}
-    >
-      <Trash2 size={13} /> Delete
-    </button>
-  </div>
+  <FileTreeContextMenu
+    x={contextMenu.x}
+    y={contextMenu.y}
+    node={menuNode}
+    {pinned}
+    onNewFile={() => handleNewFile(menuNode)}
+    onNewFolder={() => handleNewFolder(menuNode)}
+    onRename={() => handleRename(menuNode)}
+    onTogglePin={() => { const path = menuNode.path; closeContextMenu(); onTogglePin?.(path); }}
+    onMove={() => handleMove(menuNode)}
+    onDelete={() => handleDelete(menuNode)}
+    onClose={closeContextMenu}
+  />
 {/if}

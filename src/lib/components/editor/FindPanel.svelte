@@ -4,11 +4,7 @@
   import { cubicOut } from 'svelte/easing';
   import { X, ChevronUp, ChevronDown } from '@lucide/svelte';
 
-  interface FindOptions {
-    caseSensitive: boolean;
-    useRegex: boolean;
-    wholeWord: boolean;
-  }
+  import type { FindOptions } from '$lib/components/editor/find-utils';
 
   interface EditorFindApi {
     findOccurrenceCount: (query: string, opts: FindOptions) => number;
