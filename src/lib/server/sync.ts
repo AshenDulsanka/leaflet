@@ -452,11 +452,7 @@ export async function runSyncAction(
         };
       }
 
-      git(
-        ["add", "--all", "--", ...addTargets],
-        repoRoot,
-        10_000,
-      );
+      git(["add", "--all", "--", ...addTargets], repoRoot, 10_000);
 
       const staged = git(["diff", "--cached", "--name-only"], repoRoot, 5_000);
       if (!staged) {
