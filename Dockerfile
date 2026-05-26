@@ -5,9 +5,9 @@
 
 # ---- Stage 1: deps ----
 FROM node:22-alpine AS deps
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # ---- Stage 2: build ----
@@ -18,7 +18,7 @@ RUN pnpm build
 # ---- Stage 3: runtime ----
 FROM node:22-alpine AS runtime
 RUN apk add --no-cache git ca-certificates
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable
 
 WORKDIR /app
 

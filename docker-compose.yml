@@ -13,5 +13,8 @@ services:
       - NOTES_DATA_DIR=/app/data
       - NOTES_DIR=/app/data/notes
       - SCREENSHOTS_DIR=/app/data/screenshots
+      - GIT_USER_NAME=${GIT_USER_NAME}
+      - GIT_USER_EMAIL=${GIT_USER_EMAIL}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
       - PORT=3000
     restart: unless-stopped

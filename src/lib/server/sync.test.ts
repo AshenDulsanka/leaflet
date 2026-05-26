@@ -52,7 +52,7 @@ describe("sanitizeGitError", () => {
     );
 
     expect(sanitizeGitError(error)).toBe(
-      "Git authentication failed. Check remote credentials.",
+      "Git authentication failed for HTTPS remote. Set GITHUB_TOKEN (or GH_TOKEN) in the container environment.",
     );
   });
 

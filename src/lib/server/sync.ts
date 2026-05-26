@@ -7,6 +7,8 @@ import { checkpoint, reloadDb } from "$lib/server/database";
 import { invalidateDrizzle } from "$lib/server/db/index";
 
 const VALID_ACTIONS = ["push", "pull", "status"] as const;
+const DEFAULT_GIT_USER_NAME = "Leaflet Sync Bot";
+const DEFAULT_GIT_USER_EMAIL = "leaflet-sync-bot@local.invalid";
 
 type SyncAction = (typeof VALID_ACTIONS)[number];
 
@@ -68,18 +70,19 @@ function getDataDir(): string {
 
 function getGitEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  const name = process.env.GIT_USER_NAME;
-  const email = process.env.GIT_USER_EMAIL;
+  const name =
+    process.env.GIT_USER_NAME?.trim() ||
+    process.env.GIT_AUTHOR_NAME?.trim() ||
+    DEFAULT_GIT_USER_NAME;
+  const email =
+    process.env.GIT_USER_EMAIL?.trim() ||
+    process.env.GIT_AUTHOR_EMAIL?.trim() ||
+    DEFAULT_GIT_USER_EMAIL;
 
-  if (name) {
-    env.GIT_AUTHOR_NAME = name;
-    env.GIT_COMMITTER_NAME = name;
-  }
-
-  if (email) {
-    env.GIT_AUTHOR_EMAIL = email;
-    env.GIT_COMMITTER_EMAIL = email;
-  }
+  env.GIT_AUTHOR_NAME = name;
+  env.GIT_COMMITTER_NAME = name;
+  env.GIT_AUTHOR_EMAIL = email;
+  env.GIT_COMMITTER_EMAIL = email;
 
   env.GIT_TERMINAL_PROMPT = "0";
   env.GIT_DISCOVERY_ACROSS_FILESYSTEM = "1";
@@ -135,8 +138,47 @@ function gitWithOptionalAuth(
   timeout = 30_000,
 ): string {
   const remoteUrl = tryGit(["remote", "get-url", "origin"], cwd, 5_000) ?? "";
-  const authHeader = buildGitAuthHeader(remoteUrl, process.env.GITHUB_TOKEN);
+  const token =
+    process.env.GITHUB_TOKEN?.trim() ||
+    process.env.GH_TOKEN?.trim() ||
+    process.env.GIT_TOKEN?.trim() ||
+    undefined;
+  const authHeader = buildGitAuthHeader(remoteUrl, token);
   return git(buildGitArgs(args, authHeader), cwd, timeout);
+}
+
+function hasTrackedEntries(repoRoot: string, relPath: string): boolean {
+  const tracked = tryGit(["ls-files", "--", relPath], repoRoot, 5_000);
+  return tracked !== null && tracked.trim().length > 0;
+}
+
+function getSyncAddTargets(repoRoot: string, dataDir: string): string[] {
+  const notesDbPath = join(dataDir, "notes.db");
+  const notesDirPath = join(dataDir, "notes");
+  const screenshotsDirPath = join(dataDir, "screenshots");
+
+  const relNotesDb = relative(repoRoot, notesDbPath);
+  const relNotesDir = relative(repoRoot, notesDirPath);
+  const relScreenshotsDir = relative(repoRoot, screenshotsDirPath);
+
+  const targets: string[] = [];
+
+  if (existsSync(notesDbPath) || hasTrackedEntries(repoRoot, relNotesDb)) {
+    targets.push(relNotesDb);
+  }
+
+  if (existsSync(notesDirPath) || hasTrackedEntries(repoRoot, relNotesDir)) {
+    targets.push(relNotesDir);
+  }
+
+  if (
+    existsSync(screenshotsDirPath) ||
+    hasTrackedEntries(repoRoot, relScreenshotsDir)
+  ) {
+    targets.push(relScreenshotsDir);
+  }
+
+  return targets;
 }
 
 function getRepoRoot(fromDir: string): string | null {
@@ -217,7 +259,14 @@ export function sanitizeGitError(error: unknown): string {
     rawMessage.includes("could not read username") ||
     rawMessage.includes("authentication failed")
   ) {
-    return "Git authentication failed. Check remote credentials.";
+    return "Git authentication failed for HTTPS remote. Set GITHUB_TOKEN (or GH_TOKEN) in the container environment.";
+  }
+
+  if (
+    rawMessage.includes("author identity unknown") ||
+    rawMessage.includes("unable to auto-detect email address")
+  ) {
+    return "Git author identity is missing. Set GIT_USER_NAME and GIT_USER_EMAIL for the container.";
   }
 
   if (
@@ -395,8 +444,15 @@ export async function runSyncAction(
 
       checkpoint();
 
-      const relDataDir = relative(repoRoot, dataDir);
-      git(["add", relDataDir], repoRoot, 10_000);
+      const addTargets = getSyncAddTargets(repoRoot, dataDir);
+      if (addTargets.length === 0) {
+        return {
+          status: 200,
+          body: { message: "Nothing to push - no sync targets found." },
+        };
+      }
+
+      git(["add", "--all", "--", ...addTargets], repoRoot, 10_000);
 
       const staged = git(["diff", "--cached", "--name-only"], repoRoot, 5_000);
       if (!staged) {
