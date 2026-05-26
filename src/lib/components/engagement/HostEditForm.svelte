@@ -40,14 +40,15 @@
 
   let { workspaceId, host, uiMode = 'modal', onUpdated, onPortAdded, onDeletePort, onCancel }: Props = $props();
 
-  // Form state — initialized from host prop
-  let editIp = $state(host.ip);
-  let editHostname = $state(host.hostname);
-  let editOs = $state(host.os);
-  let editStatus = $state(host.status);
-  let editScope = $state<Scope>(host.scope);
-  let editNotes = $state(host.notes);
-  let editScreenshotChoice = $state<string>(host.screenshot_filename || '');
+  // Form state synced when a different host is opened for editing.
+  let syncedHostId = $state<string | null>(null);
+  let editIp = $state('');
+  let editHostname = $state('');
+  let editOs = $state('');
+  let editStatus = $state('');
+  let editScope = $state<Scope>('unknown');
+  let editNotes = $state('');
+  let editScreenshotChoice = $state<string>('');
   let editScreenshotUploadFile = $state<File | null>(null);
   let editAddingPort = $state(false);
   let editNewPortNum = $state('');
@@ -56,6 +57,23 @@
 
   let availableScreenshots = $state<Array<{ filename: string; url: string }>>([]);
   let screenshotsLoading = $state(false);
+
+  $effect(() => {
+    if (syncedHostId === host.id) return;
+    syncedHostId = host.id;
+    editIp = host.ip;
+    editHostname = host.hostname;
+    editOs = host.os;
+    editStatus = host.status;
+    editScope = host.scope;
+    editNotes = host.notes;
+    editScreenshotChoice = host.screenshot_filename || '';
+    editScreenshotUploadFile = null;
+    editAddingPort = false;
+    editNewPortNum = '';
+    editNewPortService = '';
+    editNewPortProto = 'tcp';
+  });
 
   async function loadScreenshots(): Promise<void> {
     screenshotsLoading = true;

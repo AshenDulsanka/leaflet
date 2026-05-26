@@ -2,8 +2,12 @@
   import { dev } from '$app/environment';
   import { goto } from '$app/navigation';
 
+  interface ErrorDetails {
+    message?: string;
+  }
+
   interface Props {
-    error: App.Error & { message?: string };
+    error: ErrorDetails;
     status: number;
   }
 

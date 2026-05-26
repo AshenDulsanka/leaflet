@@ -32,10 +32,17 @@
     onCancel,
   }: Props = $props();
 
-  let value = $state(initialValue);
-  let flagType = $state(initialFlagType);
-  let captureMethod = $state(initialCaptureMethod);
-  let notes = $state(initialNotes);
+  let value = $state('');
+  let flagType = $state('user');
+  let captureMethod = $state('');
+  let notes = $state('');
+
+  $effect(() => {
+    value = initialValue;
+    flagType = initialFlagType;
+    captureMethod = initialCaptureMethod;
+    notes = initialNotes;
+  });
 
   function handleSubmit(): void {
     onSubmit({ value, flagType, captureMethod, notes });

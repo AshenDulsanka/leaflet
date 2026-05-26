@@ -40,7 +40,6 @@
   let mitreLoading = $state(false);
 
   let editingId = $state<string | null>(null);
-  let editingFinding = $state<Finding | null>(null);
 
   let severityFilter = $state<'all' | FindingSeverity>('all');
   let statusFilter = $state<'all' | FindingStatus>('all');
@@ -185,7 +184,6 @@
 
   function startEdit(finding: Finding): void {
     editingId = finding.id;
-    editingFinding = finding;
     addingFinding = false;
   }
 
@@ -212,7 +210,6 @@
       const updated: Finding = await res.json();
       findings = findings.map((f) => (f.id === id ? updated : f));
       editingId = null;
-      editingFinding = null;
     } catch { console.error('Failed to update finding'); }
   }
 
@@ -228,7 +225,7 @@
 
   function handleKeydown(e: KeyboardEvent): void {
     if (e.defaultPrevented || e.key !== 'Escape') return;
-    if (editingId) { e.preventDefault(); editingId = null; editingFinding = null; return; }
+    if (editingId) { e.preventDefault(); editingId = null; return; }
     if (addingFinding) { e.preventDefault(); addingFinding = false; return; }
     onClose();
   }
@@ -412,7 +409,7 @@
                   initialMitreTechId={finding.mitre_technique_id}
                   initialMitreTechName={finding.mitre_technique_name}
                   onSubmit={(data) => saveEdit(finding.id, data)}
-                  onCancel={() => { editingId = null; editingFinding = null; }}
+                  onCancel={() => (editingId = null)}
                 />
               {:else}
                 <!-- Display row -->

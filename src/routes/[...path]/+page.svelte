@@ -35,7 +35,6 @@
   import type { FindOptions } from '$lib/components/editor/find-utils';
   import {
     encodePathForUrl,
-    normalizeNotesFolder,
     resolveWorkspacePath as _resolveWorkspacePath,
     workspaceRootUrl,
     isPathWithinWorkspace as _isPathWithinWorkspace,

@@ -350,6 +350,13 @@ export async function runSyncAction(
       const hasRemote =
         tryGit(["remote", "get-url", "origin"], repoRoot, 5_000) !== null;
       const dirty = changes.length > 0;
+      let ahead = 0;
+      let behind = 0;
+
+      if (statusOptions.includeRemote && hasRemote) {
+        fetchOrigin(repoRoot);
+        ({ ahead, behind } = getAheadBehind(repoRoot));
+      }
 
       return {
         status: 200,
@@ -359,9 +366,15 @@ export async function runSyncAction(
           hasRemote,
           dirty,
           changes: changes || null,
-          ahead: 0,
-          behind: 0,
-          recommendation: dirty ? "push" : hasRemote ? "pull" : "none",
+          ahead,
+          behind,
+          recommendation: dirty
+            ? "push"
+            : statusOptions.includeRemote
+              ? getSyncRecommendation({ hasRemote, ahead, behind })
+              : hasRemote
+                ? "pull"
+                : "none",
         },
       };
     }

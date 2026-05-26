@@ -5,7 +5,7 @@
   import { calculateCvss, METRIC_OPTIONS } from '$lib/data/cvss';
   import type { CvssMetrics } from '$lib/data/cvss';
   import { FINDING_TEMPLATES, searchFindingTemplates } from '$lib/data/finding-templates';
-  import type { Finding, FindingSeverity, FindingStatus, FindingTemplate, FindingTemplateCategory } from '$lib/types';
+  import type { FindingSeverity, FindingStatus, FindingTemplate, FindingTemplateCategory } from '$lib/types';
 
   interface MitreTechnique {
     external_id: string;
@@ -99,20 +99,20 @@
     onCancel,
   }: Props = $props();
 
-  let title = $state(initialTitle);
-  let description = $state(initialDescription);
-  let severity = $state<FindingSeverity>(initialSeverity);
-  let status = $state<FindingStatus>(initialStatus);
-  let hostId = $state(initialHostId);
-  let notePath = $state(initialNotePath);
+  let title = $state('');
+  let description = $state('');
+  let severity = $state<FindingSeverity>('info');
+  let status = $state<FindingStatus>('open');
+  let hostId = $state('');
+  let notePath = $state('');
   let cvssScore = $state(0);
-  let cvssVector = $state(initialCvssVector);
-  let metrics = $state<CvssMetrics>(parseCvssVector(initialCvssVector));
+  let cvssVector = $state('');
+  let metrics = $state<CvssMetrics>(parseCvssVector(''));
   // For add mode auto-fill: true = CVSS controls severity; for edit mode: start false to preserve stored severity
-  let cvssAutoFilled = $state(mode === 'add');
+  let cvssAutoFilled = $state(false);
   let mitreQuery = $state('');
-  let mitreTechId = $state(initialMitreTechId);
-  let mitreTechName = $state(initialMitreTechName);
+  let mitreTechId = $state('');
+  let mitreTechName = $state('');
 
   // Template picker (add mode only)
   let showTemplates = $state(false);
@@ -120,6 +120,25 @@
   let templateCategory = $state<FindingTemplateCategory | 'all'>('all');
 
   const cvssResult = $derived(calculateCvss(metrics));
+
+  $effect(() => {
+    title = initialTitle;
+    description = initialDescription;
+    severity = initialSeverity;
+    status = initialStatus;
+    hostId = initialHostId;
+    notePath = initialNotePath;
+    cvssScore = 0;
+    cvssVector = initialCvssVector;
+    metrics = parseCvssVector(initialCvssVector);
+    cvssAutoFilled = mode === 'add';
+    mitreQuery = '';
+    mitreTechId = initialMitreTechId;
+    mitreTechName = initialMitreTechName;
+    showTemplates = false;
+    templateQuery = '';
+    templateCategory = 'all';
+  });
 
   const mitreSuggestions = $derived(
     mitreTechId || !mitreQuery.trim()
@@ -211,15 +230,14 @@
     });
   }
 
-  const isModal = uiMode === 'modal';
-  const inputClass = isModal
+  const isModal = $derived(uiMode === 'modal');
+  const inputClass = $derived(isModal
     ? 'w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary'
-    : 'w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary';
-  const textareaClass = isModal
+    : 'w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary');
+  const textareaClass = $derived(isModal
     ? 'w-full resize-none rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary'
-    : 'w-full resize-none rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary';
-  const selectSize = isModal ? 'sm' : 'xs';
-  const labelClass = isModal ? 'text-xs text-muted-foreground' : 'text-[10px] text-muted-foreground';
+    : 'w-full resize-none rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary');
+  const selectSize = $derived(isModal ? 'sm' : 'xs');
 </script>
 
 {#snippet formBody()}

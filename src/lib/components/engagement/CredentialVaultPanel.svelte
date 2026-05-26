@@ -39,7 +39,6 @@
   let expandedCredId = $state<string | null>(null);
   let credentialQuery = $state('');
   let editingCredId = $state<string | null>(null);
-  let editingCred = $state<Credential | null>(null);
   let latestLoadRequest = 0;
 
   function readCachedCredentials(id: string): Credential[] | null {
@@ -106,7 +105,6 @@
   function startEditing(cred: Credential): void {
     expandedCredId = null;
     editingCredId = cred.id;
-    editingCred = cred;
   }
 
   async function updateCredential(id: string, data: CredentialFormData): Promise<void> {
@@ -130,7 +128,7 @@
       const updated: Credential = await res.json();
       credentials = credentials.map((c) => c.id === id ? updated : c);
       writeCachedCredentials(targetWorkspaceId, credentials);
-      if (editingCredId === id) { editingCredId = null; editingCred = null; }
+      if (editingCredId === id) editingCredId = null;
     } catch (err) { console.error('Failed to update credential:', { workspaceId: targetWorkspaceId, credId: id, error: err }); }
   }
 
@@ -178,7 +176,7 @@
     if (confirmDelete !== null) { e.preventDefault(); confirmDelete = null; return; }
     if (addingCred) { e.preventDefault(); addingCred = false; return; }
     if (expandedCredId !== null) { e.preventDefault(); expandedCredId = null; return; }
-    if (editingCredId !== null) { e.preventDefault(); editingCredId = null; editingCred = null; return; }
+    if (editingCredId !== null) { e.preventDefault(); editingCredId = null; return; }
     onClose();
   }
 </script>
@@ -368,7 +366,7 @@
                 initialStatus={cred.status}
                 initialNotes={cred.notes}
                 onSubmit={(data) => updateCredential(cred.id, data)}
-                onCancel={() => { editingCredId = null; editingCred = null; }}
+                onCancel={() => (editingCredId = null)}
               />
             {/if}
           </div>

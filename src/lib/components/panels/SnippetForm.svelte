@@ -41,11 +41,19 @@
     onCancel,
   }: Props = $props();
 
-  let title = $state(initialTitle);
-  let command = $state(initialCommand);
-  let category = $state(initialCategory);
-  let description = $state(initialDescription);
+  let title = $state('');
+  let command = $state('');
+  let category = $state('general');
+  let description = $state('');
   let isGlobal = $state(false);
+
+  $effect(() => {
+    title = initialTitle;
+    command = initialCommand;
+    category = initialCategory;
+    description = initialDescription;
+    isGlobal = false;
+  });
 
   function handleSubmit(): void {
     if (!title.trim() || !command.trim()) return;

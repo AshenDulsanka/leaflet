@@ -44,13 +44,23 @@
     onCancel,
   }: Props = $props();
 
-  let username = $state(initialUsername);
-  let secret = $state(initialSecret);
-  let credentialType = $state<CredentialType>(initialCredentialType);
-  let domain = $state(initialDomain);
-  let source = $state(initialSource);
-  let status = $state<CredentialStatus>(initialStatus);
-  let notes = $state(initialNotes);
+  let username = $state('');
+  let secret = $state('');
+  let credentialType = $state<CredentialType>('password');
+  let domain = $state('');
+  let source = $state('');
+  let status = $state<CredentialStatus>('unknown');
+  let notes = $state('');
+
+  $effect(() => {
+    username = initialUsername;
+    secret = initialSecret;
+    credentialType = initialCredentialType;
+    domain = initialDomain;
+    source = initialSource;
+    status = initialStatus;
+    notes = initialNotes;
+  });
 
   function handleSubmit(): void {
     if (!username.trim() && !secret.trim()) return;

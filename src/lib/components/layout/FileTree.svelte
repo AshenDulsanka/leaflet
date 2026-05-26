@@ -36,7 +36,6 @@
 
   const DRAG_SOURCE_KEY = '__leaflet_filetree_drag_source';
   const DRAG_BODY_CLASS = 'leaflet-filetree-drag-active';
-  const FILE_REORDER_SPLIT_RATIO = 0.5;
   const INDENT_PX = 16;
   const FOLDER_DROP_ZONE = 0.25;
 

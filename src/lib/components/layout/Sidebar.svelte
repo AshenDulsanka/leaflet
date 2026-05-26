@@ -2,7 +2,6 @@
   import { PanelLeftClose, PanelLeftOpen, FileText, Pin, PinOff, Pencil, Trash2 } from '@lucide/svelte';
   import FileTree from './FileTree.svelte';
   import SyncButton from './SyncButton.svelte';
-  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
   import Dialog from '$lib/components/modals/Dialog.svelte';
   import WorkspaceSelector from './WorkspaceSelector.svelte';
   import type { FileNode, Workspace } from '$lib/types';

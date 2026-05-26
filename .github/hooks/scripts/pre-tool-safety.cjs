@@ -75,7 +75,7 @@ process.stdin.on("end", function () {
         return;
       }
     }
-  } catch (_) {
+  } catch {
     /* invalid or missing stdin - fall through */
   }
   process.stdout.write("{}");

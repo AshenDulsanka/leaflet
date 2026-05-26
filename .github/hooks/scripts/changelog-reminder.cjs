@@ -22,7 +22,7 @@ process.stdin.on("end", function () {
 
     if (editTools.includes(toolName)) {
       const filePath = (input.toolInput && input.toolInput.filePath) || "";
-      const inSrc = /[\/\\]src[\/\\]/.test(filePath);
+      const inSrc = /[/\\]src[/\\]/.test(filePath);
       const isChangeLog = /CHANGELOG|HISTORY|CHANGES/i.test(filePath);
 
       if (inSrc && !isChangeLog) {
@@ -42,7 +42,7 @@ process.stdin.on("end", function () {
         // No change log file found — skip reminder silently
       }
     }
-  } catch (_) {
+  } catch {
     /* invalid or missing stdin - output empty object below */
   }
   process.stdout.write("{}");

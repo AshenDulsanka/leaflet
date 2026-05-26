@@ -24,7 +24,6 @@
   }: Props = $props();
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
   class="fixed z-[100] min-w-64 max-w-sm overflow-hidden rounded-lg border border-border bg-card shadow-xl"
   style="left: {x}px; top: {y + 6}px;"

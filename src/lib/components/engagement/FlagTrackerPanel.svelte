@@ -39,7 +39,6 @@
   let confirmDelete = $state<{ id: string; label: string } | null>(null);
   let flagQuery = $state('');
   let editingFlagId = $state<string | null>(null);
-  let editingFlag = $state<FlagEntry | null>(null);
   let latestLoadRequest = 0;
 
   function readCachedFlags(id: string): FlagEntry[] | null {
@@ -97,7 +96,6 @@
 
   function startEditing(flag: FlagEntry): void {
     editingFlagId = flag.id;
-    editingFlag = flag;
   }
 
   async function updateFlag(id: string, data: FlagFormData): Promise<void> {
@@ -113,7 +111,7 @@
       const updated: FlagEntry = await res.json();
       flags = flags.map((f) => f.id === id ? updated : f);
       writeCachedFlags(targetWorkspaceId, flags);
-      if (editingFlagId === id) { editingFlagId = null; editingFlag = null; }
+      if (editingFlagId === id) editingFlagId = null;
     } catch (err) { console.error('Failed to update flag:', { workspaceId: targetWorkspaceId, flagId: id, error: err }); }
   }
 
@@ -171,7 +169,7 @@
   function handleKeydown(e: KeyboardEvent): void {
     if (e.defaultPrevented || e.key !== 'Escape') return;
     if (confirmDelete !== null) { e.preventDefault(); confirmDelete = null; return; }
-    if (editingFlagId !== null) { e.preventDefault(); editingFlagId = null; editingFlag = null; return; }
+    if (editingFlagId !== null) { e.preventDefault(); editingFlagId = null; return; }
     if (addingFlag) { e.preventDefault(); addingFlag = false; return; }
     onClose();
   }
@@ -202,7 +200,7 @@
         <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
       </button>
       <button
-        onclick={() => { addingFlag = !addingFlag; editingFlagId = null; editingFlag = null; }}
+        onclick={() => { addingFlag = !addingFlag; editingFlagId = null; }}
         title="Add flag"
         aria-label="Add flag"
         class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -359,7 +357,7 @@
                 initialCaptureMethod={flag.capture_method}
                 initialNotes={flag.notes}
                 onSubmit={(data) => updateFlag(flag.id, data)}
-                onCancel={() => { editingFlagId = null; editingFlag = null; }}
+                onCancel={() => (editingFlagId = null)}
               />
             {/if}
           </div>

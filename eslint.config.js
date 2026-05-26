@@ -27,6 +27,12 @@ export default ts.config(
     },
   },
   {
+    files: ["**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
     ignores: ["build/", ".svelte-kit/", "dist/"],
   },
 );

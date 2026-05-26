@@ -110,7 +110,6 @@ export const GET: RequestHandler = async () => {
         { status: 503 },
       );
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     bundle = (await res.json()) as StixBundle;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

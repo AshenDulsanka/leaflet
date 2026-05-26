@@ -25,9 +25,15 @@
     onCancel,
   }: Props = $props();
 
-  let name = $state(initialName);
-  let value = $state(initialValue);
+  let name = $state('');
+  let value = $state('');
   let nameError = $state('');
+
+  $effect(() => {
+    name = initialName;
+    value = initialValue;
+    nameError = '';
+  });
 
   function handleSubmit(): void {
     const trimmed = name.trim().toUpperCase();

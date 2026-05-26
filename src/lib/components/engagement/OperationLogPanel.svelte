@@ -82,10 +82,6 @@
     { value: 'other', label: 'Other', color: 'text-muted-foreground' },
   ];
 
-  const categoryColorMap = $derived(
-    Object.fromEntries(CATEGORIES.map((category) => [category.value, category.color])) as Record<OpLogCategory, string>
-  );
-
   const hostOptions = $derived.by(() => [
     { value: '', label: 'No host' },
     ...hosts.map((host) => ({

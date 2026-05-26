@@ -96,7 +96,6 @@
 <div class="relative px-2 pb-2">
   <div class="rounded-md border border-border bg-card p-0.5 shadow-sm ring-1 ring-border/60">
     <!-- Workspace trigger button -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-accent"
       onclick={(e) => { e.stopPropagation(); dropdownOpen = !dropdownOpen; }}

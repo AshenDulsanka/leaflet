@@ -211,7 +211,7 @@ describe("FileTree drag and drop", () => {
 
     const parentButton = parentRow.querySelector("button") as HTMLElement;
     const childButton = childRow.querySelector("button") as HTMLElement;
-    expect(parentButton.style.paddingLeft).toBe("4px");
-    expect(childButton.style.paddingLeft).toBe("20px");
+    expect(parentButton.style.paddingLeft).toBe("8px");
+    expect(childButton.style.paddingLeft).toBe("42px");
   });
 });
