@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X, ChevronDown, ChevronRight, RotateCcw } from '@lucide/svelte';
-  import { METHODOLOGY } from '$lib/data/methodology';
+  import { METHODOLOGY_PRESETS } from '$lib/data/methodology';
+  import Select from '$lib/components/ui/Select.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -10,27 +11,32 @@
 
   let { onClose }: Props = $props();
 
-  let collapsed = $state<Set<string>>(new Set());
+  let selectedPreset = $state('cpts');
+  let steps = $derived(METHODOLOGY_PRESETS[selectedPreset]?.steps ?? []);
 
-  function loadChecked(): Set<string> {
-    if (typeof localStorage === 'undefined') return new Set();
+  let collapsed = $state<Set<string>>(new Set());
+  let checked = $state<Set<string>>(new Set());
+
+  $effect(() => {
+    if (typeof localStorage === 'undefined') return;
+    const key = `methodology-checked-${selectedPreset}-v1`;
     try {
-      const raw = localStorage.getItem('cpts-methodology-v1');
-      return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+      const raw = localStorage.getItem(key);
+      checked = new Set(raw ? (JSON.parse(raw) as string[]) : []);
     } catch {
-      return new Set();
+      checked = new Set();
     }
-  }
+  });
 
   function saveChecked(c: Set<string>) {
+    if (typeof localStorage === 'undefined') return;
+    const key = `methodology-checked-${selectedPreset}-v1`;
     try {
-      localStorage.setItem('cpts-methodology-v1', JSON.stringify([...c]));
+      localStorage.setItem(key, JSON.stringify([...c]));
     } catch {
       // ignore storage errors
     }
   }
-
-  let checked = $state(loadChecked());
 
   function toggle(id: string) {
     const next = new Set(checked);
@@ -53,7 +59,7 @@
   }
 
   const total = $derived(
-    METHODOLOGY.reduce((acc, phase) => acc + (phase.steps?.length ?? 0), 0),
+    steps.reduce((acc, phase) => acc + (phase.steps?.length ?? 0), 0),
   );
   const done = $derived(checked.size);
   const pct = $derived(total > 0 ? Math.round((done / total) * 100) : 0);
@@ -84,6 +90,14 @@
     </button>
   </div>
 
+  <div class="px-4 py-2 border-b border-border bg-card">
+    <Select
+      options={Object.entries(METHODOLOGY_PRESETS).map(([value, { label }]) => ({ value, label }))}
+      value={selectedPreset}
+      onchange={(val) => { selectedPreset = val; }}
+    />
+  </div>
+
   <!-- Progress bar -->
   <div class="h-1 shrink-0 bg-muted">
     <div
@@ -94,7 +108,7 @@
 
   <!-- Steps list -->
   <div class="flex-1 overflow-y-auto px-2 py-2">
-    {#each METHODOLOGY as phase (phase.id)}
+    {#each steps as phase (phase.id)}
       <div class="mb-1">
         <!-- Phase header -->
         <button

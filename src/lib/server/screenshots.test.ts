@@ -1,13 +1,18 @@
+import { randomUUID } from 'crypto';
+import { promises as fs } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { randomUUID } from 'crypto';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Isolate each test with a fresh temp DB directory
-process.env.NOTES_DATA_DIR = join(tmpdir(), `leaflet-screenshots-test-${process.pid}`);
+const tempRoot = join(tmpdir(), `leaflet-screenshots-test-${randomUUID()}`);
+process.env.NOTES_DATA_DIR = join(tempRoot, 'data');
+process.env.SCREENSHOTS_DIR = join(tempRoot, 'screenshots');
 
 const { getDb, reloadDb } = await import('$lib/server/database.js');
 const {
+  getScreenshotsDir,
+  saveScreenshot,
   insertScreenshotMetadata,
   getScreenshotMetadataForWorkspace,
   updateScreenshotMetadata,
@@ -26,6 +31,37 @@ function seedWorkspace(id: string): void {
 
 afterEach(() => {
   reloadDb();
+  return fs.rm(tempRoot, { recursive: true, force: true });
+});
+
+afterAll(async () => {
+  reloadDb();
+  await fs.rm(tempRoot, { recursive: true, force: true });
+});
+
+describe('getScreenshotsDir', () => {
+  it('returns the configured screenshots directory as an absolute path', () => {
+    expect(getScreenshotsDir()).toBe(join(tempRoot, 'screenshots'));
+  });
+});
+
+describe('saveScreenshot', () => {
+  it('writes a screenshot file and normalizes the extension', async () => {
+    const filename = await saveScreenshot(Buffer.from('hello'), ' JPEG ');
+
+    expect(filename.endsWith('.jpeg')).toBe(true);
+
+    const contents = await fs.readFile(join(getScreenshotsDir(), filename), 'utf-8');
+    expect(contents).toBe('hello');
+  });
+
+  it('rejects invalid or path-like extensions', async () => {
+    for (const extension of ['..', '../png', 'png/evil', 'png\\evil', 'bmp']) {
+      await expect(saveScreenshot(Buffer.from('x'), extension)).rejects.toThrow(
+        'Invalid screenshot extension'
+      );
+    }
+  });
 });
 
 describe('insertScreenshotMetadata', () => {

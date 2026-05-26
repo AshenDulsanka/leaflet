@@ -26,6 +26,7 @@
   let messagesEl = $state<HTMLDivElement | null>(null);
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let showTemplatePicker = $state(false);
+  let modelName = $state('AI');
 
   /** Insert a prompt template text into the input field without auto-sending. */
   function insertTemplate(prompt: string): void {
@@ -142,31 +143,42 @@
     input = '';
   }
 
+  /** Escape special HTML characters before inserting into {@html} template. */
+  function escapeHtml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   /** Minimal markdown → HTML renderer for AI responses */
   function renderMarkdown(text: string): string {
     return (
       text
-        // fenced code blocks
+        // fenced code blocks — escape code content to prevent XSS
         .replace(
           /```(\w*)\n?([\s\S]*?)```/g,
-          '<pre class="my-2 overflow-x-auto rounded bg-muted p-2 text-xs"><code>$2</code></pre>',
+          (_match, _lang, code: string) =>
+            `<pre class="my-2 overflow-x-auto rounded bg-muted p-2 text-xs"><code>${escapeHtml(code)}</code></pre>`,
         )
         // inline code
-        .replace(/`([^`\n]+)`/g, '<code class="rounded bg-muted px-1 text-xs">$1</code>')
+        .replace(/`([^`\n]+)`/g, (_match, code: string) => `<code class="rounded bg-muted px-1 text-xs">${escapeHtml(code)}</code>`)
         // bold
-        .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*\*([^*\n]+)\*\*/g, (_match, t: string) => `<strong>${escapeHtml(t)}</strong>`)
         // italic
-        .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+        .replace(/\*([^*\n]+)\*/g, (_match, t: string) => `<em>${escapeHtml(t)}</em>`)
         // h3
-        .replace(/^### (.+)$/gm, '<h3 class="mt-3 mb-1 text-xs font-bold">$1</h3>')
+        .replace(/^### (.+)$/gm, (_m, t: string) => `<h3 class="mt-3 mb-1 text-xs font-bold">${escapeHtml(t)}</h3>`)
         // h2
-        .replace(/^## (.+)$/gm, '<h2 class="mt-3 mb-1 text-xs font-semibold">$1</h2>')
+        .replace(/^## (.+)$/gm, (_m, t: string) => `<h2 class="mt-3 mb-1 text-xs font-semibold">${escapeHtml(t)}</h2>`)
         // h1
-        .replace(/^# (.+)$/gm, '<h1 class="mt-3 mb-1 text-sm font-bold">$1</h1>')
+        .replace(/^# (.+)$/gm, (_m, t: string) => `<h1 class="mt-3 mb-1 text-sm font-bold">${escapeHtml(t)}</h1>`)
         // unordered list items
-        .replace(/^[*-] (.+)$/gm, '<li class="ml-3 list-disc text-xs">$1</li>')
+        .replace(/^[*-] (.+)$/gm, (_m, t: string) => `<li class="ml-3 list-disc text-xs">${escapeHtml(t)}</li>`)
         // ordered list items
-        .replace(/^\d+\. (.+)$/gm, '<li class="ml-3 list-decimal text-xs">$1</li>')
+        .replace(/^\d+\. (.+)$/gm, (_m, t: string) => `<li class="ml-3 list-decimal text-xs">${escapeHtml(t)}</li>`)
         // newlines → <br> (but not inside pre blocks -- close enough for now)
         .replace(/\n/g, '<br />')
     );
@@ -183,8 +195,17 @@
     }
   });
 
-  onMount(() => {
+  onMount(async () => {
     inputEl?.focus();
+    try {
+      const res = await fetch('/api/ai/config');
+      if (res.ok) {
+        const data = await res.json() as { provider: string; model: string };
+        modelName = data.model;
+      }
+    } catch {
+      // ignore - default 'AI' will show
+    }
   });
 </script>
 
@@ -337,7 +358,7 @@
       </button>
     </div>
     <p class="mt-1 text-center text-[10px] text-muted-foreground">
-      Powered by {#if typeof window !== 'undefined'}&zwj;{/if}MiniMax M2.5
+      Powered by {modelName}
     </p>
   </div>
 </aside>

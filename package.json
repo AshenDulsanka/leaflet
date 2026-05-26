@@ -14,7 +14,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -22,14 +24,18 @@
     "@sveltejs/kit": "^2.21.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@tailwindcss/vite": "^4.1.0",
+    "@testing-library/svelte": "^5.3.1",
     "@types/better-sqlite3": "^7.6.12",
+    "@types/d3": "^7.4.3",
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
     "autoprefixer": "^10.4.21",
+    "drizzle-kit": "^0.31.0",
     "eslint": "^9.23.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^2.46.1",
     "globals": "^17.4.0",
+    "jsdom": "^29.1.0",
     "prettier": "^3.5.3",
     "prettier-plugin-svelte": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.11",
@@ -60,6 +66,8 @@
     "better-sqlite3": "^11.10.0",
     "bits-ui": "^2.3.0",
     "clsx": "^2.1.1",
+    "d3": "^7.9.0",
+    "drizzle-orm": "^0.43.1",
     "force-graph": "^1.51.1",
     "katex": "^0.16.22",
     "svelte-codemirror-editor": "^2.1.0",
@@ -71,5 +79,6 @@
       "better-sqlite3",
       "esbuild"
     ]
-  }
+  },
+  "packageManager": "pnpm@11.0.9+sha512.34ce82e6780233cf9cad8685029a8f81d2e06196c5a9bad98879f7424940c6817c4e4524fb7d38b8553ceed48b9758b8ebaf1abd3600c232c4c8cf7366086f38"
 }

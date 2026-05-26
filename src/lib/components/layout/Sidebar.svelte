@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { PanelLeftClose, PanelLeftOpen, FileText, Pin, PinOff, Pencil, Trash2, ChevronDown, Plus } from '@lucide/svelte';
+  import { PanelLeftClose, PanelLeftOpen, FileText, Pin, PinOff, Pencil, Trash2 } from '@lucide/svelte';
   import FileTree from './FileTree.svelte';
   import SyncButton from './SyncButton.svelte';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
   import Dialog from '$lib/components/modals/Dialog.svelte';
+  import WorkspaceSelector from './WorkspaceSelector.svelte';
   import type { FileNode, Workspace } from '$lib/types';
 
   interface Props {
@@ -20,16 +22,14 @@
     onSelectWorkspace?: (ws: Workspace) => void;
     onCreateWorkspace?: () => void;
     onPullSuccess?: () => void;
+    onDeleteWorkspace?: (id: string) => void;
+    onRenameWorkspace?: (id: string, newName: string) => void;
+    onReorderWorkspaces?: (reordered: Workspace[]) => void;
+    onNewNoteInFolder?: (parentPath: string) => void;
+    onReorderNotes?: (orderedPaths: string[]) => void;
   }
 
-  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess }: Props = $props();
-
-  let wsDropdownOpen = $state(false);
-
-  function handleSelectWorkspace(ws: Workspace) {
-    wsDropdownOpen = false;
-    onSelectWorkspace?.(ws);
-  }
+  let { tree, activeFile, collapsed = $bindable(false), workspaces = [], activeWorkspace = null, onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onMoveItem, onSelectWorkspace, onCreateWorkspace, onPullSuccess, onDeleteWorkspace, onRenameWorkspace, onReorderWorkspaces, onNewNoteInFolder, onReorderNotes }: Props = $props();
 
   // Intercept delete/rename to keep pin list in sync.
   function handleDeleteItem(path: string) {
@@ -56,7 +56,8 @@
     if (typeof localStorage === 'undefined') return [];
     try {
       return JSON.parse(localStorage.getItem(storageKey()) ?? '[]');
-    } catch {
+    } catch (err) {
+      console.error('Failed to parse pinned notes from localStorage:', { key: storageKey(), error: err });
       return [];
     }
   }
@@ -67,6 +68,9 @@
   }
 
   let pinned = $state<string[]>(loadPinned());
+
+  const SIDEBAR_MIN_WIDTH = 180;
+  const SIDEBAR_MAX_WIDTH = 400;
 
   // Reload pinned list when workspace changes
   $effect(() => {
@@ -101,14 +105,18 @@
   let sidebarWidth = $state(260);
   let isResizing = $state(false);
 
+  function clampSidebarWidth(value: number): number {
+    return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, value));
+  }
+
   function startResize(e: MouseEvent) {
     isResizing = true;
     const startX = e.clientX;
-    const startWidth = sidebarWidth;
+    const startWidth = clampSidebarWidth(sidebarWidth);
 
     function onMouseMove(e: MouseEvent) {
       const newWidth = startWidth + (e.clientX - startX);
-      sidebarWidth = Math.min(400, Math.max(180, newWidth));
+      sidebarWidth = clampSidebarWidth(newWidth);
     }
 
     function onMouseUp() {
@@ -122,11 +130,11 @@
   }
 </script>
 
-<svelte:window onclick={() => { closePinnedMenu(); wsDropdownOpen = false; }} />
+<svelte:window onclick={() => { closePinnedMenu(); }} />
 
 <aside
-  class="relative flex flex-shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200"
-  style={collapsed ? 'width: 40px' : `width: ${sidebarWidth}px`}
+  class="relative flex flex-shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 {collapsed ? '' : 'sidebar-resizable'}"
+  style={collapsed ? 'width: 40px' : `width: ${clampSidebarWidth(sidebarWidth)}px`}
 >
   <!-- Header: title + sync + collapse toggle -->
   <div class="flex h-8 items-center justify-between pl-3 pr-1">
@@ -157,62 +165,15 @@
 
   <!-- Workspace selector (hidden when collapsed) -->
   {#if !collapsed && (workspaces.length > 0 || onCreateWorkspace)}
-    <div class="relative px-2 pb-2">
-      <div
-        class="flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 hover:bg-accent"
-        onclick={(e) => { e.stopPropagation(); wsDropdownOpen = !wsDropdownOpen; }}
-        onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); wsDropdownOpen = !wsDropdownOpen; } }}
-        role="button"
-        tabindex="0"
-        aria-haspopup="listbox"
-        aria-expanded={wsDropdownOpen}
-        title="Switch workspace"
-      >
-        <div
-          class="h-3 w-3 flex-shrink-0 rounded-sm"
-          style={activeWorkspace ? `background-color: ${activeWorkspace.icon_color}` : 'background-color: #6366f1'}
-        ></div>
-        <span class="flex-1 truncate text-xs font-medium text-foreground">
-          {activeWorkspace?.name ?? 'No workspace'}
-        </span>
-        <ChevronDown size={11} class="flex-shrink-0 text-muted-foreground" />
-      </div>
-
-      {#if wsDropdownOpen}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div
-          class="absolute left-2 right-2 top-full z-50 mt-0.5 rounded-md border border-border bg-popover py-1 shadow-lg"
-          onclick={(e) => e.stopPropagation()}
-        >
-          {#each workspaces as ws (ws.id)}
-            <button
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent
-                     {activeWorkspace?.id === ws.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'}"
-              onclick={() => handleSelectWorkspace(ws)}
-            >
-              <div class="h-2.5 w-2.5 flex-shrink-0 rounded-sm" style="background-color: {ws.icon_color}"></div>
-              <span class="flex-1 truncate">{ws.name}</span>
-              {#if ws.host_count || ws.flag_count}
-                <span class="text-[10px] text-muted-foreground">{ws.host_count ?? 0}H / {ws.flag_count ?? 0}F</span>
-              {/if}
-            </button>
-          {/each}
-          {#if onCreateWorkspace}
-            {#if workspaces.length > 0}
-              <div class="my-1 border-t border-border"></div>
-            {/if}
-            <button
-              class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-              onclick={() => { wsDropdownOpen = false; onCreateWorkspace?.(); }}
-            >
-              <Plus size={11} />
-              New workspace
-            </button>
-          {/if}
-        </div>
-      {/if}
-    </div>
+    <WorkspaceSelector
+      {workspaces}
+      {activeWorkspace}
+      onSelectWorkspace={onSelectWorkspace}
+      {onCreateWorkspace}
+      {onDeleteWorkspace}
+      {onRenameWorkspace}
+      {onReorderWorkspaces}
+    />
   {/if}
 
   <!-- File tree (hidden when collapsed) -->
@@ -268,6 +229,8 @@
         onRenameItem={handleRenameItem}
         onTogglePin={togglePin}
         {onMoveItem}
+        {onNewNoteInFolder}
+        {onReorderNotes}
       />
     </div>
   {/if}
@@ -282,6 +245,7 @@
       onmousedown={startResize}
     ></div>
   {/if}
+
 </aside>
 
 <!-- Pinned-item context menu -->
@@ -358,3 +322,5 @@
     />
   {/if}
 {/if}
+
+

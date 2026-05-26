@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, ZoomIn, ZoomOut, Download } from '@lucide/svelte';
+  import { X, Download } from '@lucide/svelte';
   import { fly, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
@@ -11,19 +11,17 @@
 
   let { src, alt = '', onClose }: Props = $props();
 
-  let zoomed = $state(false);
-
-  function handleKeydown(e: KeyboardEvent) {
+  function handleKeydown(e: KeyboardEvent): void {
     if (e.key === 'Escape') onClose();
-    if (e.key === '+' || e.key === '=') zoomed = true;
-    if (e.key === '-') zoomed = false;
   }
 
-  function download() {
+  function download(): void {
     const a = document.createElement('a');
     a.href = src;
-    a.download = alt || 'image';
+    a.download = src.split('/').pop() ?? (alt || 'image');
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
   }
 </script>
 
@@ -41,17 +39,6 @@
     transition:fly={{ y: -8, duration: 200, easing: cubicOut }}
     class="absolute top-3 right-3 flex items-center gap-1"
   >
-    <button
-      onclick={() => (zoomed = !zoomed)}
-      title={zoomed ? 'Zoom out (-)' : 'Zoom in (+)'}
-      class="flex h-7 w-7 items-center justify-center rounded bg-white/10 text-white hover:bg-white/20"
-    >
-      {#if zoomed}
-        <ZoomOut size={14} />
-      {:else}
-        <ZoomIn size={14} />
-      {/if}
-    </button>
     <button
       onclick={download}
       title="Download"
@@ -71,17 +58,12 @@
   <!-- Image -->
   <div
     transition:fly={{ y: 12, duration: 220, easing: cubicOut }}
-    class="flex p-10 {zoomed ? 'overflow-auto' : 'max-h-screen max-w-full items-center justify-center'}"
+    class="flex p-10 max-h-screen max-w-full items-center justify-center"
   >
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <img
       {src}
       {alt}
-      onclick={() => (zoomed = !zoomed)}
-      class="rounded shadow-2xl transition-all duration-200 {zoomed
-        ? 'cursor-zoom-out'
-        : 'max-h-[85vh] max-w-[85vw] cursor-zoom-in object-contain'}"
+      class="max-h-[85vh] max-w-[85vw] rounded object-contain shadow-2xl"
     />
   </div>
 

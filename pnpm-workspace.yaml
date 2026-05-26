@@ -1,0 +1,9 @@
+allowBuilds:
+  '@google/genai': set this to true or false
+  better-sqlite3: set this to true or false
+  esbuild: set this to true or false
+  protobufjs: set this to true or false
+minimumReleaseAgeExclude:
+  - esbuild@0.24.3
+  - cookie@0.7.0
+  - drizzle-orm@0.45.2

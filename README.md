@@ -32,15 +32,25 @@ This project also serves as a reference for **agent orchestration** and open-sou
 
 **Workspaces**
 - Isolated workspaces — each with its own note tree
-- General workspaces for everyday notes
-- CTF workspaces unlock engagement tools
+- Pentest workspaces are the default creation type
+- General workspaces remain available for everyday notes
+- Pentest workspaces unlock the engagement tools; the optional **CPTS preset** additionally enables the methodology checklist
+- Workspace order can be rearranged by drag and drop; right-click a workspace for rename/delete
 
-**CTF and Pentest Tools** (CTF workspaces only)
-- Host tracker with port management
+**Templates and Workflow**
+- Command Palette templates insert raw Markdown snippets into the current note
+- Global templates are always available; workspace templates appear when that workspace is active
+- Methodology checklist is available only in pentest workspaces with the CPTS preset enabled
+- Destructive panel actions use confirmation dialogs
+
+**CTF and Pentest Tools** (pentest workspaces only)
+- Host tracker with port management (initial port entry and screenshot association on add)
 - Credential vault
 - Flag tracker
 - Attack chain visualizer
 - Command snippets with variable substitution
+- Operation log, findings tracker, network topology, and CVSS calculator
+- Add forms open as centered modal dialogs by default (toggle to inline mode in Settings)
 
 **AI Integration** (optional)
 - AI chat assistant with current note as context
@@ -49,7 +59,8 @@ This project also serves as a reference for **agent orchestration** and open-sou
 
 **Sync**
 - One-click git push and pull
-- Status indicator: up-to-date, unpushed changes, behind remote
+- Persistent sync badge with recommendation-driven pull/push actions and stale/error states
+- Status refresh on load, window focus, and after pull/push actions
 
 ## Screenshots
 
@@ -66,6 +77,7 @@ This project also serves as a reference for **agent orchestration** and open-sou
 | Editor (Source) | CodeMirror 6 (svelte-codemirror-editor) |
 | Math | @milkdown/plugin-math + KaTeX |
 | Database | SQLite via better-sqlite3 |
+| ORM | drizzle-orm (better-sqlite3 dialect, synchronous) |
 | Icons | @lucide/svelte |
 | Package Manager | pnpm |
 | Runtime | Node.js 22 LTS |
@@ -94,6 +106,13 @@ cd leaflet
 cp .env.example .env
 pnpm install
 pnpm dev
+```
+
+Optional database tooling:
+
+```bash
+pnpm db:generate   # regenerate Drizzle migration files from schema
+pnpm db:studio     # open Drizzle Studio (visual DB browser)
 ```
 
 ## Production
@@ -127,6 +146,13 @@ Notes are `.md` files in `data/notes/`. The database (`data/notes.db`) stores wo
 
 Use the Sync button in the app toolbar, or manually:
 
+Toolbar sync behavior:
+
+- Calls `POST /api/sync` with `action: status | pull | push`
+- Keeps a persistent badge (In Sync, Pull N, Push N, Diverged, Ready to Push, Stale Status)
+- Enables pull/push buttons from server recommendation and ahead/behind counts
+- Reuses the notification pill system for start/success/info/error feedback
+
 ```bash
 # On device A (after working)
 git add data/
@@ -142,6 +168,12 @@ git pull
 | File | Contents |
 |------|----------|
 | `AGENTS.md` | 8-agent orchestration pipeline and AI coding agent guidelines |
+| `docs/ARCHITECTURE.md` | Workspace model, runtime data flow, storage layout, sync design |
+| `docs/API.md` | API route contracts, validation rules, templates, screenshots |
+| `docs/COMPONENTS.md` | Component inventory and visible UI surfaces |
+| `docs/ENGAGEMENT_TOOLS.md` | Host tracker, credential vault, flag tracker, findings, topology |
+| `docs/FEATURES.md` | End-user feature guide and UX conventions |
+| `docs/SECURITY.md` | Path traversal, validation, and secret-handling rules |
 | `.github/skills/architecture/SKILL.md` | Data flow, folder structure, design decisions |
 | `.github/skills/coding-standards/SKILL.md` | Code conventions for contributors and AI agents |
 | `.github/skills/commit-conventions/SKILL.md` | Commit message format and examples |
@@ -153,6 +185,7 @@ git pull
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 
 ## License
 

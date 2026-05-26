@@ -67,5 +67,5 @@
   {/if}
 
   <!-- Push remaining info to the right -->
-  <span class="ml-auto">CPTS Notes</span>
+  <span class="ml-auto">Leaflet Notes</span>
 </footer>

@@ -1,8 +1,8 @@
 ---
-description: Draft a GitHub issue for a Leaflet task or bug. Produces a focused issue with a clear title, problem description, acceptance criteria checklist, affected component, label suggestions, and branch name following branch-conventions/SKILL.md.
+description: Draft a GitHub issue for a task or bug. Produces a focused issue with a clear title, problem description, acceptance criteria checklist, affected component, label suggestions, and branch name following branch-conventions/SKILL.md.
 ---
 
-Draft a GitHub issue for Leaflet based on the following task or bug description:
+Draft a GitHub issue based on the following task or bug description:
 
 [Describe the task or bug here]
 
@@ -18,7 +18,7 @@ Concise, specific, 10 words max. Example: `feat: add search filter to workspace 
 What is the current problem or what new capability is needed? One paragraph.
 
 **Context:**
-Which part of the app is affected? (editor, sidebar, workspace, notes, sync, AI, etc.)
+Which part of the app is affected? (UI, API, auth, database, configuration, etc.)
 
 ### Acceptance Criteria
 A checklist of conditions that must be true for the issue to be complete:

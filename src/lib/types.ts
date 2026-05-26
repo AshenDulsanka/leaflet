@@ -10,6 +10,7 @@ export interface FileNode {
   type: 'file' | 'folder';
   children?: FileNode[]; // only present when type === 'folder'
   extension?: string; // only present when type === 'file'
+  sort_order?: number; // custom sort position; absent means unset (treated as Infinity)
 }
 
 /** A screenshot with workspace-scoped metadata */
@@ -49,6 +50,10 @@ export interface Workspace {
   total_flags: number;
   passing_flags: number;
   notes_folder: string;
+  /** Built-in workspace preset identifier, e.g. 'cpts'. NULL means no preset. */
+  preset: string | null;
+  /** Display order — lower values appear first in workspace lists. */
+  sort_order: number;
   created_at: string;
   updated_at: string;
   // Joined aggregates (from list/get queries)
@@ -146,6 +151,18 @@ export interface NoteTemplate {
   title: string;
   description: string;
   content: string;
+  workspaceId?: string | null;
+}
+
+/** A user-created note template stored in the database */
+export interface UserTemplate {
+  id: string;
+  workspace_id: string | null;
+  title: string;
+  description: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export type FindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info' | 'none';

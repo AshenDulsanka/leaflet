@@ -19,6 +19,22 @@ function isErrnoError(err: unknown): err is Error & { code: string } {
   return err instanceof Error && 'code' in err;
 }
 
+function isValidRelativePath(input: unknown): input is string {
+  if (typeof input !== 'string') return false;
+  const path = input.trim();
+  if (!path || path.length > 512) return false;
+  if (path.includes('\0')) return false;
+  if (path.includes('..')) return false;
+  if (path.startsWith('/') || path.startsWith('\\')) return false;
+
+  const segments = path.split('/');
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    return false;
+  }
+
+  return true;
+}
+
 export const GET: RequestHandler = async ({ params }) => {
   const path = params.path;
   if (!path) return error(400, 'Path is required');
@@ -95,16 +111,27 @@ export const DELETE: RequestHandler = async ({ params }) => {
 
 export const PATCH: RequestHandler = async ({ params, request }) => {
   const path = params.path;
-  if (!path) return error(400, 'Path is required');
+  if (!isValidRelativePath(path)) return error(400, 'Invalid source path');
 
   try {
-    const { newPath } = await request.json();
-    if (!newPath || typeof newPath !== 'string') return error(400, 'newPath is required');
+    const body: unknown = await request.json();
+    if (typeof body !== 'object' || body === null) return error(400, 'Invalid request body');
+
+    const { newPath } = body as { newPath?: unknown };
+    if (!isValidRelativePath(newPath)) return error(400, 'Invalid destination path');
+    if (newPath === path) return json({ success: true });
+
     await moveNote(path, newPath);
     return json({ success: true });
   } catch (err) {
     if (err instanceof Error && err.message.includes('traversal')) {
       return error(403, 'Access denied');
+    }
+    if (isErrnoError(err) && err.code === 'ENOENT') {
+      return error(404, 'Source note or folder not found');
+    }
+    if (isErrnoError(err) && err.code === 'EEXIST') {
+      return error(409, 'Destination already exists');
     }
     console.error('Failed to move note:', err);
     return error(500, 'Failed to move note');

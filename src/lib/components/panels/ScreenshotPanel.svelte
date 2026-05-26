@@ -1,34 +1,35 @@
 <script lang="ts">
-  import { Camera, X, Trash2, Upload, RefreshCw, Image, Link, Link2Off } from '@lucide/svelte';
+  import { Camera, Pencil, X, Trash2, Upload, RefreshCw, Image, Eye } from '@lucide/svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import type { ScreenshotMeta, FileNode } from '$lib/types';
+  import ConfirmDialog from '$lib/components/modals/ConfirmDialog.svelte';
+  import ToolModal from '$lib/components/modals/ToolModal.svelte';
+  import ImageLightbox from '$lib/components/editor/ImageLightbox.svelte';
+  import type { ScreenshotMeta } from '$lib/types';
 
   interface Props {
     onClose: () => void;
     onInsert: (markdown: string) => void;
     workspaceId: string | null;
-    notesFolder: string;
+    refreshTrigger?: number;
+    uiMode?: 'modal' | 'inline';
   }
 
-  let { onClose, onInsert, workspaceId, notesFolder }: Props = $props();
+  let { onClose, onInsert, workspaceId, refreshTrigger = 0, uiMode = 'modal' }: Props = $props();
 
   let screenshots = $state<ScreenshotMeta[]>([]);
   let loading = $state(false);
   let uploading = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
-
-  // Caption editing state
-  let editingCaption = $state<string | null>(null); // filename currently being edited
-  let captionDraft = $state('');
-
-  // Note-link picker state
-  let linkingNote = $state<string | null>(null); // filename whose note picker is open
-  let noteQuery = $state('');
-  let allNoteFiles = $state<{ name: string; path: string }[]>([]);
-  let notesLoaded = $state(false);
+  
+  let lightboxImage = $state<string | null>(null);
+  let confirmDelete = $state<{ id: string; label: string } | null>(null);
+  let renaming = $state<{ filename: string; value: string } | null>(null);
+  let screenshotQuery = $state('');
 
   $effect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    refreshTrigger; // track changes to force refresh when editor uploads an image
     loadScreenshots();
   });
 
@@ -37,8 +38,15 @@
     try {
       const qs = workspaceId !== null ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';
       const res = await fetch(`/api/screenshots${qs}`);
-      screenshots = await res.json();
-    } catch {
+      if (!res.ok) {
+        console.error('Failed to load screenshots:', { workspaceId, status: res.status });
+        screenshots = [];
+        return;
+      }
+      const data: unknown = await res.json();
+      screenshots = Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Failed to load screenshots:', { workspaceId, error: err });
       screenshots = [];
     } finally {
       loading = false;
@@ -47,10 +55,45 @@
 
   async function deleteScreenshot(filename: string): Promise<void> {
     try {
-      await fetch(`/api/screenshots/${filename}`, { method: 'DELETE' });
+      const qs = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : '';
+      const res = await fetch(`/api/screenshots/${encodeURIComponent(filename)}${qs}`, { method: 'DELETE' });
+      if (!res.ok) { console.error('Failed to delete screenshot:', { filename, status: res.status }); return; }
       screenshots = screenshots.filter((s) => s.filename !== filename);
-    } catch {
-      console.error('Failed to delete screenshot');
+    } catch (err) {
+      console.error('Failed to delete screenshot:', err);
+    }
+  }
+
+  async function renameScreenshot(filename: string, newName: string): Promise<void> {
+    if (!workspaceId) return;
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    try {
+      const res = await fetch(`/api/screenshots/${encodeURIComponent(filename)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, caption: trimmed, newFilename: trimmed }),
+      });
+      if (!res.ok) {
+        console.error('Failed to rename screenshot:', { filename, status: res.status });
+        return; // keep renaming open
+      }
+      const raw: unknown = await res.json();
+      if (typeof raw !== 'object' || raw === null || !('filename' in raw)) {
+        console.error('Unexpected rename response shape:', raw);
+        renaming = null;
+        return;
+      }
+      const data = raw as { filename: string; url?: string; caption?: string };
+      screenshots = screenshots.map((s) =>
+        s.filename === filename
+          ? { ...s, filename: data.filename, url: data.url ?? s.url, caption: data.caption ?? trimmed }
+          : s
+      );
+      renaming = null; // only clear on success
+    } catch (err) {
+      console.error('Failed to rename screenshot:', err);
+      // do NOT clear renaming — keep form open for retry
     }
   }
 
@@ -62,9 +105,13 @@
     if (workspaceId !== null) formData.append('workspace_id', workspaceId);
     try {
       const res = await fetch('/api/screenshots', { method: 'POST', body: formData });
-      if (res.ok) await loadScreenshots();
-    } catch {
-      console.error('Failed to upload screenshot');
+      if (!res.ok) {
+        console.error('Failed to upload screenshot:', { workspaceId, status: res.status });
+        return;
+      }
+      await loadScreenshots();
+    } catch (err) {
+      console.error('Failed to upload screenshot:', { workspaceId, error: err });
     } finally {
       uploading = false;
     }
@@ -92,142 +139,45 @@
   }
 
   function handleKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') onClose();
-  }
+    if (e.defaultPrevented || e.key !== 'Escape') return;
 
-  // ---- caption editing ----
-
-  function startEditCaption(ss: ScreenshotMeta): void {
-    editingCaption = ss.filename;
-    captionDraft = ss.caption;
-    // Close any open note picker
-    linkingNote = null;
-  }
-
-  async function commitCaption(ss: ScreenshotMeta): Promise<void> {
-    if (workspaceId === null) return;
-    const trimmed = captionDraft.trim();
-    editingCaption = null;
-    if (trimmed === ss.caption) return; // no change
-    try {
-      await fetch(`/api/screenshots/${ss.filename}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId, caption: trimmed }),
-      });
-      screenshots = screenshots.map((s) =>
-        s.filename === ss.filename ? { ...s, caption: trimmed } : s
-      );
-    } catch {
-      console.error('Failed to save caption');
-    }
-  }
-
-  function handleCaptionKeydown(e: KeyboardEvent, ss: ScreenshotMeta): void {
-    if (e.key === 'Enter') {
+    if (confirmDelete !== null) {
       e.preventDefault();
-      commitCaption(ss);
-    } else if (e.key === 'Escape') {
-      editingCaption = null;
+      confirmDelete = null;
+      return;
     }
-  }
 
-  // ---- note linking ----
-
-  function flattenTree(nodes: FileNode[]): { name: string; path: string }[] {
-    const result: { name: string; path: string }[] = [];
-    for (const node of nodes) {
-      if (node.type === 'file') {
-        result.push({ name: node.name, path: node.path });
-      } else if (node.children) {
-        result.push(...flattenTree(node.children));
-      }
+    if (lightboxImage !== null) {
+      e.preventDefault();
+      lightboxImage = null;
+      return;
     }
-    return result;
-  }
 
-  async function openNotePicker(ss: ScreenshotMeta): Promise<void> {
-    linkingNote = ss.filename;
-    noteQuery = '';
-    editingCaption = null;
-
-    if (!notesLoaded) {
-      try {
-        const base = notesFolder ? `?base=${encodeURIComponent(notesFolder)}` : '';
-        const res = await fetch(`/api/notes/tree${base}`);
-        const data = await res.json();
-        allNoteFiles = flattenTree(data.tree ?? []);
-        notesLoaded = true;
-      } catch {
-        allNoteFiles = [];
-      }
+    if (renaming !== null) {
+      e.preventDefault();
+      renaming = null;
+      return;
     }
+
+    onClose();
   }
 
-  function closeNotePicker(): void {
-    linkingNote = null;
-    noteQuery = '';
-  }
-
-  const filteredNotes = $derived(
-    noteQuery.trim() === ''
-      ? allNoteFiles.slice(0, 20)
-      : allNoteFiles.filter((n) =>
-          n.name.toLowerCase().includes(noteQuery.toLowerCase()) ||
-          n.path.toLowerCase().includes(noteQuery.toLowerCase())
-        ).slice(0, 20)
+  const filteredScreenshots = $derived(
+    screenshotQuery.trim()
+      ? screenshots.filter(
+          (s) =>
+            s.filename.toLowerCase().includes(screenshotQuery.toLowerCase()) ||
+            (s.caption ?? '').toLowerCase().includes(screenshotQuery.toLowerCase())
+        )
+      : screenshots
   );
-
-  async function selectNote(ss: ScreenshotMeta, notePath: string): Promise<void> {
-    if (workspaceId === null) return;
-    closeNotePicker();
-    try {
-      await fetch(`/api/screenshots/${ss.filename}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId, linked_note_path: notePath }),
-      });
-      screenshots = screenshots.map((s) =>
-        s.filename === ss.filename ? { ...s, linked_note_path: notePath } : s
-      );
-    } catch {
-      console.error('Failed to link note');
-    }
-  }
-
-  async function unlinkNote(ss: ScreenshotMeta): Promise<void> {
-    if (workspaceId === null) return;
-    try {
-      await fetch(`/api/screenshots/${ss.filename}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId, linked_note_path: '' }),
-      });
-      screenshots = screenshots.map((s) =>
-        s.filename === ss.filename ? { ...s, linked_note_path: '' } : s
-      );
-    } catch {
-      console.error('Failed to unlink note');
-    }
-  }
-
-  function noteName(path: string): string {
-    // Return just the basename without extension for display
-    const parts = path.split('/');
-    return parts[parts.length - 1].replace(/\.md$/, '');
-  }
-
-  /** Programmatic focus action - avoids the a11y autofocus attribute warning. */
-  function focusOnMount(node: HTMLInputElement): void {
-    node.focus();
-  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <aside
   transition:fly={{ x: 320, duration: 250, easing: cubicOut }}
-  class="flex w-80 shrink-0 flex-col overflow-hidden border-l border-border bg-card"
+  class="absolute right-0 top-0 flex h-full w-80 shrink-0 flex-col overflow-hidden border-l border-border bg-card"
 >
   <!-- Header -->
   <div class="flex items-center gap-2 border-b border-border px-3 py-2.5">
@@ -237,6 +187,7 @@
       class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
       onclick={loadScreenshots}
       title="Refresh"
+      aria-label="Refresh screenshots"
     >
       <RefreshCw size={12} class={loading ? 'animate-spin' : ''} />
     </button>
@@ -244,6 +195,7 @@
       class="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
       onclick={onClose}
       title="Close"
+      aria-label="Close screenshots panel"
     >
       <X size={13} />
     </button>
@@ -280,6 +232,16 @@
     onchange={handleFileChange}
   />
 
+  <div class="border-b border-border px-3 py-2">
+    <input
+      type="text"
+      aria-label="Filter screenshots"
+      placeholder="Filter screenshots..."
+      bind:value={screenshotQuery}
+      class="w-full rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+    />
+  </div>
+
   <!-- Screenshot grid -->
   <div class="flex-1 overflow-y-auto p-3">
     {#if loading && screenshots.length === 0}
@@ -292,147 +254,162 @@
         <p class="text-xs text-muted-foreground">No screenshots yet</p>
         <p class="mt-1 text-[11px] text-muted-foreground">Upload an image or paste one into the editor</p>
       </div>
+    {:else if filteredScreenshots.length === 0}
+      <div class="py-8 text-center">
+        <p class="text-xs text-muted-foreground">No screenshots match your filter</p>
+      </div>
     {:else}
       <p class="mb-2 text-[11px] text-muted-foreground">
-        {screenshots.length} screenshot{screenshots.length !== 1 ? 's' : ''} - click to insert into note
+        {filteredScreenshots.length} screenshot{filteredScreenshots.length !== 1 ? 's' : ''}{#if screenshotQuery.trim()} (filtered){/if} - click to insert into note
       </p>
       <div class="grid grid-cols-2 gap-2">
-        {#each screenshots as ss (ss.filename)}
-          <div class="flex flex-col gap-1 rounded-md border border-border bg-muted/30 overflow-hidden">
+        {#each filteredScreenshots as ss (ss.filename)}
+          <div class="flex flex-col rounded-md border border-border bg-muted/30">
             <!-- Thumbnail clickable area -->
             <div
               class="group relative cursor-pointer overflow-hidden transition-colors hover:border-primary/50"
-              onclick={() => onInsert(`![${ss.caption || ss.filename}](${ss.url})`)}
+              onclick={() => onInsert(`![${ss.filename}](${ss.url})`)}
               role="button"
               tabindex="0"
               onkeydown={(e) => {
-                if (e.key === 'Enter') onInsert(`![${ss.caption || ss.filename}](${ss.url})`);
+                if (e.key === 'Enter') onInsert(`![${ss.filename}](${ss.url})`);
               }}
               aria-label="Insert {ss.filename}"
             >
               <img
                 src={ss.url}
-                alt={ss.caption || ss.filename}
+                alt={ss.filename}
                 class="aspect-video w-full object-cover"
                 loading="lazy"
               />
-              <!-- Hover overlay -->
-              <div
-                class="absolute inset-0 flex items-center justify-center bg-background/70 opacity-0 transition-opacity group-hover:opacity-100"
-              >
-                <span
-                  class="rounded bg-primary/90 px-2 py-0.5 text-[10px] font-medium text-primary-foreground"
-                >
-                  Insert
+              <!-- File size and insert hint at bottom -->
+              <div class="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/80 via-black/40 to-transparent p-1.5 pt-6 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                <span class="text-[9px] text-white/90 drop-shadow-sm">
+                  {formatSize(ss.sizeBytes)}
+                </span>
+                <span class="rounded border border-white/20 bg-black/40 px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm backdrop-blur-md">
+                  Click to Insert
                 </span>
               </div>
-              <!-- Delete button -->
-              <button
-                class="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded bg-destructive/90 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive"
-                onclick={(e) => { e.stopPropagation(); deleteScreenshot(ss.filename); }}
-                title="Delete screenshot"
-              >
-                <Trash2 size={10} />
-              </button>
-              <!-- File size label -->
-              <span class="absolute bottom-1 right-1.5 text-[9px] text-white drop-shadow">
-                {formatSize(ss.sizeBytes)}
-              </span>
             </div>
 
-            <!-- Caption row -->
-            <div class="px-1.5 pb-0.5">
-              {#if editingCaption === ss.filename}
-                <input
-                  type="text"
-                  class="w-full rounded border border-primary/50 bg-background px-1.5 py-0.5 text-[11px] text-foreground focus:outline-none"
-                  bind:value={captionDraft}
-                  onblur={() => commitCaption(ss)}
-                  onkeydown={(e) => handleCaptionKeydown(e, ss)}
-                  maxlength="500"
-                  placeholder="Add caption…"
-                  use:focusOnMount
-                />
-              {:else}
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div
-                  class="cursor-text rounded px-1 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/60 {ss.caption ? 'text-foreground' : ''}"
-                  style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"
-                  onclick={() => { if (workspaceId !== null) startEditCaption(ss); }}
-                  title={workspaceId !== null ? 'Click to edit caption' : ss.caption}
+            <!-- Action row -->
+            <div class="flex items-center gap-1 border-t border-border/50 bg-background/50 px-1 py-0.5">
+              {#if renaming !== null && renaming.filename === ss.filename && uiMode === 'inline'}
+                <form
+                  class="flex w-full items-center gap-1"
+                  onsubmit={(e) => { e.preventDefault(); renameScreenshot(ss.filename, renaming!.value); }}
                 >
-                  {ss.caption || 'Add caption…'}
-                </div>
+                  <!-- svelte-ignore a11y_autofocus -->
+                  <input
+                    type="text"
+                    class="min-w-0 flex-1 rounded border border-input bg-background px-1 py-0.5 text-[10px] text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    bind:value={renaming.value}
+                    onkeydown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        renaming = null;
+                      }
+                    }}
+                    autofocus
+                  />
+                  <button type="submit" class="shrink-0 px-1 text-[10px] font-medium text-primary hover:underline">Save</button>
+                </form>
+              {:else}
+                <span class="min-w-0 flex-1 truncate px-1 text-[10px] text-muted-foreground" title={ss.caption || ss.filename}>
+                  {ss.caption || ss.filename}
+                </span>
+                <button
+                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
+                  onclick={(e) => { e.stopPropagation(); lightboxImage = ss.url; }}
+                  title="View full image"
+                  aria-label="View {ss.filename}"
+                >
+                  <Eye size={12} />
+                </button>
+                <button
+                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground"
+                  onclick={(e) => { e.stopPropagation(); renaming = { filename: ss.filename, value: ss.caption || ss.filename.replace(/\.[^.]+$/, '') }; }}
+                  title="Rename screenshot"
+                  aria-label="Rename {ss.filename}"
+                >
+                  <Pencil size={12} />
+                </button>
+                <button
+                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-destructive dark:text-red-400 transition-colors hover:bg-destructive/20 hover:text-destructive focus-visible:outline-2 focus-visible:outline-destructive"
+                  onclick={(e) => { e.stopPropagation(); confirmDelete = { id: ss.filename, label: ss.filename }; }}
+                  title="Delete screenshot"
+                  aria-label="Delete {ss.filename}"
+                >
+                  <Trash2 size={12} />
+                </button>
               {/if}
             </div>
-
-            <!-- Note link row (only shown when workspace is active) -->
-            {#if workspaceId !== null}
-              <div class="px-1.5 pb-1.5">
-                {#if linkingNote === ss.filename}
-                  <!-- Note search picker -->
-                  <div class="flex flex-col gap-1">
-                    <input
-                      type="text"
-                      class="w-full rounded border border-primary/50 bg-background px-1.5 py-0.5 text-[11px] text-foreground focus:outline-none"
-                      bind:value={noteQuery}
-                      placeholder="Search notes…"
-                      use:focusOnMount
-                      onkeydown={(e) => { if (e.key === 'Escape') closeNotePicker(); }}
-                    />
-                    {#if filteredNotes.length > 0}
-                      <div class="max-h-24 overflow-y-auto rounded border border-border bg-popover text-[11px]">
-                        {#each filteredNotes as note (note.path)}
-                          <button
-                            class="flex w-full items-center px-2 py-1 text-left hover:bg-muted/60"
-                            onclick={() => selectNote(ss, note.path)}
-                          >
-                            {note.name}
-                          </button>
-                        {/each}
-                      </div>
-                    {:else if noteQuery.length > 0}
-                      <p class="px-1 text-[10px] text-muted-foreground">No notes found</p>
-                    {/if}
-                    <button
-                      class="text-left text-[10px] text-muted-foreground hover:text-foreground"
-                      onclick={closeNotePicker}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                {:else if ss.linked_note_path}
-                  <!-- Linked note display -->
-                  <div class="flex items-center gap-1">
-                    <Link size={10} class="shrink-0 text-primary" />
-                    <span class="flex-1 truncate text-[10px] text-primary" title={ss.linked_note_path}>
-                      {noteName(ss.linked_note_path)}
-                    </span>
-                    <button
-                      class="flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-destructive"
-                      onclick={() => unlinkNote(ss)}
-                      title="Unlink note"
-                    >
-                      <Link2Off size={9} />
-                    </button>
-                  </div>
-                {:else}
-                  <!-- Link note button -->
-                  <button
-                    class="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
-                    onclick={() => openNotePicker(ss)}
-                  >
-                    <Link size={10} />
-                    Link note
-                  </button>
-                {/if}
-              </div>
-            {/if}
           </div>
         {/each}
       </div>
     {/if}
   </div>
 </aside>
+
+{#if lightboxImage}
+  <ImageLightbox src={lightboxImage} onClose={() => lightboxImage = null} />
+{/if}
+
+{#if confirmDelete !== null}
+  {@const pending = confirmDelete}
+  <ConfirmDialog
+    title="Delete Screenshot"
+    message="Delete '{pending.label}'? This cannot be undone."
+    onConfirm={() => { deleteScreenshot(pending.id); confirmDelete = null; }}
+    onCancel={() => confirmDelete = null}
+  />
+{/if}
+
+{#if renaming !== null && uiMode === 'modal'}
+  {@const r = renaming}
+  <ToolModal
+    ariaLabel="Rename screenshot"
+    onClose={() => (renaming = null)}
+    maxWidthClass="max-w-xs"
+  >
+    <div class="p-4">
+      <h3 class="mb-3 text-sm font-semibold text-foreground">Rename Screenshot</h3>
+      <form
+        onsubmit={(e) => { e.preventDefault(); renameScreenshot(r.filename, r.value); }}
+      >
+        <!-- svelte-ignore a11y_autofocus -->
+        <input
+          type="text"
+          class="mb-3 w-full rounded border border-input bg-background px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          bind:value={renaming.value}
+          onkeydown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              renaming = null;
+            }
+          }}
+          autofocus
+        />
+        <div class="flex justify-end gap-2">
+          <button
+            type="button"
+            onclick={() => renaming = null}
+            class="rounded px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent/30"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Rename
+          </button>
+        </div>
+      </form>
+    </div>
+  </ToolModal>
+{/if}
 

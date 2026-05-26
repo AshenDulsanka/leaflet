@@ -1,8 +1,8 @@
 ---
-description: Review the selected Leaflet code against project coding standards. Checks Svelte 5 rune syntax, TypeScript strict compliance, naming conventions, error handling, import ordering, and function quality. References .github/skills/coding-standards/SKILL.md.
+description: Review the selected code against project coding standards. Checks Svelte 5 rune syntax, TypeScript strict compliance, naming conventions, error handling, import ordering, and function quality. References .github/skills/coding-standards/SKILL.md.
 ---
 
-Review the following Leaflet code against the project's coding standards.
+Review the following code against the project's coding standards.
 
 Read `.github/skills/coding-standards/SKILL.md` first to understand the full rules, then check each category below.
 
