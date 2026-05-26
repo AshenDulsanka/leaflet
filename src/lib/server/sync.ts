@@ -138,7 +138,12 @@ function gitWithOptionalAuth(
   timeout = 30_000,
 ): string {
   const remoteUrl = tryGit(["remote", "get-url", "origin"], cwd, 5_000) ?? "";
-  const authHeader = buildGitAuthHeader(remoteUrl, process.env.GITHUB_TOKEN);
+  const token =
+    process.env.GITHUB_TOKEN?.trim() ||
+    process.env.GH_TOKEN?.trim() ||
+    process.env.GIT_TOKEN?.trim() ||
+    undefined;
+  const authHeader = buildGitAuthHeader(remoteUrl, token);
   return git(buildGitArgs(args, authHeader), cwd, timeout);
 }
 
@@ -220,7 +225,7 @@ export function sanitizeGitError(error: unknown): string {
     rawMessage.includes("could not read username") ||
     rawMessage.includes("authentication failed")
   ) {
-    return "Git authentication failed. Check remote credentials.";
+    return "Git authentication failed for HTTPS remote. Set GITHUB_TOKEN (or GH_TOKEN) in the container environment.";
   }
 
   if (
@@ -405,8 +410,14 @@ export async function runSyncAction(
 
       checkpoint();
 
-      const relDataDir = relative(repoRoot, dataDir);
-      git(["add", relDataDir], repoRoot, 10_000);
+      const relNotesDb = relative(repoRoot, join(dataDir, "notes.db"));
+      const relNotesDir = relative(repoRoot, join(dataDir, "notes"));
+      const relScreenshotsDir = relative(repoRoot, join(dataDir, "screenshots"));
+      git(
+        ["add", "--all", "--", relNotesDb, relNotesDir, relScreenshotsDir],
+        repoRoot,
+        10_000,
+      );
 
       const staged = git(["diff", "--cached", "--name-only"], repoRoot, 5_000);
       if (!staged) {
