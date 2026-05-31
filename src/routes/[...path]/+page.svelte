@@ -922,8 +922,8 @@
       }}
       onReorderNotes={reorderNotes}
       onPullSuccess={async () => {
-        await loadWorkspaces();
-        await loadTree(activeWorkspace?.notes_folder ?? '');
+        await invalidateAll();
+        window.location.reload();
       }}
     />
 
