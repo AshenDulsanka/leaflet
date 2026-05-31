@@ -122,16 +122,19 @@ describe("buildGitArgs", () => {
 });
 
 describe("resolveStatusOptions", () => {
-  it("enables remote fetch only when includeRemote is explicitly true", () => {
+  it("enables remote fetch by default", () => {
+    expect(resolveStatusOptions(undefined)).toEqual({ includeRemote: true });
+    expect(resolveStatusOptions({})).toEqual({ includeRemote: true });
+    expect(resolveStatusOptions({ includeRemote: "yes" })).toEqual({
+      includeRemote: true,
+    });
     expect(resolveStatusOptions({ includeRemote: true })).toEqual({
       includeRemote: true,
     });
   });
 
-  it("defaults includeRemote to false for missing or invalid payloads", () => {
-    expect(resolveStatusOptions(undefined)).toEqual({ includeRemote: false });
-    expect(resolveStatusOptions({})).toEqual({ includeRemote: false });
-    expect(resolveStatusOptions({ includeRemote: "yes" })).toEqual({
+  it("allows callers to explicitly skip remote fetch", () => {
+    expect(resolveStatusOptions({ includeRemote: false })).toEqual({
       includeRemote: false,
     });
   });
