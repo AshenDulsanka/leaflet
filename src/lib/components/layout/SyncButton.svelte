@@ -108,7 +108,7 @@
       const res = await fetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'status' }),
+        body: JSON.stringify({ action: 'status', includeRemote: true }),
       });
       const payload = toRecord(await res.json());
 
@@ -135,11 +135,16 @@
   }
 
   const canPull = $derived(
-    syncState.initialized && syncState.hasRemote && !syncState.dirty
+    syncState.initialized &&
+      syncState.hasRemote &&
+      (syncState.recommendation === 'pull' || syncState.recommendation === 'both')
   );
 
   const canPush = $derived(
-    syncState.initialized && syncState.hasRemote && syncState.dirty
+    syncState.initialized &&
+      syncState.hasRemote &&
+      syncState.behind === 0 &&
+      (syncState.recommendation === 'push' || syncState.recommendation === 'both')
   );
 
   const shouldRetryStatus = $derived(!hasStatusSnapshot || statusRefreshError !== null);
