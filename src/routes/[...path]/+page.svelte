@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
+  import { LoaderCircle } from '@lucide/svelte';
   import { theme } from '$lib/theme.svelte';
   import Sidebar from '$lib/components/layout/Sidebar.svelte';
   import Editor from '$lib/components/editor/Editor.svelte';
@@ -66,6 +67,7 @@
   let tree = $state<FileNode[]>([]);
   let activeFile = $state<string | null>(null);
   let activeContent = $state<string>('');
+  let isInitialLoading = $state(true);
   let isSaving = $state(false);
   let isDirty = $state(false);
   let searchOpen = $state(false);
@@ -406,45 +408,48 @@
   }
 
   onMount(async () => {
-    // Load workspaces first so we can scope the tree to the active workspace
-    await loadWorkspaces();
-    const urlPath = $page.params.path;
-    if (!urlPath && activeWorkspace) {
-      await loadTree(activeWorkspace.notes_folder ?? '');
-      await goto(workspaceRootUrl(activeWorkspace), { replaceState: true, noScroll: true, keepFocus: true });
-      return;
-    }
-    if (urlPath) {
-      const matchedWorkspace = workspaces.find(
-        (ws) => urlPath === ws.notes_folder || urlPath.startsWith(`${ws.notes_folder}/`)
-      );
-      if (matchedWorkspace) {
-        activeWorkspace = matchedWorkspace;
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem(WS_STORAGE_KEY, matchedWorkspace.id);
+    try {
+      // Load workspaces first so we can scope the tree to the active workspace
+      await loadWorkspaces();
+      const urlPath = $page.params.path;
+      if (!urlPath && activeWorkspace) {
+        await loadTree(activeWorkspace.notes_folder ?? '');
+        await goto(workspaceRootUrl(activeWorkspace), { replaceState: true, noScroll: true, keepFocus: true });
+        return;
+      }
+      if (urlPath) {
+        const matchedWorkspace = workspaces.find(
+          (ws) => urlPath === ws.notes_folder || urlPath.startsWith(`${ws.notes_folder}/`)
+        );
+        if (matchedWorkspace) {
+          activeWorkspace = matchedWorkspace;
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(WS_STORAGE_KEY, matchedWorkspace.id);
+          }
         }
       }
-    }
-    await loadTree(activeWorkspace?.notes_folder ?? '');
-    // If URL already has a note file path, open it without pushing another history entry.
-    // open that file without pushing another history entry.
-    if (urlPath && urlPath.endsWith('.md')) {
-      try {
-        await openFile(urlPath, false, undefined, true);
-      } catch (openErr: unknown) {
-        const status = getOpenFileStatus(openErr);
-        if (status === 400 || status === 404) {
-          await goto(`/${encodePathForUrl(urlPath)}`, {
-            replaceState: true,
-            noScroll: true,
-            keepFocus: true,
-            invalidateAll: true
-          });
-          return;
-        }
+      await loadTree(activeWorkspace?.notes_folder ?? '');
+      // If URL already has a note file path, open it without pushing another history entry.
+      if (urlPath && urlPath.endsWith('.md')) {
+        try {
+          await openFile(urlPath, false, undefined, true);
+        } catch (openErr: unknown) {
+          const status = getOpenFileStatus(openErr);
+          if (status === 400 || status === 404) {
+            await goto(`/${encodePathForUrl(urlPath)}`, {
+              replaceState: true,
+              noScroll: true,
+              keepFocus: true,
+              invalidateAll: true
+            });
+            return;
+          }
 
-        console.error('Failed to open file:', urlPath);
+          console.error('Failed to open file:', urlPath);
+        }
       }
+    } finally {
+      isInitialLoading = false;
     }
   });
 
@@ -928,13 +933,22 @@
     />
 
     <main class="relative flex flex-1 flex-col overflow-hidden">
-      {#if findOpen && activeFile}
+      {#if isInitialLoading}
+        <div
+          class="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
+          <LoaderCircle size={24} class="animate-spin motion-reduce:animate-none" />
+          <p class="text-sm">Loading notes...</p>
+        </div>
+      {:else if findOpen && activeFile}
         <FindPanel
           editorApi={editorApi}
           onClose={() => (findOpen = false)}
         />
       {/if}
-      {#if activeFile}
+      {#if !isInitialLoading && activeFile}
         <Editor
           mode={editorMode}
           content={activeContent}
@@ -952,7 +966,7 @@
           {noteSuggestions}
           workspaceId={activeWorkspace?.id ?? null}
         />
-      {:else}
+      {:else if !isInitialLoading}
         <div class="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
           <svg
             xmlns="http://www.w3.org/2000/svg"
