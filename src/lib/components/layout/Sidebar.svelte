@@ -1,5 +1,15 @@
 <script lang="ts">
-  import { PanelLeftClose, PanelLeftOpen, FileText, Pin, PinOff, Pencil, Trash2 } from '@lucide/svelte';
+  import {
+    PanelLeftClose,
+    PanelLeftOpen,
+    FileText,
+    FilePlus,
+    FolderPlus,
+    Pin,
+    PinOff,
+    Pencil,
+    Trash2
+  } from '@lucide/svelte';
   import FileTree from './FileTree.svelte';
   import SyncButton from './SyncButton.svelte';
   import Dialog from '$lib/components/modals/Dialog.svelte';
@@ -82,6 +92,8 @@
   // Context menu for pinned items
   let pinnedMenu = $state<{ x: number; y: number; path: string } | null>(null);
   let pinnedDialog = $state<{ type: 'rename' | 'delete'; path: string } | null>(null);
+  let rootMenu = $state<{ x: number; y: number } | null>(null);
+  let rootDialog = $state<'file' | 'folder' | null>(null);
 
   function openPinnedMenu(e: MouseEvent, path: string) {
     e.preventDefault();
@@ -90,6 +102,24 @@
   }
 
   function closePinnedMenu() { pinnedMenu = null; }
+
+  function openRootMenu(e: MouseEvent): void {
+    e.preventDefault();
+    rootMenu = { x: e.clientX, y: e.clientY };
+  }
+
+  function closeRootMenu(): void {
+    rootMenu = null;
+  }
+
+  function createRootNote(): void {
+    closeRootMenu();
+    if (onNewNoteInFolder) {
+      onNewNoteInFolder('');
+      return;
+    }
+    rootDialog = 'file';
+  }
 
   function togglePin(path: string) {
     if (pinned.includes(path)) {
@@ -129,7 +159,7 @@
   }
 </script>
 
-<svelte:window onclick={() => { closePinnedMenu(); }} />
+<svelte:window onclick={() => { closePinnedMenu(); closeRootMenu(); }} />
 
 <aside
   class="relative flex flex-shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200 {collapsed ? '' : 'sidebar-resizable'}"
@@ -204,6 +234,7 @@
       role="tree"
       tabindex="-1"
       aria-label="File tree"
+      oncontextmenu={openRootMenu}
       onkeydown={(e) => {
         if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
         e.preventDefault();
@@ -246,6 +277,48 @@
   {/if}
 
 </aside>
+
+{#if rootMenu}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div
+    class="fixed z-50 min-w-40 rounded-md border border-border bg-popover py-1 shadow-lg"
+    style="left: {rootMenu.x}px; top: {rootMenu.y}px"
+    onclick={(e) => e.stopPropagation()}
+  >
+    <button
+      class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+      onclick={createRootNote}
+    >
+      <FilePlus size={13} /> New note
+    </button>
+    <button
+      class="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+      onclick={() => { closeRootMenu(); rootDialog = 'folder'; }}
+    >
+      <FolderPlus size={13} /> New folder
+    </button>
+  </div>
+{/if}
+
+{#if rootDialog}
+  <Dialog
+    title={rootDialog === 'file' ? 'New Note' : 'New Folder'}
+    placeholder={rootDialog === 'file' ? 'note-name' : 'folder-name'}
+    confirmLabel="Create"
+    onConfirm={(name) => {
+      const kind = rootDialog;
+      rootDialog = null;
+      if (!name) return;
+      if (kind === 'file') {
+        onCreateFile(name.endsWith('.md') ? name : `${name}.md`);
+      } else {
+        onCreateFolder(name);
+      }
+    }}
+    onCancel={() => (rootDialog = null)}
+  />
+{/if}
 
 <!-- Pinned-item context menu -->
 {#if pinnedMenu}

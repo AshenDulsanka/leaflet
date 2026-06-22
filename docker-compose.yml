@@ -10,6 +10,14 @@ services:
       - ./.git:/app/.git
     environment:
       - NODE_ENV=production
+      - ORIGIN=${ORIGIN:-http://localhost:3000}
+      - AI_PROVIDER=${AI_PROVIDER}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_BASE_URL=${GEMINI_BASE_URL}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+      - MINIMAX_BASE_URL=${MINIMAX_BASE_URL}
+      - MINIMAX_MODEL=${MINIMAX_MODEL}
       - NOTES_DATA_DIR=/app/data
       - NOTES_DIR=/app/data/notes
       - SCREENSHOTS_DIR=/app/data/screenshots
