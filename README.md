@@ -70,7 +70,8 @@ This project also serves as a reference for **agent orchestration** and open-sou
 
 ## Screenshots
 
-<!-- TODO: add screenshots after UI is stable -->
+![Leaflet Light Theme](static/images/leaflet-light.png)
+![Leaflet Dark Theme](static/images/leaflet-dark.png)
 
 ## Tech Stack
 

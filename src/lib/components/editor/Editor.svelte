@@ -4,9 +4,11 @@
   import { onMount, onDestroy, untrack } from "svelte";
   import { Crepe } from "@milkdown/crepe";
   import { editorViewCtx, parserCtx } from "@milkdown/core";
+  import { Slice } from "@milkdown/kit/prose/model";
   import {
     Plugin,
     PluginKey,
+    Selection,
     type EditorState,
     type Transaction,
   } from "@milkdown/kit/prose/state";
@@ -77,6 +79,12 @@
     alt: string;
     pmPos: number;
   }
+
+  interface InsertionTarget {
+    from: number;
+    to: number;
+  }
+
   let imageToolbarState = $state<ImageToolbarState | null>(null);
 
   // Wikilink autocomplete dropdown state
@@ -885,21 +893,47 @@
     textareaEl.scrollTop = Math.max(0, line - 4) * lh;
   }
 
-  /** Insert text at the current cursor position in either editor mode. */
-  function insertText(text: string) {
+  function getInsertionTarget(): InsertionTarget | null {
+    if (mode === "wysiwyg" && crepeEditor) {
+      const { from, to } = crepeEditor.editor.ctx.get(editorViewCtx).state.selection;
+      return { from, to };
+    }
+    if (textareaEl) {
+      return {
+        from: textareaEl.selectionStart ?? internalContent.length,
+        to: textareaEl.selectionEnd ?? internalContent.length,
+      };
+    }
+    return null;
+  }
+
+  /** Insert Markdown at a captured position or the current cursor selection. */
+  function insertText(text: string, target: InsertionTarget | null = null) {
     if (mode === "wysiwyg" && crepeEditor) {
       try {
         const view = crepeEditor.editor.ctx.get(editorViewCtx);
         const parser = crepeEditor.editor.ctx.get(parserCtx);
-        // Append the snippet to the current markdown and replace the whole
-        // document so Milkdown parses blocks correctly (e.g. fenced code blocks).
-        const newMarkdown = internalContent + "\n\n" + text;
-        const newDoc = parser(newMarkdown);
-        if (newDoc) {
+        const parsed = parser(text);
+        if (parsed) {
           const { state } = view;
-          view.dispatch(
-            state.tr.replaceWith(0, state.doc.content.size, newDoc.content),
+          const insertion = target ?? {
+            from: state.selection.from,
+            to: state.selection.to,
+          };
+          const maxPosition = state.doc.content.size;
+          const from = Math.min(insertion.from, maxPosition);
+          const to = Math.min(Math.max(insertion.to, from), maxPosition);
+          const transaction = state.tr.replaceRange(
+            from,
+            to,
+            Slice.maxOpen(parsed.content),
           );
+          const selectionPosition = transaction.mapping.map(from, 1);
+          transaction.setSelection(
+            Selection.near(transaction.doc.resolve(selectionPosition)),
+          );
+          view.dispatch(transaction.scrollIntoView());
+          view.focus();
         }
         return;
       } catch {
@@ -907,8 +941,12 @@
       }
     }
     if (textareaEl) {
-      const start = textareaEl.selectionStart ?? internalContent.length;
-      const end = textareaEl.selectionEnd ?? internalContent.length;
+      const insertion = target ?? {
+        from: textareaEl.selectionStart ?? internalContent.length,
+        to: textareaEl.selectionEnd ?? internalContent.length,
+      };
+      const start = Math.min(insertion.from, internalContent.length);
+      const end = Math.min(Math.max(insertion.to, start), internalContent.length);
       const newContent =
         internalContent.slice(0, start) + text + internalContent.slice(end);
       internalContent = newContent;
@@ -929,8 +967,17 @@
     }
   }
 
-  async function uploadAndInsert(file: File, wsId: string | null = null) {
-    await _uploadAndInsert(file, wsId, insertText, onImageUploaded);
+  async function uploadAndInsert(
+    file: File,
+    wsId: string | null = null,
+    target: InsertionTarget | null = getInsertionTarget(),
+  ) {
+    await _uploadAndInsert(
+      file,
+      wsId,
+      (text) => insertText(text, target),
+      onImageUploaded,
+    );
   }
 
   async function handlePaste(e: ClipboardEvent) {
@@ -938,8 +985,11 @@
     const imageItem = items.find((item) => isAllowedImageType(item.type));
     if (!imageItem) return;
     e.preventDefault();
+    e.stopPropagation();
     const blob = imageItem.getAsFile();
-    if (blob) await uploadAndInsert(blob, workspaceId);
+    if (blob) {
+      await uploadAndInsert(blob, workspaceId, getInsertionTarget());
+    }
   }
 
   function handleDragover(e: DragEvent) {
@@ -953,7 +1003,19 @@
     const imageFile = files.find((f) => isAllowedImageType(f.type));
     if (!imageFile) return;
     e.preventDefault();
-    await uploadAndInsert(imageFile, workspaceId);
+    e.stopPropagation();
+    let target = getInsertionTarget();
+    if (mode === "wysiwyg" && crepeEditor) {
+      const view = crepeEditor.editor.ctx.get(editorViewCtx);
+      const dropPosition = view.posAtCoords({
+        left: e.clientX,
+        top: e.clientY,
+      });
+      if (dropPosition) {
+        target = { from: dropPosition.pos, to: dropPosition.pos };
+      }
+    }
+    await uploadAndInsert(imageFile, workspaceId, target);
   }
 
   onMount(async () => {
@@ -979,9 +1041,9 @@
 
 <div
   class="relative flex h-full w-full flex-col"
-  onpaste={handlePaste}
-  ondragover={handleDragover}
-  ondrop={handleDrop}
+  onpastecapture={handlePaste}
+  ondragovercapture={handleDragover}
+  ondropcapture={handleDrop}
   role="none"
 >
   <!-- Milkdown WYSIWYG - always in DOM so milkdownContainer is never null.

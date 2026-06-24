@@ -48,11 +48,11 @@ export function resolveStatusOptions(
   input: unknown,
 ): Required<SyncStatusOptions> {
   if (typeof input !== "object" || input === null) {
-    return { includeRemote: false };
+    return { includeRemote: true };
   }
 
   const record = input as Record<string, unknown>;
-  return { includeRemote: record.includeRemote === true };
+  return { includeRemote: record.includeRemote !== false };
 }
 
 class SyncHttpError extends Error {
@@ -234,20 +234,21 @@ export function parseAheadBehindCounts(countOutput: string): {
 
 export function getSyncRecommendation(input: {
   hasRemote: boolean;
+  dirty?: boolean;
   ahead: number;
   behind: number;
 }): SyncRecommendation {
   if (!input.hasRemote) {
     return "none";
   }
-  if (input.ahead > 0 && input.behind > 0) {
+  if (input.behind > 0 && (input.dirty || input.ahead > 0)) {
     return "both";
+  }
+  if (input.dirty || input.ahead > 0) {
+    return "push";
   }
   if (input.behind > 0) {
     return "pull";
-  }
-  if (input.ahead > 0) {
-    return "push";
   }
   return "none";
 }
@@ -390,6 +391,8 @@ export async function runSyncAction(
 
   try {
     if (action === "status") {
+      checkpoint();
+
       const branch = git(
         ["rev-parse", "--abbrev-ref", "HEAD"],
         repoRoot,
@@ -403,8 +406,13 @@ export async function runSyncAction(
       let behind = 0;
 
       if (statusOptions.includeRemote && hasRemote) {
-        fetchOrigin(repoRoot);
-        ({ ahead, behind } = getAheadBehind(repoRoot));
+        try {
+          fetchOrigin(repoRoot);
+          ({ ahead, behind } = getAheadBehind(repoRoot));
+        } catch {
+          ahead = 0;
+          behind = 0;
+        }
       }
 
       return {
@@ -417,13 +425,12 @@ export async function runSyncAction(
           changes: changes || null,
           ahead,
           behind,
-          recommendation: dirty
-            ? "push"
-            : statusOptions.includeRemote
-              ? getSyncRecommendation({ hasRemote, ahead, behind })
-              : hasRemote
-                ? "pull"
-                : "none",
+          recommendation: getSyncRecommendation({
+            hasRemote,
+            dirty,
+            ahead,
+            behind,
+          }),
         },
       };
     }
