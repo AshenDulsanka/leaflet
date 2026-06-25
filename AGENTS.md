@@ -1,17 +1,18 @@
 # Agent Guidelines
 
-This file defines how AI coding agents (GitHub Copilot, Claude Code, etc.) should approach this repository.
+This file defines how AI coding agents (Codex, Claude Code, etc.) should approach this repository.
 
 ## Read First
 
 Before writing any code, read these files in order:
 
-1. `.github/skills/coding-standards/SKILL.md` — TypeScript, Svelte 5, and general code conventions
-2. `.github/skills/commit-conventions/SKILL.md` — commit message format and scope list
-3. `.github/skills/architecture/SKILL.md` — folder structure, data flow, design decisions
-4. `.github/skills/branch-conventions/SKILL.md` — branch naming rules and lifecycle
-5. `.github/skills/pr-standards/SKILL.md` — pull request format and review requirements
+1. `.agents/skills/coding-standards/SKILL.md` — TypeScript, Svelte 5, and general code conventions
+2. `.agents/skills/git/SKILL.md` — Git workflow routing for branches, commits, and pull requests
+3. `.agents/skills/git/steps/commit-conventions.md` — commit message format and scope list
+4. `.agents/skills/git/steps/branch-conventions.md` — branch naming rules and lifecycle
+5. `.agents/skills/git/steps/pr-standards.md` — pull request format and review requirements
 6. `docs/SECURITY.md` — path traversal prevention, secret management, input validation
+7. `docs/ARCHITECTURE.md` — folder structure, data flow, design decisions
 
 ## What Is Leaflet
 
@@ -76,10 +77,11 @@ leaflet/
 - Validate all file paths with `safePath()` before any `fs` operation (see `docs/SECURITY.md`).
 - Gate CPTS-specific features (e.g., Methodology panel) on `activeWorkspace.preset === 'cpts'`, not on `workspace.type`. Do not use `workspace.type` alone for fine-grained feature gating.
 - When adding a new engagement panel, implement the `uiMode: 'modal' | 'inline'` prop convention (default `'modal'`). In modal mode, add/edit forms must render as centered overlay dialogs; inline mode keeps forms expanding in-panel.
-- Follow `.github/skills/coding-standards/SKILL.md` for naming, imports, error handling.
-- Follow `.github/skills/commit-conventions/SKILL.md` for all commit messages.
-- Follow `.github/skills/branch-conventions/SKILL.md` for branch naming.
-- Follow `.github/skills/pr-standards/SKILL.md` when opening pull requests.
+- Follow `.agents/skills/coding-standards/SKILL.md` for naming, imports, error handling.
+- Follow `.agents/skills/git/SKILL.md` for Git workflow routing.
+- Follow `.agents/skills/git/steps/commit-conventions.md` for all commit messages.
+- Follow `.agents/skills/git/steps/branch-conventions.md` for branch naming.
+- Follow `.agents/skills/git/steps/pr-standards.md` when opening pull requests.
 
 ## What Agents Must Not Do
 

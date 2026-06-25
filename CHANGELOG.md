@@ -7,18 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- The sidebar file tree now provides a workspace-root context menu for creating notes and folders.
-- Production Docker Compose now forwards the configured public origin and AI provider settings into the Leaflet container.
-- The README now includes current light and dark theme screenshots.
-
 ### Fixed
 
-- Image paste, drop, and upload actions now insert Markdown at the captured editor selection or drop position instead of appending it to the document.
-- The editor route now shows a loading state while the initial workspace, file tree, and active note are restored.
-- Successful sync pulls now trigger a full web app reload so pulled note, workspace, panel, and frontend changes are reflected immediately.
-- Sync test expectations now match the updated sanitized HTTPS auth guidance returned by `sanitizeGitError`, resolving the CI test-step failure in `src/lib/server/sync.test.ts`.
+- Documentation references now point to the live `.agents/skills` files and the consolidated Git workflow skill.
+- WYSIWYG tables now let columns size from their content instead of keeping injected equal-width columns.
+- Initial refresh now shows a simple loading state while workspaces, file tree, and active note load; right-clicking empty file-tree space now offers root-level New note and New folder actions.
+- Clipboard image paste and file drop now intercept events before Crepe's native handlers, preventing duplicate image nodes from a single action.
+- Production Docker now forwards AI provider, API key, endpoint, and model settings from `.env` into the application container.
+- WYSIWYG image paste, drag-and-drop, and screenshot-panel insertion now place images at the saved caret or drop position instead of appending them to the end of the note.
+- Production Docker now sets SvelteKit's public `ORIGIN`, preventing clipboard, drag-and-drop, and file-picker screenshot uploads from being rejected as cross-site form submissions.
 - Docker builds now copy `pnpm-workspace.yaml` into dependency install stages and rely on the repo-pinned pnpm version, so approved native/codegen build scripts run during `docker compose up -d`.
 - CI lint/test failures from Svelte 5 prop-state initialization warnings, stale unused symbols, unused Svelte ignore comments, CommonJS hook script linting, and stale FileTree indentation expectations.
 - Sync commits in production containers now set a deterministic git author fallback and support explicit `GIT_USER_NAME`/`GIT_USER_EMAIL` compose env overrides, preventing "Author identity unknown" failures.

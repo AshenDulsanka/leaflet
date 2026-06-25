@@ -26,4 +26,4 @@ Closes #
 
 ---
 
-> See [`.github/skills/pr-standards.md`](.github/skills/pr-standards.md) for full PR requirements.
+> See [`.agents/skills/git/steps/pr-standards.md`](../.agents/skills/git/steps/pr-standards.md) for full PR requirements.
