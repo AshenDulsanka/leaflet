@@ -216,15 +216,21 @@ body {
    --------------------------------------------------------------------------*/
 .milkdown .editor table {
   border-collapse: collapse;
-  width: 100%;
+  table-layout: auto;
+  width: auto;
+  min-width: 100%;
   margin: 1em 0;
   font-size: 0.9em;
+}
+.milkdown .editor col {
+  width: auto !important;
 }
 .milkdown .editor th,
 .milkdown .editor td {
   border: 1px solid hsl(var(--border));
   padding: 0.45em 0.8em;
   text-align: left;
+  vertical-align: top;
   color: hsl(var(--foreground));
 }
 .milkdown .editor th {

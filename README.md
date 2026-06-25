@@ -129,7 +129,7 @@ docker compose build
 docker compose up -d
 ```
 
-App runs at http://localhost:3000.
+App runs at http://localhost:4000.
 
 ## Environment Variables
 
@@ -140,12 +140,17 @@ Copy `.env.example` to `.env` and configure:
 | `NOTES_DATA_DIR`  | No       | `./data`                     | Directory for database and notes            |
 | `NOTES_DIR`       | No       | `./data/notes`               | Directory for `.md` note files              |
 | `SCREENSHOTS_DIR` | No       | `./data/screenshots`         | Directory for uploaded screenshots          |
-| `PORT`            | No       | `3000` (prod) / `5173` (dev) | Server port                                 |
+| `ORIGIN`          | No       | `http://localhost:4000`      | Public production URL used for form security |
+| `PORT`            | No       | `4000` (prod) / `5173` (dev) | Server port                                 |
 | `AI_PROVIDER`     | No       | `gemini`                     | AI provider: `gemini` or `minimax`          |
 | `GEMINI_API_KEY`  | No       | -                            | Google Gemini API key (enables AI features) |
 | `MINIMAX_API_KEY` | No       | -                            | MiniMax API key (alternative provider)      |
 
 AI features are silently disabled when no API key is configured.
+
+Set `ORIGIN` to the exact URL used to open the production app, including the
+scheme and port. For example, use `http://192.168.1.20:4000` for LAN access or
+`https://notes.example.com` behind HTTPS.
 
 ## Syncing Between Devices
 
@@ -181,11 +186,11 @@ git pull
 | `docs/ENGAGEMENT_TOOLS.md`                   | Host tracker, credential vault, flag tracker, findings, topology                                                          |
 | `docs/FEATURES.md`                           | End-user feature guide and UX conventions                                                                                 |
 | `docs/SECURITY.md`                           | Path traversal, validation, and secret-handling rules                                                                     |
-| `.github/skills/architecture/SKILL.md`       | Data flow, folder structure, design decisions                                                                             |
-| `.github/skills/coding-standards/SKILL.md`   | Code conventions for contributors and AI agents                                                                           |
-| `.github/skills/commit-conventions/SKILL.md` | Commit message format and examples                                                                                        |
-| `.github/skills/branch-conventions/SKILL.md` | Branch naming rules                                                                                                       |
-| `.github/skills/pr-standards/SKILL.md`       | Pull request requirements                                                                                                 |
+| `.agents/skills/coding-standards/SKILL.md`   | Code conventions for contributors and AI agents                                                                           |
+| `.agents/skills/git/SKILL.md`                | Git workflow routing for branches, commits, and pull requests                                                             |
+| `.agents/skills/git/steps/commit-conventions.md` | Commit message format and examples                                                                                   |
+| `.agents/skills/git/steps/branch-conventions.md` | Branch naming rules                                                                                                  |
+| `.agents/skills/git/steps/pr-standards.md`   | Pull request requirements                                                                                                 |
 | `.github/agents/`                            | 8 specialized agents (orchestrator, planner, coder, designer, code-reviewer, security-auditor, test-writer, docs-updater) |
 | `CONTRIBUTING.md`                            | How to contribute                                                                                                         |
 

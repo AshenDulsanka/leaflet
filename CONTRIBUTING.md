@@ -6,11 +6,12 @@ Thank you for your interest in contributing. This guide covers everything you ne
 
 Read these documents in order:
 
-1. [`.github/skills/coding-standards.md`](.github/skills/coding-standards.md) - code conventions
-2. [`.github/skills/commit-conventions.md`](.github/skills/commit-conventions.md) - commit message format
-3. [`.github/skills/branch-conventions.md`](.github/skills/branch-conventions.md) - branch naming
-4. [`.github/skills/pr-standards.md`](.github/skills/pr-standards.md) - pull request requirements
-5. [`.github/skills/architecture.md`](.github/skills/architecture.md) - how the codebase is structured
+1. [`.agents/skills/coding-standards/SKILL.md`](.agents/skills/coding-standards/SKILL.md) - code conventions
+2. [`.agents/skills/git/SKILL.md`](.agents/skills/git/SKILL.md) - Git workflow routing
+3. [`.agents/skills/git/steps/commit-conventions.md`](.agents/skills/git/steps/commit-conventions.md) - commit message format
+4. [`.agents/skills/git/steps/branch-conventions.md`](.agents/skills/git/steps/branch-conventions.md) - branch naming
+5. [`.agents/skills/git/steps/pr-standards.md`](.agents/skills/git/steps/pr-standards.md) - pull request requirements
+6. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - how the codebase is structured
 
 ## Development Setup
 
@@ -31,10 +32,10 @@ docker compose -f docker-compose.dev.yaml up --watch
 ## Workflow
 
 1. Create a GitHub issue for the work you intend to do.
-2. Cut a branch from `development` following `branch-conventions.md`.
-3. Make changes following `coding-standards.md`.
-4. Commit following `commit-conventions.md`.
-5. Open a PR targeting `development` following `pr-standards.md`.
+2. Cut a branch from `development` following `.agents/skills/git/steps/branch-conventions.md`.
+3. Make changes following `.agents/skills/coding-standards/SKILL.md`.
+4. Commit following `.agents/skills/git/steps/commit-conventions.md`.
+5. Open a PR targeting `development` following `.agents/skills/git/steps/pr-standards.md`.
 6. Address review feedback.
 7. Squash merge into `development`.
 

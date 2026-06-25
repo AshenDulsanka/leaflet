@@ -12,6 +12,8 @@ tags:
 
 ## Sessions
 
+- [[sessions/2026-06-22-initial-loader-sidebar-context-menu]] — Add refresh loader and root file-tree context actions
+- [[sessions/2026-06-25-wysiwyg-table-content-sizing]] — Let WYSIWYG tables size columns from content
 - [[sessions/2025-07-15-analyze-codebase]] — Initial vault population from analyze-codebase skill
 - [[sessions/2026-04-29-flow-panels-doc-sync]] — Document flow-panel UX updates and refresh memory links
 - [[sessions/2026-04-30-regression-fix-doc-finalization]] — Finalize regression-fix changelog + memory coverage
