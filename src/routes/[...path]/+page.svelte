@@ -593,6 +593,7 @@
   async function createFile(path: string, type: 'file' | 'folder', initialContent?: string) {
     const fullPath = resolveWorkspacePath(path);
     const encodedPath = encodePathForUrl(fullPath);
+    const content = type === 'file' ? buildNewNoteContent(path, initialContent) : undefined;
     beginTreeWrite();
     try {
       const res = await fetch(`/api/notes/${encodedPath}`, {
@@ -609,11 +610,11 @@
         }
         return;
       }
-      if (type === 'file' && initialContent) {
+      if (content !== undefined) {
         await fetch(`/api/notes/${encodedPath}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: initialContent })
+          body: JSON.stringify({ content })
         });
       }
     } finally {
@@ -621,6 +622,12 @@
     }
 
     await loadTree(activeWorkspace?.notes_folder ?? '', { force: true });
+  }
+
+  function buildNewNoteContent(path: string, initialContent?: string): string {
+    const title = path.split('/').pop()?.replace(/\.md$/i, '') ?? 'Untitled';
+    const body = initialContent?.trimStart() ?? '';
+    return `# ${title}\n\n${body}`;
   }
 
   async function deleteFile(path: string) {
@@ -735,7 +742,7 @@
 
 <svelte:window
   onkeydown={(e) => {
-    if (e.ctrlKey && e.key === 'b') {
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'l') {
       e.preventDefault();
       sidebarCollapsed = !sidebarCollapsed;
     }

@@ -2,6 +2,7 @@
   import {
     PanelLeftClose,
     PanelLeftOpen,
+    ListTree,
     FileText,
     FilePlus,
     FolderPlus,
@@ -77,6 +78,8 @@
   }
 
   let pinned = $state<string[]>(loadPinned());
+  let expandAllSignal = $state(0);
+  let expandAllOpen = $state(false);
 
   const SIDEBAR_MIN_WIDTH = 180;
   const SIDEBAR_MAX_WIDTH = 400;
@@ -130,6 +133,11 @@
     savePinned(pinned);
   }
 
+  function toggleAllFolders(): void {
+    expandAllOpen = !expandAllOpen;
+    expandAllSignal += 1;
+  }
+
   // Resize state
   let sidebarWidth = $state(260);
   let isResizing = $state(false);
@@ -172,7 +180,15 @@
       <div class="ml-auto flex items-center gap-0.5">
         <SyncButton {onPullSuccess} />
         <button
-          title="Collapse sidebar (Ctrl+B)"
+          title={expandAllOpen ? 'Collapse all folders' : 'Expand all folders'}
+          onclick={toggleAllFolders}
+          class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label={expandAllOpen ? 'Collapse all folders' : 'Expand all folders'}
+        >
+          <ListTree size={13} />
+        </button>
+        <button
+          title="Collapse sidebar (Ctrl+Shift+L)"
           onclick={() => (collapsed = !collapsed)}
           class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
           aria-label="Collapse sidebar"
@@ -182,7 +198,7 @@
       </div>
     {:else}
       <button
-        title="Expand sidebar (Ctrl+B)"
+        title="Expand sidebar (Ctrl+Shift+L)"
         onclick={() => (collapsed = !collapsed)}
         class="ml-auto flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
         aria-label="Expand sidebar"
@@ -251,6 +267,8 @@
         nodes={tree}
         {activeFile}
         depth={0}
+        {expandAllSignal}
+        {expandAllOpen}
         {pinned}
         {onOpenFile}
         {onCreateFile}

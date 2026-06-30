@@ -19,6 +19,8 @@
     allNodes?: FileNode[];
     activeFile: string | null;
     depth: number;
+    expandAllSignal?: number;
+    expandAllOpen?: boolean;
     pinned?: string[];
     onOpenFile: (path: string) => void;
     onCreateFile: (path: string) => void;
@@ -31,7 +33,7 @@
     onReorderNotes?: (orderedPaths: string[]) => void;
   }
 
-  let { nodes, allNodes, activeFile, depth, pinned = [], onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onTogglePin, onMoveItem, onNewNoteInFolder, onReorderNotes }: Props =
+  let { nodes, allNodes, activeFile, depth, expandAllSignal = 0, expandAllOpen = false, pinned = [], onOpenFile, onCreateFile, onCreateFolder, onDeleteItem, onRenameItem, onTogglePin, onMoveItem, onNewNoteInFolder, onReorderNotes }: Props =
     $props();
 
   const DRAG_SOURCE_KEY = '__leaflet_filetree_drag_source';
@@ -41,6 +43,17 @@
 
   // Track which folders are expanded
   let expanded = $state<Record<string, boolean>>({});
+
+  function collectFolderPaths(items: FileNode[]): string[] {
+    return items.flatMap((item) =>
+      item.type === 'folder' ? [item.path, ...collectFolderPaths(item.children ?? [])] : []
+    );
+  }
+
+  $effect(() => {
+    if (expandAllSignal === 0) return;
+    expanded = expandAllOpen ? Object.fromEntries(collectFolderPaths(nodes).map((path) => [path, true])) : {};
+  });
 
   // Drag-and-drop: highlight folder target or root zones while dragging
   let dropTargetPath = $state<string | null>(null);
@@ -611,6 +624,8 @@
             allNodes={dragValidationNodes}
             {activeFile}
             depth={depth + 1}
+            {expandAllSignal}
+            {expandAllOpen}
             {pinned}
             {onOpenFile}
             {onCreateFile}

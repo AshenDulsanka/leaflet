@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Sidebar now includes an Expand/Collapse all folders button, and new notes start with an `#` heading from the note name.
+
+### Changed
+
+- Sidebar collapse/expand shortcut changed from `Ctrl+B` to `Ctrl+Shift+L` so editor bold remains available.
+
 ### Fixed
 
 - Documentation references now point to the live `.agents/skills` files and the consolidated Git workflow skill.

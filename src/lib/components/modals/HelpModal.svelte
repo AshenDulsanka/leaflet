@@ -26,7 +26,7 @@
       section: 'Navigation',
       items: [
         { keys: ['Ctrl', 'P'], description: 'Open full-text search' },
-        { keys: ['Ctrl', 'B'], description: 'Collapse / expand sidebar' },
+        { keys: ['Ctrl', 'Shift', 'L'], description: 'Collapse / expand sidebar' },
         { keys: ['Ctrl', 'Shift', 'K'], description: 'Open command palette (pentest snippets)' },
         { keys: ['Ctrl', '.'], description: 'Toggle methodology checklist panel' },
         { keys: ['Arrow keys'], description: 'Navigate file tree items when focused' },
